@@ -103,7 +103,7 @@ Versión *{1.0}*
     - SonarQube
     - VPS Debian
 
-  El objetivo principal es ofrecer una plataforma segura, escalable y centralizada que mejore la comunicación universitaria.
+   El objetivo principal es ofrecer una plataforma segura, escalable y centralizada que mejore la comunicación universitaria.
 
     1.4. Objetivos
 
@@ -134,26 +134,58 @@ Versión *{1.0}*
 2. <span id="_Toc52661347" class="anchor"></span>**Riesgos**
 
     Los principales riesgos que podrían afectar el éxito del proyecto son:
+   
+    | Riesgo                      | Descripción                                  | Impacto | Mitigación               |
+    | --------------------------- | -------------------------------------------- | ------- | ------------------------ |
+    | Falta de tiempo             | Retraso en el desarrollo por carga académica | Alto    | Planificación semanal    |
+    | Fallas en VPS               | Problemas en el servidor                     | Medio   | Backup y pruebas locales |
+    | Problemas en microservicios | Errores en la integración                    | Alto    | Pruebas continuas        |
+    | Fallas de seguridad         | Vulnerabilidades en PHP                      | Alto    | SonarQube y Snyk         |
+    | Problemas en Docker         | Configuración incorrecta                     | Medio   | Documentación y pruebas  |
+    | Falta de coordinación       | Desorganización del equipo                   | Alto    | Reuniones semanales      |
 
-        Riesgo	Descripción	Impacto	Mitigación
-        Falta de tiempo	Retraso en el desarrollo por carga académica	Alto	Planificación semanal
-        Fallas en VPS	Problemas en el servidor	Medio	Backup y pruebas locales
-        Problemas en microservicios	Errores en la integración	Alto	Pruebas continuas
-        Fallas de seguridad	Vulnerabilidades en PHP	Alto	SonarQube y Snyk
-        Problemas en Docker	Configuración incorrecta	Medio	Documentación y pruebas
-        Falta de coordinación	Desorganización del equipo	Alto	Reuniones semanales
 
+    
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
 3. <span id="_Toc52661348" class="anchor"></span>**Análisis de la Situación actual**
 
     3.1. Planteamiento del problema
 
-            Describa antecedentes y situación actual, explicando la problemática y/o necesidad que será resuelta con el proyecto propuesto.
+    Actualmente los estudiantes de la Universidad Privada de Tacna no cuentan con una plataforma digital institucional que centralice la comunicación               académica    y social.
+
+    La comunicación se realiza mediante redes sociales externas como Facebook, WhatsApp e Instagram, lo que genera problemas como:
+
+    - Falta de privacidad
+    - Información dispersa
+    - No hay control institucional
+    - No existe segmentación por carrera
+    - Riesgo de cuentas falsas
+    - Dependencia de plataformas externas
+
+    Esto genera la necesidad de una red social universitaria propia que permita la comunicación segura y organizada dentro de la institución.
 
     3.2. Consideraciones de hardware y software
 
-            Hardware y software posibles para la implementación, se analizara lo que existe y es alcanzable, se evaluara que tecnología se puede > utilizar en el proyecto.
+    Hardware
+    - Computadoras del equipo de desarrollo
+    - VPS Debian
+    - Internet
+    - Servidor virtual
+    - Almacenamiento SSD
+    
+    Software
+    - PHP 8
+    - Lumen Framework
+    - MySQL
+    - Docker
+    - Terraform
+    - GitHub
+    - SonarQube
+    - Snyk
+    - Semgrep
+    - Visual Studio Code
+    - Navegadores web
 
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
@@ -164,115 +196,160 @@ Versión *{1.0}*
 
     4.1. <span id="_Toc52661350" class="anchor"></span>Factibilidad Técnica
 
-        El estudio de viabilidad técnica se enfoca en obtener un entendimiento de los recursos tecnológicos disponibles actualmente y su aplicabilidad a las necesidades que se espera tenga el proyecto. En el caso de tecnología informática esto implica una evaluación del hardware y software y como este puede cubrir las necesidades del sistema propuesto.
-
-        Realizar una evaluación de la tecnología actual existente y la posibilidad de utilizarla en el desarrollo e implantación del sistema.*
-
-        Describir acerca del hardware (equipos, servidor), software (aplicaciones, navegadores, sistemas operativos, dominio, internet, infraestructura de red física, etc.
-
+     El proyecto Red Social UPT se presenta como una iniciativa técnicamente viable para mejorar la comunicación e interacción entre los estudiantes de la           Universidad Privada de Tacna mediante el uso de una plataforma web basada en arquitectura de microservicios.
+    
+    La implementación del sistema implica el desarrollo de tres microservicios principales: autenticación institucional, publicaciones e historias, y perfiles      e interacciones sociales, los cuales estarán conectados mediante API REST y protegidos con tokens JWT. Esto permitirá garantizar la seguridad,                  escalabilidad y mantenimiento del sistema.
+    
+    El desarrollo del sistema web requiere la creación de una interfaz funcional y compatible con diferentes navegadores y dispositivos, lo que permitirá a los     estudiantes acceder desde computadoras o teléfonos móviles sin inconvenientes. Para ello, se realizarán pruebas de compatibilidad y rendimiento que             aseguren el correcto funcionamiento de la plataforma.
+    
+    La implementación del microservicio de autenticación permitirá validar las cuentas institucionales con dominio @virtual.upt.pe, garantizando que solo           estudiantes de la universidad puedan acceder al sistema. Esto ayudará a mantener un entorno seguro y controlado.
+    
+    El microservicio de publicaciones e historias permitirá a los usuarios crear contenido en tiempo real, subir imágenes y generar historias efímeras,             asegurando un control eficiente del almacenamiento y la expiración automática de contenido.
+    
+    El microservicio de perfiles e interacciones permitirá la gestión de perfiles, comentarios, likes y segmentación por facultad y carrera, facilitando la         organización académica y la interacción social.
+    
+    Además, el sistema será desplegado en un VPS con sistema operativo Debian utilizando Docker y Terraform, lo que garantizará una infraestructura                 automatizada y reproducible.
+    
+    El proyecto también integrará herramientas de calidad y seguridad como SonarQube, Snyk o Semgrep y GitHub Actions para asegurar la calidad del código y         evitar vulnerabilidades.
+    
+    Aunque el proyecto presenta desafíos técnicos como la integración de microservicios y el despliegue en la nube, su factibilidad se basa en el uso de            tecnologías modernas, software libre y metodologías adecuadas de desarrollo, lo que permite afirmar que el proyecto es técnicamente viable.
+        
     4.2. <span id="_Toc52661351" class="anchor"></span>Factibilidad Económica
 
-        El propósito del estudio de viabilidad económica, es determinar los beneficios económicos del proyecto o sistema propuesto para la organización, en contraposición con los costos.
-        Como se mencionó anteriormente en el estudio de factibilidad técnica wvaluar si la institución (departamento de TI) cuenta con las herramientas necesarias para la implantación del sistema y evaluar si la propuesta requiere o no de una inversión inicial en infraestructura informática.
-        Se plantearán los costos del proyecto.
-        Costeo del Proyecto: Consiste en estimar los costos de los recursos Humanos, materiales o consumibles y/o máquinas) directos para completar las actividades del proyecto}.*
+   El propósito del estudio de viabilidad económica, es determinar los beneficios económicos del proyecto o sistema propuesto para la organización, en             contraposición con los costos.
 
-        Definir los siguientes costos:
+   Definir los siguientes costos:
 
         4.2.1. Costos Generales
 
-                Los costos generales son todos los gastos realizados en accesorios y material de oficina y de uso diario, necesarios para los procesos, tales como, papeles, plumas, cartuchos de impresora, marcadores, computadora etc. Colocar tabla de costos.
+        | Ítem | Descripción          | u.m.   | Costo Unitario | Cantidad  | Costo Total  |
+        | ---- | -------------------- | ------ | -------------- | --------- | ------------ |
+        | 1    | Papel Bond           | Millar | S/ 20.00       | 2         | S/ 40.00     |
+        | 2    | Lapiceros            | Caja   | S/ 10.00       | 1         | S/ 10.00     |
+        | 3    | Folder               | Unidad | S/ 1.00        | 10        | S/ 10.00     |
+        | 4    | Recarga de impresora | Unidad | S/ 35.00       | 1         | S/ 35.00     |
+        |      |                      |        |                | **Total** | **S/ 95.00** |
 
         4.2.2. Costos operativos durante el desarrollo 
         
-                Evaluar costos necesarios para la operatividad de las actividades de la empresa durante el periodo en el que se realizara el proyecto. Los costos de operación pueden ser renta de oficina, agua, luz, teléfono, etc.
+        | Ítem | Descripción | Costo Unitario | Meses     | Total      |
+        | ---- | ----------- | -------------- | --------- | ---------- |
+        | 1    | Internet    | S/ 100         | 4         | S/ 400     |
+        | 2    | Luz         | S/ 80          | 4         | S/ 320     |
+        |      |             |                | **Total** | **S/ 720** |
 
         4.2.3. Costos del ambiente
 
-                Evaluar si se cuenta con los requerimientos técnicos para la implantación del software como el dominio, infraestructura de red, acceso a internet, etc.
+        | Ítem | Descripción | Detalles         | Costo | Cantidad  | Total      |
+        | ---- | ----------- | ---------------- | ----- | --------- | ---------- |
+        | 1    | VPS Debian  | Servidor virtual | S/ 25 | 4         | S/ 100     |
+        | 2    | Dominio web | Plataforma       | S/ 50 | 1         | S/ 50      |
+        | 3    | GitHub      | Repositorio      | S/ 0  | 1         | S/ 0       |
+        |      |             |                  |       | **Total** | **S/ 150** |
 
         4.2.4. Costos de personal
-
-                Aquí se incluyen los gastos generados por el recurso humano que se necesita para el desarrollo del sistema únicamente.
-
-                No se considerará personal para la operación y funcionamiento del sistema.
-
-                Incluir tabla que muestra los gastos correspondientes al personal.
-
-                Indicar organización y roles. Indicar horario de trabajo del personal.
+   
+        | Rol                          | Unidad | Cantidad | Pago por hora | Horas | Horario       | Total    |
+        | ---------------------------- | ------ | -------- | ------------- | ----- | ------------- | -------- |
+        | Desarrollador Backend        | 1      | 1        | 20            | 60    | 8:00 - 14:00  | 1200     |
+        | Desarrollador Microservicios | 1      | 1        | 20            | 60    | 14:00 - 20:00 | 1200     |
+        | DevOps y Documentación       | 1      | 1        | 20            | 60    | 19:00 - 22:00 | 1200     |
+        |                              |        |          |               |       | **Total**     | **3600** |
 
         4.2.5.  Costos totales del desarrollo del sistema
 
-                {Totalizar costos y realizar resumen de costo final del proyecto y la forma de pago.
+            | Resumen de Costos  | Costos Totales |
+            | ------------------ | -------------- |
+            | Costos Generales   | S/ 95          |
+            | Costos de Ambiente | S/ 150         |
+            | Costos de Personal | S/ 3600        |
+            | Costos Operativos  | S/ 720         |
+            | **TOTAL**          | **S/ 4565**    |
+
+
 
     4.3. <span id="_Toc52661352" class="anchor"></span>Factibilidad Operativa
 
-        Describir los beneficios del producto y si se tiene la capacidad por parte del cliente para mantener el sistema funcionando y garantizar el buen funcionamiento y su impacto en los usuarios. Lista de interesados.
-
+       El proyecto es operativamente viable, ya que el sistema permitirá a los usuarios de la institución educativa controlar la asistencia de manera rápida y         eficiente mediante el reconocimiento por vectores numéricos. La plataforma será fácil de usar, con una interfaz intuitiva que permitirá a docentes y            personal administrativo registrar, consultar y gestionar la asistencia sin complicaciones. Además, el sistema reducirá el trabajo manual, mejorará el           control de la información y optimizará los procesos internos de la institución. También se contará con soporte técnico y capacitación básica para               garantizar el correcto uso y mantenimiento del sistema, asegurando su funcionamiento continuo.
+   
     4.4. <span id="_Toc52661353" class="anchor"></span>Factibilidad Legal
 
-        Determinar si existe conflicto del proyecto con restricciones legales como leyes y regulaciones del país o locales relacionadas con seguridad, protección de datos, conducta de negocio, empleo y adquisiciones.
+     El proyecto cumple con la normativa legal vigente en el Perú, especialmente en lo relacionado con la protección de datos personales y el uso de                 tecnologías de información. Se respetará la Ley de Protección de Datos Personales, garantizando la seguridad y confidencialidad de la información de los        estudiantes y docentes. Asimismo, el sistema se desarrollará respetando las normas de uso de software, derechos de autor y regulaciones tecnológicas,           evitando problemas legales durante su implementación.
 
     4.5. <span id="_Toc52661354" class="anchor"></span>Factibilidad Social 
 
-        Evaluar influencias y asuntos de índole social y cultural como el clima político, códigos de conducta y ética*
+        El proyecto tendrá un impacto social positivo, ya que mejorará el control de asistencia en las instituciones educativas de Tacna, contribuyendo a una         mejor organización académica y administrativa. Los estudiantes, docentes y personal administrativo se beneficiarán al contar con un sistema moderno que         reduce errores y mejora la eficiencia en el registro de asistencia. Además, el uso de tecnología en el entorno educativo promueve la innovación y               fortalece la digitalización de los procesos institucionales.
 
     4.6. <span id="_Toc52661355" class="anchor"></span>Factibilidad Ambiental
 
-        Evaluar influencias y asuntos de índole ambiental como el impacto y repercusión en el medio ambiente.
+       El proyecto no genera un impacto ambiental significativo, ya que se basa principalmente en el uso de tecnología digital. La implementación del sistema          permitirá reducir el uso de papel en el registro de asistencia, contribuyendo al cuidado del medio ambiente. Asimismo, se promoverá el uso responsable          de equipos informáticos y recursos tecnológicos, garantizando una gestión sostenible durante el desarrollo e implementación del sistema.
 
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
 5. <span id="_Toc52661356" class="anchor"></span>**Análisis Financiero**
 
-    El plan financiero se ocupa del análisis de ingresos y gastos asociados a cada proyecto, desde el punto de vista del instante temporal en que se producen. Su misión fundamental es detectar situaciones financieramente inadecuadas.
+    El plan financiero se ocupa del análisis de ingresos y gastos asociados a cada proyecto, desde el punto de vista del instante temporal en que se producen.      Su misión fundamental es detectar situaciones financieramente inadecuadas.
     Se tiene que estimar financieramente el resultado del proyecto.
 
     5.1. Justificación de la Inversión
 
         5.1.1. Beneficios del Proyecto
 
-            El beneficio se calcula como el margen económico menos los costes de oportunidad, que son los márgenes que hubieran podido obtenerse de haber dedicado el capital y el esfuerzo a otras actividades.
-            El beneficio, obtenido lícitamente, no es sólo una recompensa a la inversión, al esfuerzo y al riesgo asumidos por el empresario, sino que también es un factor esencial para que las empresas sigan en el  mercado e incorporen nuevas inversiones al tejido industrial y social de las naciones.
-            Describir beneficios tangibles e intangibles*
-            Beneficios tangibles: son de fácil cuantificación, generalmente están relacionados con la reducción de recursos o talento humano.
-            Beneficios intangibles: no son fácilmente cuantificables y están relacionados con elementos o mejora en otros procesos de la organización.
->
-            Ejemplo de beneficios:
+        Beneficios Tangibles
+        - Reducción de tiempo en el control de asistencia.
+        - Disminución de errores en registros manuales.
+        - Ahorro en uso de papel y recursos administrativos.
+        - Mejor control de la información académica.
+        - Optimización del trabajo del personal administrativo.
 
-            - Mejoras en la eficiencia del área bajo estudio.
-            - Reducción de personal.
-            - Reducción de futuras inversiones y costos.
-            - Disponibilidad del recurso humano.
-            - Mejoras en planeación, control y uso de recursos.
-            - Suministro oportuno de insumos para las operaciones.
-            - Cumplimiento de requerimientos gubernamentales.
-            - Toma acertada de decisiones.
-            - Disponibilidad de información apropiada.
-            - Aumento en la confiabilidad de la información.
-            - Mejor servicio al cliente externo e interno
-            - Logro de ventajas competitivas.
-            - Valor agregado a un producto de la compañía.
+        Beneficios Intangibles
+        - Mejora en la organización institucional.
+        - Mayor confiabilidad en la información.
+        - Modernización tecnológica de la institución.
+        - Mejor toma de decisiones académicas.
+        - Incremento en la eficiencia del sistema educativo.
+        - Mayor seguridad en el control de asistencia.
         
         5.1.2. Criterios de Inversión
 
             5.1.2.1. Relación Beneficio/Costo (B/C)
 
-                En base a los costos y beneficios identificados se evalúa si es factible el desarrollo del proyecto. 
-                Si se presentan varias alternativas de solución se evaluará cada una de ellas para determinar la mejor solución desde el punto de vista del > retorno de la inversión
-                El B/C si es mayor a uno, se acepta el proyecto; si el B/C es igual a uno es indiferente aceptar o rechazar el proyecto y si el B/C es menor a uno se rechaza el proyecto
+            La relación beneficio/costo permite evaluar si los beneficios del proyecto superan a los costos de inversión.
+            Cuando el resultado es mayor a 1, el proyecto es rentable y puede ser aceptado.
+
+            <img width="673" height="309" alt="PASOFT_IMAGE03" src="https://github.com/user-attachments/assets/c53a971a-282a-46ec-aa67-5d9b3ce6a984" />
+
+            B/C = 1.72
+            
+            Esto indica que el proyecto es rentable, ya que los beneficios son mayores que los costos.
 
             5.1.2.2. Valor Actual Neto (VAN)
             
-                Valor actual de los beneficios netos que genera el proyecto. Si el VAN es mayor que cero, se acepta el proyecto; si el VAN es igual a cero es indiferente aceptar o rechazar el proyecto y si el VAN es menor que cero se rechaza el proyecto
-
+            El Valor Actual Neto representa el valor actual de los beneficios que generará el proyecto a lo largo del tiempo.
+            Si el VAN es mayor a cero, el proyecto es viable económicamente.
+            
+            <img width="676" height="267" alt="PASOFT_IMAGE01" src="https://github.com/user-attachments/assets/2715d440-e8ab-4f17-be80-ebdd5dde9644" />
+            VAN = S/ 4,081.11
+            i = 13%
+            
+            Esto demuestra que el proyecto genera ganancias y es económicamente viable.
+              
             5.1.2.3 Tasa Interna de Retorno (TIR)*
-                Es la tasa porcentual que indica la rentabilidad promedio anual que genera el capital invertido en el proyecto. Si la TIR es mayor que el costo de oportunidad se acepta el proyecto, si la TIR es igual al costo de oportunidad es indiferente aceptar o rechazar el proyecto, si la TIR es menor que el costo de oportunidad se rechaza el proyecto
 
-                Costo de oportunidad de capital (COK) es la tasa de interés que podría haber obtenido con el dinero invertido en el proyecto
-
+            La Tasa Interna de Retorno indica la rentabilidad del proyecto en porcentaje anual.
+            Si la TIR es mayor que el costo de oportunidad (COK), el proyecto se acepta.
+            
+            <img width="671" height="287" alt="PASOFT_IMAGE02" src="https://github.com/user-attachments/assets/02429a92-9f0c-4bc7-b3c1-c8a9255a237b" />
+            
+            TIR = 43%
+            
+            Esto indica que el proyecto tiene una alta rentabilidad, superando el costo de oportunidad del 13%, por lo que es viable.
+   
+            
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
 6. <span id="_Toc52661357" class="anchor"></span>**Conclusiones**
 
-Explicar los resultados del análisis de factibilidad que nos indican si el proyecto es viable y factible.
+El análisis de factibilidad demuestra que el proyecto del sistema de control de asistencia mediante reconocimiento por vectores numéricos es viable técnica, económica, operativa, legal, social y ambientalmente. Los resultados financieros muestran un VAN positivo de S/ 4,081.11, una TIR de 43% y una relación beneficio/costo de 1.72, lo que confirma que el proyecto es rentable y sostenible en el tiempo.
+
+En conclusión, la implementación del sistema permitirá mejorar la gestión de asistencia en instituciones educativas de Tacna, optimizar recursos, reducir errores administrativos y modernizar los procesos académicos, garantizando beneficios económicos y operativos a largo plazo.
