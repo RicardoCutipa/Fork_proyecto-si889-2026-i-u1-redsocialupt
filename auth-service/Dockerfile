@@ -18,4 +18,5 @@ RUN mkdir -p storage/logs storage/framework/views \
 
 EXPOSE 8000
 
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+# Ejecutar migraciones y luego iniciar el servidor
+CMD php artisan migrate --force 2>/dev/null; php -S 0.0.0.0:8000 -t public
