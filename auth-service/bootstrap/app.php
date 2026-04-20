@@ -23,7 +23,33 @@ $app->withEloquent();
 
 /*
 |--------------------------------------------------------------------------
-| Registrar Middleware
+| Registrar Singletons
+|--------------------------------------------------------------------------
+*/
+
+$app->singleton(
+    Illuminate\Contracts\Debug\ExceptionHandler::class,
+    Laravel\Lumen\Exceptions\Handler::class
+);
+
+$app->singleton(
+    Illuminate\Contracts\Console\Kernel::class,
+    Laravel\Lumen\Console\Kernel::class
+);
+
+/*
+|--------------------------------------------------------------------------
+| Registrar Middleware Global
+|--------------------------------------------------------------------------
+*/
+
+$app->middleware([
+    App\Http\Middleware\CorsMiddleware::class,
+]);
+
+/*
+|--------------------------------------------------------------------------
+| Registrar Middleware de Ruta
 |--------------------------------------------------------------------------
 */
 

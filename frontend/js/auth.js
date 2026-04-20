@@ -40,14 +40,27 @@ async function handleGoogleAuth(response) {
  * Muestra la sección de usuario autenticado y oculta el login.
  */
 function showUserSection(user) {
+    console.log('[Auth] Usuario autenticado:', user); // debug temporal
+
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('user-section').style.display = 'block';
 
     document.getElementById('user-name').textContent = user.name || user.email;
     document.getElementById('user-email').textContent = user.email;
 
+    var avatar = document.getElementById('user-avatar');
     if (user.avatar_url) {
-        document.getElementById('user-avatar').src = user.avatar_url;
+        avatar.src = user.avatar_url;
+        avatar.onerror = function() {
+            // Si falla la imagen de Google, mostrar inicial del nombre
+            avatar.style.display = 'none';
+            var fallback = document.createElement('span');
+            fallback.textContent = (user.name || user.email).charAt(0).toUpperCase();
+            fallback.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;background:#4285f4;color:#fff;font-size:22px;font-weight:bold;';
+            avatar.parentNode.insertBefore(fallback, avatar);
+        };
+    } else {
+        avatar.style.display = 'none';
     }
 
     // Mostrar botón de admin si el usuario es admin

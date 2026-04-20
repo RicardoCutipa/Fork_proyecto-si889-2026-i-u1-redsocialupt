@@ -56,7 +56,7 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: rootpass
       JWT_SECRET: super-secret-key-change-in-production
-      GOOGLE_CLIENT_ID: PENDIENTE
+      GOOGLE_CLIENT_ID: 955206169841-jpg61cp2k46i1bdfbg7mujqukqqfsbgs.apps.googleusercontent.com
     depends_on:
       auth-db:
         condition: service_healthy
