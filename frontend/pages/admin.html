@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Red Social UPT</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Panel de Administración</h1>
+        <a href="../index.html">← Volver al inicio</a>
+
+        <div id="admin-error" style="display:none; color:red; margin:10px 0;"></div>
+
+        <h2>Usuarios registrados</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Activo</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody id="users-table-body">
+                <tr><td colspan="6">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script>
+        /**
+         * Carga la lista de usuarios desde Auth Service.
+         */
+        async function loadUsers() {
+            const errorDiv = document.getElementById('admin-error');
+            errorDiv.style.display = 'none';
+
+            try {
+                const res = await authFetch(API.AUTH + '/admin/users');
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Error al cargar usuarios');
+                }
+
+                const tbody = document.getElementById('users-table-body');
+                tbody.innerHTML = '';
+
+                data.forEach(function(user) {
+                    const row = document.createElement('tr');
+                    row.innerHTML =
+                        '<td>' + user.id + '</td>' +
+                        '<td>' + (user.name || '—') + '</td>' +
+                        '<td>' + user.email + '</td>' +
+                        '<td>' + user.role + '</td>' +
+                        '<td>' + (user.is_active ? '✅' : '❌') + '</td>' +
+                        '<td><button onclick="toggleUser(' + user.id + ')">' +
+                        (user.is_active ? 'Desactivar' : 'Activar') +
+                        '</button></td>';
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        /**
+         * Activa/desactiva un usuario.
+         */
+        async function toggleUser(userId) {
+            try {
+                const res = await authFetch(API.AUTH + '/admin/users/' + userId, {
+                    method: 'PUT',
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Error al actualizar usuario');
+                }
+
+                loadUsers(); // Recargar tabla
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        // Cargar usuarios al abrir la página
+        window.addEventListener('DOMContentLoaded', loadUsers);
+    </script>
+</body>
+</html>

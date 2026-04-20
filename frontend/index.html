@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Social UPT — Iniciar Sesión</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Red Social UPT</h1>
+        <p>Plataforma exclusiva para la comunidad universitaria</p>
+
+        <div id="login-section">
+            <p>Inicia sesión con tu cuenta <strong>@virtual.upt.pe</strong></p>
+
+            <div id="g_id_onload"
+                 data-client_id="PENDIENTE"
+                 data-callback="handleGoogleAuth"
+                 data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-size="large"
+                 data-theme="outline"
+                 data-text="sign_in_with"
+                 data-shape="rectangular"
+                 data-locale="es">
+            </div>
+
+            <div id="error-message" style="display:none; color:red; margin-top:10px;"></div>
+        </div>
+
+        <div id="user-section" style="display:none;">
+            <div id="user-info">
+                <img id="user-avatar" src="" alt="Avatar" width="50" height="50" style="border-radius:50%;">
+                <span id="user-name"></span>
+                <span id="user-email"></span>
+            </div>
+            <button id="btn-logout" onclick="logout()">Cerrar Sesión</button>
+            <a id="btn-admin" href="pages/admin.html" style="display:none;">Panel de Admin</a>
+            <a href="pages/feed.html">Ir al Feed</a>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>
