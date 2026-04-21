@@ -74,12 +74,13 @@ docker compose up --build
 | RF-02 | Autenticación segura con Google OAuth + JWT |
 | RF-03 | Crear publicaciones de texto e imagen en el feed |
 | RF-04 | Visualizar el feed en orden cronológico |
-| RF-05 | Publicar historias de texto o imagen con expiración automática |
-| RF-06 | Dar likes a publicaciones |
-| RF-07 | Comentar publicaciones |
-| RF-08 | Compartir publicaciones |
-| RF-09 | Gestionar perfil (nombre, foto, carrera, facultad) |
-| RF-10 | Panel de administración para gestión de usuarios y contenido |
+| RF-05 | Enviar, aceptar y rechazar solicitudes de amistad |
+| RF-06 | Chat privado entre amigos (mensajes en tiempo real con polling) |
+| RF-07 | Dar likes a publicaciones |
+| RF-08 | Comentar publicaciones |
+| RF-09 | Compartir publicaciones |
+| RF-10 | Gestionar perfil (nombre, foto, carrera, facultad) |
+| RF-11 | Panel de administración para gestión de usuarios y contenido |
 
 ---
 
