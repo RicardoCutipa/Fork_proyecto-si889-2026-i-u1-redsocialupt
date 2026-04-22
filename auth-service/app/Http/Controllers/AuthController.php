@@ -18,9 +18,7 @@ class AuthController extends BaseController
 
     /**
      * POST /api/auth/google
-     *
-     * Autentica al usuario con Google OAuth.
-     * Si es la primera vez, crea el usuario automáticamente.
+     * Verifica ID Token de Google, crea/encuentra usuario, retorna JWT.
      */
     public function googleAuth(Request $request): JsonResponse
     {
@@ -30,18 +28,63 @@ class AuthController extends BaseController
 
         try {
             $result = $this->authService->googleAuth($request->input('id_token'));
-
             return response()->json($result, 200);
         } catch (\Exception $e) {
-            $code = $e->getCode() ?: 500;
-            return response()->json(['error' => $e->getMessage()], $code);
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    /**
+     * POST /api/auth/complete-profile
+     * Guarda los datos del formulario de primer acceso (RF-01).
+     */
+    public function completeProfile(Request $request): JsonResponse
+    {
+        $this->validate($request, [
+            'full_name'      => 'required|string|max:150',
+            'user_type'      => 'required|in:student,teacher',
+            'faculty'        => 'nullable|string|max:150',
+            'career'         => 'nullable|string|max:150',
+            'academic_cycle' => 'nullable|string|max:20',
+            'student_code'   => 'nullable|string|max:20',
+        ]);
+
+        try {
+            $user = $this->authService->completeProfile(
+                $request->auth->sub,
+                $request->only(['full_name', 'user_type', 'faculty', 'career', 'academic_cycle', 'student_code'])
+            );
+            return response()->json(['message' => 'Perfil completado', 'user' => $user], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    /**
+     * PUT /api/auth/profile
+     * Editar avatar y bio del perfil (RF-06).
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $this->validate($request, [
+            'avatar_url' => 'nullable|string|max:500',
+            'bio'        => 'nullable|string',
+        ]);
+
+        try {
+            $user = $this->authService->updateProfile(
+                $request->auth->sub,
+                $request->only(['avatar_url', 'bio'])
+            );
+            return response()->json(['message' => 'Perfil actualizado', 'user' => $user], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
         }
     }
 
     /**
      * POST /api/auth/logout
-     *
-     * Cierra sesión. El frontend descarta el JWT.
+     * El frontend descarta el JWT.
      */
     public function logout(): JsonResponse
     {
@@ -50,23 +93,13 @@ class AuthController extends BaseController
 
     /**
      * GET /api/auth/me
-     *
-     * Retorna los datos del usuario autenticado.
+     * Datos del usuario autenticado.
      */
     public function me(Request $request): JsonResponse
     {
         try {
             $user = $this->authService->getAuthenticatedUser($request->auth->sub);
-
-            return response()->json([
-                'id'         => $user->id,
-                'email'      => $user->email,
-                'name'       => $user->name,
-                'avatar_url' => $user->avatar_url,
-                'role'       => $user->role,
-                'is_active'  => $user->is_active,
-                'created_at' => $user->created_at,
-            ], 200);
+            return response()->json($user, 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
         }
@@ -74,8 +107,7 @@ class AuthController extends BaseController
 
     /**
      * GET /api/auth/verify
-     *
-     * Verifica que el JWT es válido. Uso inter-servicio.
+     * Verifica validez del JWT (uso inter-servicio).
      */
     public function verify(Request $request): JsonResponse
     {
@@ -89,8 +121,7 @@ class AuthController extends BaseController
 
     /**
      * GET /api/auth/admin/users
-     *
-     * Lista todos los usuarios (solo admin).
+     * Lista todos los usuarios (RF-09 — solo admin).
      */
     public function listUsers(Request $request): JsonResponse
     {
@@ -98,15 +129,12 @@ class AuthController extends BaseController
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
-        $users = $this->authService->listUsers();
-
-        return response()->json($users, 200);
+        return response()->json($this->authService->listUsers(), 200);
     }
 
     /**
      * PUT /api/auth/admin/users/{id}
-     *
-     * Activa o desactiva un usuario (solo admin).
+     * Activa o desactiva un usuario (RF-09 — solo admin).
      */
     public function toggleUser(Request $request, int $id): JsonResponse
     {
@@ -116,11 +144,38 @@ class AuthController extends BaseController
 
         try {
             $user = $this->authService->toggleUser($id);
-
             return response()->json([
-                'message'   => $user->is_active ? 'Usuario activado' : 'Usuario desactivado',
-                'user'      => $user,
+                'message' => $user->is_active ? 'Usuario activado' : 'Usuario desactivado',
+                'user'    => $user,
             ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    /**
+     * PUT /api/auth/admin/users/{id}/academic
+     * Edita info académica de un usuario (RF-09 — solo admin).
+     */
+    public function updateAcademic(Request $request, int $id): JsonResponse
+    {
+        if ($request->auth->role !== 'admin') {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $this->validate($request, [
+            'user_type'      => 'nullable|in:student,teacher',
+            'faculty'        => 'nullable|string|max:150',
+            'career'         => 'nullable|string|max:150',
+            'academic_cycle' => 'nullable|string|max:20',
+            'student_code'   => 'nullable|string|max:20',
+        ]);
+
+        try {
+            $user = $this->authService->updateAcademic($id, $request->only([
+                'user_type', 'faculty', 'career', 'academic_cycle', 'student_code',
+            ]));
+            return response()->json(['message' => 'Datos académicos actualizados', 'user' => $user], 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
         }
