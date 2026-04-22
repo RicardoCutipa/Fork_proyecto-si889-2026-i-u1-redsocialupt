@@ -1,0 +1,197 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── PHPUnit Tests (4 microservicios) ────────────────────────────────
+  test-auth:
+    name: Tests Auth Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: auth-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, zip
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  test-posts:
+    name: Tests Posts Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: posts-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, zip
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  test-social:
+    name: Tests Profile Social Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: profile-social-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, zip
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  test-chat:
+    name: Tests Chat Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chat-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, zip
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  # ── SonarCloud ──────────────────────────────────────────────────────
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: [test-auth, test-posts, test-social, test-chat]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ── Snyk Security ───────────────────────────────────────────────────
+  snyk:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    needs: [test-auth, test-posts, test-social, test-chat]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+      - name: Install auth-service deps
+        run: composer install --no-interaction --prefer-dist
+        working-directory: auth-service
+      - name: Install posts-service deps
+        run: composer install --no-interaction --prefer-dist
+        working-directory: posts-service
+      - name: Install social-service deps
+        run: composer install --no-interaction --prefer-dist
+        working-directory: profile-social-service
+      - name: Install chat-service deps
+        run: composer install --no-interaction --prefer-dist
+        working-directory: chat-service
+      - name: Run Snyk (auth)
+        uses: snyk/actions/php@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=auth-service/composer.lock --severity-threshold=high
+      - name: Run Snyk (posts)
+        uses: snyk/actions/php@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=posts-service/composer.lock --severity-threshold=high
+      - name: Run Snyk (social)
+        uses: snyk/actions/php@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=profile-social-service/composer.lock --severity-threshold=high
+      - name: Run Snyk (chat)
+        uses: snyk/actions/php@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=chat-service/composer.lock --severity-threshold=high
+
+  # ── Docker Build ────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test-auth, test-posts, test-social, test-chat]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build auth-service
+        run: docker build -t auth-service ./auth-service
+      - name: Build posts-service
+        run: docker build -t posts-service ./posts-service
+      - name: Build profile-social-service
+        run: docker build -t profile-social-service ./profile-social-service
+      - name: Build chat-service
+        run: docker build -t chat-service ./chat-service
+
+  # ── Docker Publish (solo en Release) ────────────────────────────────
+  docker-publish:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    needs: [docker-build, sonarcloud]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & Push auth-service
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/auth-service:latest ./auth-service
+          docker push ghcr.io/${{ github.repository }}/auth-service:latest
+      - name: Build & Push posts-service
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/posts-service:latest ./posts-service
+          docker push ghcr.io/${{ github.repository }}/posts-service:latest
+      - name: Build & Push profile-social-service
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/profile-social-service:latest ./profile-social-service
+          docker push ghcr.io/${{ github.repository }}/profile-social-service:latest
+      - name: Build & Push chat-service
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/chat-service:latest ./chat-service
+          docker push ghcr.io/${{ github.repository }}/chat-service:latest
