@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compañeros — UPT Connect</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .directory-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:var(--sm); }
+    .user-card { display:flex; flex-direction:column; align-items:center; gap:var(--sm); padding:var(--md); text-align:center; }
+    .user-card .name { font-weight:600; font-size:15px; }
+    .user-card .career { font-size:12px; color:var(--on-surface-var); }
+    .user-card .actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+    .pending-section { margin-bottom:var(--md); }
+    .pending-cards { display:flex; flex-direction:column; gap:var(--xs); }
+    .req-item { display:flex; align-items:center; gap:var(--sm); padding:var(--sm); background:var(--surface-card); border:1px solid var(--outline-var); border-radius:var(--r-md); }
+    .req-item .info { flex:1; }
+    .req-item .info .name { font-weight:600; font-size:14px; }
+    .req-item .info .career { font-size:12px; color:var(--on-surface-var); }
+    .req-item .btns { display:flex; gap:6px; }
+    .filters { display:flex; gap:var(--sm); margin-bottom:var(--md); flex-wrap:wrap; align-items:center; }
+    .filters select { flex:1; min-width:160px; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
+    <div class="sidebar-user">
+      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
+      <div class="sidebar-user-info"><div class="name" id="sb-name">...</div><div class="career" id="sb-career">...</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="feed.html"><span class="mi">home</span> Inicio</a>
+      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
+      <a href="messages.html"><span class="mi">chat</span> Mensajes</a>
+      <a href="companions.html" class="active"><span class="mi">groups</span> Compañeros</a>
+    </nav>
+    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
+  </aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title">Compañeros</span>
+    </header>
+    <main class="page-body wide">
+      <!-- Pending requests -->
+      <div class="pending-section" id="pending-section" style="display:none">
+        <h2 style="font-size:16px;font-weight:700;color:var(--primary);margin-bottom:var(--sm)">Solicitudes recibidas</h2>
+        <div class="pending-cards" id="pending-list"></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <div class="search-wrap" style="flex:2;min-width:200px">
+          <span class="mi">search</span>
+          <input type="text" class="input-field" id="search-input" placeholder="Buscar por nombre...">
+        </div>
+        <select class="input-field" id="career-filter" style="flex:1;min-width:160px">
+          <option value="">Todas las carreras</option>
+          <option>Ingeniería de Sistemas</option>
+          <option>Medicina Humana</option>
+          <option>Derecho</option>
+          <option>Administración de Empresas</option>
+          <option>Ingeniería Civil</option>
+          <option>Arquitectura</option>
+          <option>Educación Inicial</option>
+          <option>Contabilidad</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="loadDirectory()"><span class="mi">filter_list</span> Filtrar</button>
+      </div>
+
+      <!-- Directory grid -->
+      <div class="directory-grid" id="directory-grid">
+        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="../js/api.js"></script>
+<script>
+requireAuth();
+const user = getUser();
+if(user){
+  document.getElementById('sb-name').textContent=user.name||'';
+  document.getElementById('sb-career').textContent=user.career||'';
+  const c=getFacultyColor(user.career);
+  const el=document.getElementById('sb-avatar'); el.textContent=initials(user.name); el.style.background=c; el.style.color='#fff';
+}
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+async function loadDirectory() {
+  const q=document.getElementById('search-input').value;
+  const career=document.getElementById('career-filter').value;
+  const params=new URLSearchParams();
+  if(q) params.set('search',q);
+  if(career) params.set('career',career);
+  const grid=document.getElementById('directory-grid');
+  grid.innerHTML=`<div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>`;
+  const res=await SocialAPI.getDirectory(params.toString());
+  if(!res?.ok||!res.data.length){ grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1"><span class="mi">group_off</span><p>No se encontraron usuarios</p></div>`; return; }
+
+  // Get friends list to know relationship state
+  const fr=await SocialAPI.getFriends();
+  const friendIds=new Set((fr?.data||[]).map(f=>f.id));
+
+  grid.innerHTML=res.data.map(u=>{
+    const c=getFacultyColor(u.career), isMe=user&&u.id===user.id, isFriend=friendIds.has(u.id);
+    let action='';
+    if(isMe) action=`<a href="profile.html" class="btn btn-secondary btn-sm">Mi perfil</a>`;
+    else if(isFriend) action=`<span style="font-size:12px;color:var(--on-surface-var);font-weight:600">✓ Son amigos</span>`;
+    else action=`<button class="btn btn-primary btn-sm" onclick="sendReq(${u.id},this)"><span class="mi">person_add</span> Conectar</button>`;
+    return `<div class="card user-card">
+      <div class="avatar avatar-lg" style="background:${c}">${initials(u.name)}</div>
+      <div>
+        <a class="name" href="profile.html?id=${u.id}">${esc(u.name)}</a>
+        <div class="career">${esc(u.career||'')}</div>
+        <span class="faculty-badge" style="background:${c};margin-top:4px;font-size:10px">${esc(u.career||'')}</span>
+      </div>
+      <div class="actions">${action}
+        ${!isMe?`<a href="messages.html?user=${u.id}" class="btn btn-ghost btn-sm btn-icon" title="Mensaje"><span class="mi">chat</span></a>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function sendReq(id,btn){ btn.disabled=true; const r=await SocialAPI.sendRequest(id); if(r?.ok){showToast('Solicitud enviada ✓','success');btn.textContent='Pendiente';btn.disabled=true;}else{showToast(r?.data?.error||'Error','error');btn.disabled=false;} }
+
+async function loadPending() {
+  const res=await SocialAPI.getPendingRequests();
+  if(!res?.ok||!res.data.length) return;
+  document.getElementById('pending-section').style.display='';
+  document.getElementById('pending-list').innerHTML=res.data.map(r=>`
+    <div class="req-item" id="req-${r.request_id}">
+      <div class="avatar avatar-md" style="background:${getFacultyColor(r.career)}">${initials(r.name)}</div>
+      <div class="info"><div class="name">${esc(r.name)}</div><div class="career">${esc(r.career||'')}</div></div>
+      <div class="btns">
+        <button class="btn btn-primary btn-sm" onclick="acceptReq(${r.request_id})">Aceptar</button>
+        <button class="btn btn-ghost btn-sm" onclick="rejectReq(${r.request_id})">Rechazar</button>
+      </div>
+    </div>`).join('');
+}
+async function acceptReq(id){ const r=await SocialAPI.acceptRequest(id); if(r?.ok){document.getElementById(`req-${id}`)?.remove();showToast('Solicitud aceptada','success');loadDirectory();}else showToast('Error','error'); }
+async function rejectReq(id){ const r=await SocialAPI.rejectRequest(id); if(r?.ok){document.getElementById(`req-${id}`)?.remove();showToast('Solicitud rechazada','');}else showToast('Error','error'); }
+
+document.getElementById('search-input').addEventListener('keydown', e=>{ if(e.key==='Enter') loadDirectory(); });
+loadDirectory(); loadPending();
+</script>
+</body>
+</html>
