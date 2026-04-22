@@ -6,9 +6,8 @@ use Firebase\JWT\JWT;
 
 class AuthTest extends TestCase
 {
-    /**
-     * Helper: genera un JWT válido para tests.
-     */
+    // ── Helpers ──────────────────────────────────────────────────────────
+
     private function generateTestToken(array $overrides = []): string
     {
         $payload = array_merge([
@@ -22,70 +21,61 @@ class AuthTest extends TestCase
         return JWT::encode($payload, env('JWT_SECRET'), 'HS256');
     }
 
-    /**
-     * Helper: genera un JWT de admin.
-     */
     private function generateAdminToken(): string
     {
         return $this->generateTestToken(['role' => 'admin', 'sub' => 99]);
     }
 
-    /**
-     * Test: el endpoint raíz responde correctamente.
-     */
+    private function authHeader(string $token): array
+    {
+        return ['Authorization' => 'Bearer ' . $token];
+    }
+
+    // ── Tests públicos ────────────────────────────────────────────────────
+
     public function testRootEndpoint(): void
     {
         $response = $this->get('/');
-
         $this->assertEquals(200, $response->status());
         $this->seeJson(['service' => 'auth-service']);
     }
 
-    /**
-     * Test: POST /api/auth/google sin token retorna error.
-     */
-    public function testGoogleAuthWithoutToken(): void
+    public function testGoogleAuthRequiresToken(): void
     {
         $response = $this->post('/api/auth/google', []);
-
         $this->assertEquals(422, $response->status());
     }
 
-    /**
-     * Test: GET /api/auth/me sin JWT retorna 401.
-     */
+    // ── Tests JWT middleware ──────────────────────────────────────────────
+
     public function testMeWithoutJwt(): void
     {
         $response = $this->get('/api/auth/me');
-
         $this->assertEquals(401, $response->status());
         $this->seeJson(['error' => 'Token no proporcionado']);
     }
 
-    /**
-     * Test: GET /api/auth/me con JWT inválido retorna 401.
-     */
     public function testMeWithInvalidJwt(): void
     {
-        $response = $this->get('/api/auth/me', [
-            'Authorization' => 'Bearer token-invalido',
-        ]);
-
+        $response = $this->get('/api/auth/me', ['Authorization' => 'Bearer token-invalido']);
         $this->assertEquals(401, $response->status());
         $this->seeJson(['error' => 'Token inválido']);
     }
 
-    /**
-     * Test: GET /api/auth/verify con JWT válido retorna datos.
-     */
+    public function testExpiredToken(): void
+    {
+        $token    = $this->generateTestToken(['exp' => time() - 100]);
+        $response = $this->get('/api/auth/verify', $this->authHeader($token));
+        $this->assertEquals(401, $response->status());
+        $this->seeJson(['error' => 'Token expirado']);
+    }
+
+    // ── Tests endpoints protegidos ────────────────────────────────────────
+
     public function testVerifyWithValidJwt(): void
     {
-        $token = $this->generateTestToken();
-
-        $response = $this->get('/api/auth/verify', [
-            'Authorization' => 'Bearer ' . $token,
-        ]);
-
+        $token    = $this->generateTestToken();
+        $response = $this->get('/api/auth/verify', $this->authHeader($token));
         $this->assertEquals(200, $response->status());
         $this->seeJson([
             'valid'   => true,
@@ -95,48 +85,48 @@ class AuthTest extends TestCase
         ]);
     }
 
-    /**
-     * Test: POST /api/auth/logout con JWT válido cierra sesión.
-     */
     public function testLogout(): void
     {
-        $token = $this->generateTestToken();
-
-        $response = $this->post('/api/auth/logout', [], [
-            'Authorization' => 'Bearer ' . $token,
-        ]);
-
+        $token    = $this->generateTestToken();
+        $response = $this->post('/api/auth/logout', [], $this->authHeader($token));
         $this->assertEquals(200, $response->status());
         $this->seeJson(['message' => 'Sesión cerrada correctamente']);
     }
 
-    /**
-     * Test: GET /api/auth/admin/users sin ser admin retorna 403.
-     */
+    public function testCompleteProfileRequiresFullName(): void
+    {
+        $token    = $this->generateTestToken();
+        $response = $this->post('/api/auth/complete-profile', [], $this->authHeader($token));
+        $this->assertEquals(422, $response->status());
+    }
+
+    public function testUpdateProfileWithoutJwt(): void
+    {
+        $response = $this->put('/api/auth/profile', ['bio' => 'Hola']);
+        $this->assertEquals(401, $response->status());
+    }
+
+    // ── Tests admin ───────────────────────────────────────────────────────
+
     public function testListUsersAsNonAdmin(): void
     {
-        $token = $this->generateTestToken(['role' => 'user']);
-
-        $response = $this->get('/api/auth/admin/users', [
-            'Authorization' => 'Bearer ' . $token,
-        ]);
-
+        $token    = $this->generateTestToken(['role' => 'user']);
+        $response = $this->get('/api/auth/admin/users', $this->authHeader($token));
         $this->assertEquals(403, $response->status());
         $this->seeJson(['error' => 'No autorizado']);
     }
 
-    /**
-     * Test: JWT expirado retorna 401.
-     */
-    public function testExpiredToken(): void
+    public function testToggleUserAsNonAdmin(): void
     {
-        $token = $this->generateTestToken(['exp' => time() - 100]);
+        $token    = $this->generateTestToken(['role' => 'user']);
+        $response = $this->put('/api/auth/admin/users/1', [], $this->authHeader($token));
+        $this->assertEquals(403, $response->status());
+    }
 
-        $response = $this->get('/api/auth/verify', [
-            'Authorization' => 'Bearer ' . $token,
-        ]);
-
-        $this->assertEquals(401, $response->status());
-        $this->seeJson(['error' => 'Token expirado']);
+    public function testUpdateAcademicAsNonAdmin(): void
+    {
+        $token    = $this->generateTestToken(['role' => 'user']);
+        $response = $this->put('/api/auth/admin/users/1/academic', [], $this->authHeader($token));
+        $this->assertEquals(403, $response->status());
     }
 }

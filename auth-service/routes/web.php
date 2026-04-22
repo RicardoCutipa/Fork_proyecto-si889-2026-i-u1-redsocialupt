@@ -11,19 +11,23 @@ $router->get('/', function () {
 });
 
 $router->group(['prefix' => 'api/auth'], function () use ($router) {
-    // Público
+
+    // ── Público ──────────────────────────────────────────────
     $router->post('/google', 'AuthController@googleAuth');
 
-    // Protegido con JWT
+    // ── Protegido con JWT ────────────────────────────────────
     $router->group(['middleware' => 'jwt'], function () use ($router) {
-        $router->post('/logout', 'AuthController@logout');
-        $router->get('/me',      'AuthController@me');
-        $router->get('/verify',  'AuthController@verify');
+        $router->post('/logout',            'AuthController@logout');
+        $router->post('/complete-profile',  'AuthController@completeProfile');
+        $router->get('/me',                 'AuthController@me');
+        $router->put('/profile',            'AuthController@updateProfile');
+        $router->get('/verify',             'AuthController@verify');
     });
 
-    // Admin
+    // ── Admin (JWT requerido — rol verificado inline en el controlador) ──
     $router->group(['prefix' => 'admin', 'middleware' => 'jwt'], function () use ($router) {
-        $router->get('/users',       'AuthController@listUsers');
-        $router->put('/users/{id}',  'AuthController@toggleUser');
+        $router->get('/users',                  'AuthController@listUsers');
+        $router->put('/users/{id}',             'AuthController@toggleUser');
+        $router->put('/users/{id}/academic',    'AuthController@updateAcademic');
     });
 });

@@ -9,19 +9,12 @@ use Google\Client as GoogleClient;
 class AuthService
 {
     /**
-     * Autentica al usuario con Google OAuth.
-     *
-     * Verifica el ID Token de Google, comprueba que el email sea
-     * @virtual.upt.pe, y crea o encuentra al usuario en la BD.
-     *
-     * @param string $idToken ID Token de Google enviado desde el frontend
-     * @return array Token JWT propio y datos del usuario
-     * @throws \Exception Si el token es inválido o el dominio no es permitido
+     * Autentica con Google OAuth.
+     * Verifica el ID Token, comprueba @virtual.upt.pe, crea o encuentra el usuario.
      */
     public function googleAuth(string $idToken): array
     {
-        // Verificar el ID Token con Google
-        $client = new GoogleClient(['client_id' => env('GOOGLE_CLIENT_ID')]);
+        $client  = new GoogleClient(['client_id' => env('GOOGLE_CLIENT_ID')]);
         $payload = $client->verifyIdToken($idToken);
 
         if (!$payload) {
@@ -33,13 +26,11 @@ class AuthService
         $name     = $payload['name'] ?? '';
         $avatar   = $payload['picture'] ?? '';
 
-        // Verificar dominio @virtual.upt.pe
-        $domain = substr(strrchr($email, '@'), 1);
-        if ($domain !== 'virtual.upt.pe') {
+        // Validar dominio
+        if (substr(strrchr($email, '@'), 1) !== 'virtual.upt.pe') {
             throw new \Exception('Solo se permiten cuentas @virtual.upt.pe', 403);
         }
 
-        // Crear o encontrar usuario
         $user = User::firstOrCreate(
             ['google_id' => $googleId],
             [
@@ -51,69 +42,74 @@ class AuthService
             ]
         );
 
-        // Verificar si el usuario está activo
         if (!$user->is_active) {
             throw new \Exception('Tu cuenta ha sido desactivada', 403);
         }
 
-        // Generar nuestro JWT
-        $token = $this->generateJwt($user);
-
         return [
-            'token' => $token,
-            'user'  => [
-                'id'         => $user->id,
-                'email'      => $user->email,
-                'name'       => $user->name,
-                'avatar_url' => $user->avatar_url,
-                'role'       => $user->role,
-            ],
+            'token'               => $this->generateJwt($user),
+            'is_profile_complete' => $user->is_profile_complete,
+            'user'                => $this->formatUser($user),
         ];
     }
 
     /**
-     * Obtiene los datos del usuario autenticado.
-     *
-     * @param int $userId
-     * @return User
-     * @throws \Exception Si el usuario no existe
+     * Completa el perfil en el primer acceso (RF-01).
+     */
+    public function completeProfile(int $userId, array $data): User
+    {
+        $user = $this->findOrFail($userId);
+
+        $user->update([
+            'full_name'      => $data['full_name'],
+            'user_type'      => $data['user_type']      ?? 'student',
+            'faculty'        => $data['faculty']         ?? null,
+            'career'         => $data['career']          ?? null,
+            'academic_cycle' => $data['academic_cycle']  ?? null,
+            'student_code'   => $data['student_code']    ?? null,
+            'is_profile_complete' => true,
+        ]);
+
+        return $user->fresh();
+    }
+
+    /**
+     * Actualiza avatar y bio del perfil (RF-06).
+     */
+    public function updateProfile(int $userId, array $data): User
+    {
+        $user = $this->findOrFail($userId);
+
+        $user->update(array_filter([
+            'avatar_url' => $data['avatar_url'] ?? null,
+            'bio'        => $data['bio']        ?? null,
+        ], fn($v) => $v !== null));
+
+        return $user->fresh();
+    }
+
+    /**
+     * Retorna los datos del usuario autenticado.
      */
     public function getAuthenticatedUser(int $userId): User
     {
-        $user = User::find($userId);
-
-        if (!$user) {
-            throw new \Exception('Usuario no encontrado', 404);
-        }
-
-        return $user;
+        return $this->findOrFail($userId);
     }
 
     /**
-     * Lista todos los usuarios (solo admin).
-     *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * Lista todos los usuarios (RF-09 — solo admin).
      */
     public function listUsers()
     {
-        return User::all();
+        return User::orderBy('created_at', 'desc')->get();
     }
 
     /**
-     * Activa o desactiva un usuario (solo admin).
-     *
-     * @param int $userId
-     * @return User
-     * @throws \Exception Si el usuario no existe
+     * Activa o desactiva un usuario (RF-09 — solo admin).
      */
     public function toggleUser(int $userId): User
     {
-        $user = User::find($userId);
-
-        if (!$user) {
-            throw new \Exception('Usuario no encontrado', 404);
-        }
-
+        $user = $this->findOrFail($userId);
         $user->is_active = !$user->is_active;
         $user->save();
 
@@ -121,11 +117,34 @@ class AuthService
     }
 
     /**
-     * Genera un JWT firmado con los datos del usuario.
-     *
-     * @param User $user
-     * @return string
+     * Actualiza datos académicos de un usuario (RF-09 — solo admin).
      */
+    public function updateAcademic(int $userId, array $data): User
+    {
+        $user = $this->findOrFail($userId);
+
+        $user->update(array_filter([
+            'faculty'        => $data['faculty']        ?? null,
+            'career'         => $data['career']         ?? null,
+            'academic_cycle' => $data['academic_cycle'] ?? null,
+            'student_code'   => $data['student_code']   ?? null,
+            'user_type'      => $data['user_type']      ?? null,
+        ], fn($v) => $v !== null));
+
+        return $user->fresh();
+    }
+
+    // ─── Privados ─────────────────────────────────────────
+
+    private function findOrFail(int $userId): User
+    {
+        $user = User::find($userId);
+        if (!$user) {
+            throw new \Exception('Usuario no encontrado', 404);
+        }
+        return $user;
+    }
+
     private function generateJwt(User $user): string
     {
         $payload = [
@@ -136,10 +155,21 @@ class AuthService
             'exp'   => time() + (env('JWT_EXPIRATION_MINUTES', 60) * 60),
         ];
 
-        return JWT::encode(
-            $payload,
-            env('JWT_SECRET'),
-            env('JWT_ALGORITHM', 'HS256')
-        );
+        return JWT::encode($payload, env('JWT_SECRET'), env('JWT_ALGORITHM', 'HS256'));
+    }
+
+    private function formatUser(User $user): array
+    {
+        return [
+            'id'                  => $user->id,
+            'email'               => $user->email,
+            'name'                => $user->name,
+            'full_name'           => $user->full_name,
+            'avatar_url'          => $user->avatar_url,
+            'faculty'             => $user->faculty,
+            'career'              => $user->career,
+            'role'                => $user->role,
+            'is_profile_complete' => $user->is_profile_complete,
+        ];
     }
 }
