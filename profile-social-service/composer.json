@@ -20,5 +20,12 @@
             "Tests\\": "tests/"
         }
     },
+    "config": {
+        "preferred-install": "dist",
+        "optimize-autoloader": true,
+        "audit": {
+            "ignore": ["PKSA-y2cr-5h3j-g3ys"]
+        }
+    },
     "minimum-stability": "stable"
 }
