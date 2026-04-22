@@ -70,17 +70,15 @@ docker compose up --build
 
 | # | Descripción |
 |---|---|
-| RF-01 | Inicio de sesión con cuenta Google `@virtual.upt.pe` |
-| RF-02 | Autenticación segura con Google OAuth + JWT |
-| RF-03 | Crear publicaciones de texto e imagen en el feed |
-| RF-04 | Visualizar el feed en orden cronológico |
-| RF-05 | Enviar, aceptar y rechazar solicitudes de amistad |
-| RF-06 | Chat privado entre amigos (mensajes en tiempo real con polling) |
-| RF-07 | Dar likes a publicaciones |
-| RF-08 | Comentar publicaciones |
-| RF-09 | Compartir publicaciones |
-| RF-10 | Gestionar perfil (nombre, foto, carrera, facultad) |
-| RF-11 | Panel de administración para gestión de usuarios y contenido |
+| RF-01 | Login con `@virtual.upt.pe` via Google OAuth; formulario de primer acceso (nombre, tipo, facultad, escuela, ciclo, código); cierre de sesión |
+| RF-02 | Crear publicaciones de texto e imagen con visibilidad: todos / compañeros / mi facultad |
+| RF-03 | Feed en orden cronológico filtrado según visibilidad y relaciones del usuario |
+| RF-04 | Dar likes a publicaciones |
+| RF-05 | Comentar publicaciones |
+| RF-06 | Gestionar perfil: editar foto de perfil, foto de portada y bio |
+| RF-07 | Directorio de compañeros: explorar por facultad/escuela, buscar por nombre, enviar/aceptar/rechazar solicitudes, ver lista de compañeros; badge con solicitudes pendientes |
+| RF-08 | Chat privado entre compañeros: texto e imágenes, polling cada 3s |
+| RF-09 | Panel de administración: gestión de usuarios (editar info académica, activar/desactivar), moderación de publicaciones y comentarios |
 
 ---
 
