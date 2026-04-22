@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mensajes — UPT Connect</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .messages-layout { display:grid; grid-template-columns:280px 1fr; gap:0; height:calc(100vh - var(--topbar-h)); overflow:hidden; }
+    .inbox-panel { border-right:1px solid var(--outline-var); overflow-y:auto; background:var(--surface-card); }
+    .inbox-header { padding:var(--sm) var(--md); border-bottom:1px solid var(--outline-var); font-size:15px; font-weight:700; color:var(--primary); }
+    .inbox-item { display:flex; align-items:center; gap:var(--sm); padding:var(--sm) var(--md); cursor:pointer; transition:background .15s; border-bottom:1px solid var(--outline-var); }
+    .inbox-item:hover { background:var(--surface-low); }
+    .inbox-item.active { background:rgba(27,42,107,.07); }
+    .inbox-item .info { flex:1; min-width:0; }
+    .inbox-item .info .name { font-weight:600; font-size:14px; }
+    .inbox-item .info .preview { font-size:12px; color:var(--on-surface-var); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .inbox-item .unread { background:var(--primary); color:#fff; border-radius:var(--r-full); font-size:11px; font-weight:700; padding:2px 7px; }
+    .chat-panel { display:flex; flex-direction:column; height:100%; }
+    .chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:var(--on-surface-var); gap:var(--sm); }
+    .chat-empty .mi { font-size:56px; opacity:.3; }
+    .chat-header { display:flex; align-items:center; gap:var(--sm); padding:var(--sm) var(--md); border-bottom:1px solid var(--outline-var); background:var(--surface-card); }
+    .chat-header .name { font-weight:700; font-size:16px; }
+    .chat-header .career { font-size:12px; color:var(--on-surface-var); }
+    .chat-messages { flex:1; overflow-y:auto; padding:var(--md); display:flex; flex-direction:column; gap:var(--sm); background:var(--surface); }
+    .msg { max-width:70%; padding:10px 14px; border-radius:var(--r-lg); font-size:14px; line-height:1.5; word-break:break-word; }
+    .msg.sent { background:var(--primary); color:#fff; align-self:flex-end; border-bottom-right-radius:var(--r-sm); }
+    .msg.recv { background:var(--surface-card); border:1px solid var(--outline-var); align-self:flex-start; border-bottom-left-radius:var(--r-sm); }
+    .msg .msg-time { font-size:11px; opacity:.65; margin-top:4px; text-align:right; }
+    .chat-input-bar { display:flex; gap:var(--sm); padding:var(--sm) var(--md); border-top:1px solid var(--outline-var); background:var(--surface-card); }
+    .chat-input-bar input { flex:1; padding:10px 16px; border-radius:var(--r-full); border:1.5px solid var(--outline-var); font-size:14px; }
+    .chat-input-bar input:focus { outline:none; border-color:var(--primary); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
+    <div class="sidebar-user">
+      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
+      <div class="sidebar-user-info"><div class="name" id="sb-name">...</div><div class="career" id="sb-career">...</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="feed.html"><span class="mi">home</span> Inicio</a>
+      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
+      <a href="messages.html" class="active"><span class="mi">chat</span> Mensajes</a>
+      <a href="companions.html"><span class="mi">groups</span> Compañeros</a>
+    </nav>
+    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
+  </aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title">Mensajes</span>
+    </header>
+    <div class="messages-layout">
+      <!-- Inbox -->
+      <div class="inbox-panel">
+        <div class="inbox-header">Conversaciones</div>
+        <div id="inbox-list"><div class="loading-center"><div class="spinner" style="width:24px;height:24px;border-width:2px"></div></div></div>
+      </div>
+      <!-- Chat -->
+      <div class="chat-panel" id="chat-panel">
+        <div class="chat-empty"><span class="mi">forum</span><p>Selecciona una conversación</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../js/api.js"></script>
+<script>
+requireAuth();
+const user = getUser();
+if(user){
+  document.getElementById('sb-name').textContent=user.name||'';
+  document.getElementById('sb-career').textContent=user.career||'';
+  const c=getFacultyColor(user.career);
+  const el=document.getElementById('sb-avatar'); el.textContent=initials(user.name); el.style.background=c; el.style.color='#fff';
+}
+
+let pollTimer=null, activeUserId=null;
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function msgTime(d){ return new Date(d).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
+
+async function loadInbox() {
+  const res = await ChatAPI.getInbox();
+  const el = document.getElementById('inbox-list');
+  if(!res?.ok||!res.data.length){ el.innerHTML=`<div class="empty-state" style="padding:var(--md)"><span class="mi">chat_bubble_outline</span><p>Sin conversaciones</p></div>`; return; }
+  el.innerHTML=res.data.map(c=>`
+    <div class="inbox-item ${activeUserId===c.contact_id?'active':''}" onclick="openChat(${c.contact_id},'${esc(c.contact_name||'Usuario')}','${esc(c.contact_career||'')}')">
+      <div class="avatar avatar-sm" style="background:${getFacultyColor(c.contact_career)}">${initials(c.contact_name)}</div>
+      <div class="info">
+        <div class="name">${esc(c.contact_name||'Usuario')}</div>
+        <div class="preview">${esc(c.last_message?.content||'')}</div>
+      </div>
+      ${c.unread_count>0?`<span class="unread">${c.unread_count}</span>`:''}
+    </div>`).join('');
+
+  // Open from URL ?user=
+  const urlUser=new URLSearchParams(location.search).get('user');
+  if(urlUser&&!activeUserId){
+    const item=res.data.find(c=>c.contact_id==urlUser);
+    if(item) openChat(urlUser,item.contact_name||'Usuario',item.contact_career||'');
+  }
+}
+
+function openChat(uid, name, career) {
+  activeUserId=parseInt(uid);
+  if(pollTimer) clearInterval(pollTimer);
+  const color=getFacultyColor(career);
+  document.getElementById('chat-panel').innerHTML=`
+    <div class="chat-header">
+      <div class="avatar avatar-md" style="background:${color}">${initials(name)}</div>
+      <div><div class="name">${esc(name)}</div><div class="career">${esc(career)}</div></div>
+    </div>
+    <div class="chat-messages" id="chat-msgs"></div>
+    <div class="chat-input-bar">
+      <input type="text" id="msg-input" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') sendMsg()">
+      <button class="btn btn-primary btn-icon" onclick="sendMsg()"><span class="mi">send</span></button>
+    </div>`;
+  loadMessages(uid);
+  pollTimer=setInterval(()=>loadMessages(uid),3000);
+  // mark inbox active
+  document.querySelectorAll('.inbox-item').forEach(el=>el.classList.remove('active'));
+}
+
+async function loadMessages(uid) {
+  const res=await ChatAPI.getConversation(uid);
+  if(!res?.ok) return;
+  const el=document.getElementById('chat-msgs');
+  if(!el) return;
+  const atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<80;
+  el.innerHTML=res.data.length?res.data.map(m=>{
+    const sent=m.sender_id===(user?.id);
+    return `<div class="msg ${sent?'sent':'recv'}">${esc(m.content)}<div class="msg-time">${msgTime(m.created_at)}</div></div>`;
+  }).join(''):`<div class="empty-state"><span class="mi">waving_hand</span><p>¡Di hola para empezar!</p></div>`;
+  if(atBottom||res.data.length===0) el.scrollTop=el.scrollHeight;
+}
+
+async function sendMsg() {
+  const inp=document.getElementById('msg-input');
+  const content=inp.value.trim();
+  if(!content||!activeUserId) return;
+  inp.value='';
+  const res=await ChatAPI.sendMessage(activeUserId,content);
+  if(res?.ok) loadMessages(activeUserId);
+  else showToast('Error al enviar','error');
+}
+
+loadInbox();
+setInterval(loadInbox,10000);
+</script>
+</body>
+</html>
