@@ -1,17 +1,188 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feed — Red Social UPT</title>
-    <link rel="stylesheet" href="../css/styles.css">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feed — UPT Connect</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .feed-layout { display: grid; grid-template-columns: 1fr 260px; gap: var(--md); }
+    .feed-main { display: flex; flex-direction: column; gap: var(--md); }
+    .composer-textarea { width:100%; border:1.5px solid var(--outline-var); border-radius:var(--r-md); padding:var(--sm); font-size:15px; resize:none; min-height:80px; font-family:inherit; transition:border-color .15s; }
+    .composer-textarea:focus { outline:none; border-color:var(--primary); }
+    .composer-footer { display:flex; align-items:center; justify-content:space-between; margin-top:var(--xs); }
+    .post-card { display:flex; flex-direction:column; gap:var(--sm); }
+    .post-header { display:flex; align-items:flex-start; justify-content:space-between; }
+    .post-author { display:flex; align-items:center; gap:var(--sm); }
+    .post-author .name { font-weight:600; font-size:15px; }
+    .post-author .meta { font-size:12px; color:var(--on-surface-var); display:flex; align-items:center; gap:4px; }
+    .post-content { font-size:15px; line-height:1.6; }
+    .post-actions { display:flex; gap:var(--sm); border-top:1px solid var(--outline-var); padding-top:var(--sm); }
+    .post-action-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:var(--r-full); background:transparent; font-size:13px; font-weight:500; color:var(--on-surface-var); transition:background .15s; }
+    .post-action-btn:hover { background:var(--surface-container); }
+    .post-action-btn.liked { color:var(--error); }
+    .comments-section { border-top:1px solid var(--outline-var); padding-top:var(--sm); display:flex; flex-direction:column; gap:6px; }
+    .comment-item { display:flex; gap:8px; align-items:flex-start; }
+    .comment-bubble { background:var(--surface-low); border-radius:var(--r-md); padding:8px 12px; flex:1; }
+    .comment-bubble .cname { font-weight:600; font-size:13px; }
+    .comment-bubble .ctext { font-size:14px; }
+    .comment-input-row { display:flex; gap:8px; }
+    .comment-input-row input { flex:1; padding:8px 12px; border-radius:var(--r-full); border:1.5px solid var(--outline-var); font-size:14px; }
+    .comment-input-row input:focus { outline:none; border-color:var(--primary); }
+    .sidebar-widget h3 { font-size:13px; font-weight:700; color:var(--primary); margin-bottom:var(--sm); text-transform:uppercase; letter-spacing:.04em; }
+    .friend-item { display:flex; align-items:center; gap:var(--sm); padding:8px 0; border-bottom:1px solid var(--outline-var); }
+    .friend-item:last-child { border:none; }
+    .friend-item .info .name { font-weight:600; font-size:14px; }
+    .friend-item .info .career { font-size:12px; color:var(--on-surface-var); }
+    @media(max-width:768px){ .feed-layout { grid-template-columns:1fr; } .feed-sidebar { display:none; } }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📰 Feed</h1>
-        <a href="../index.html">← Volver al inicio</a>
-        <p><em>Pendiente — será implementado por el equipo en posts-service.</em></p>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
+    <div class="sidebar-user">
+      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
+      <div class="sidebar-user-info">
+        <div class="name" id="sb-name">...</div>
+        <div class="career" id="sb-career">...</div>
+      </div>
     </div>
-    <script src="../js/api.js"></script>
+    <nav class="sidebar-nav">
+      <a href="feed.html" class="active"><span class="mi">home</span> Inicio</a>
+      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
+      <a href="messages.html"><span class="mi">chat</span> Mensajes <span class="badge-dot" id="msg-dot" style="display:none"></span></a>
+      <a href="companions.html"><span class="mi">groups</span> Compañeros <span class="badge-dot" id="req-dot" style="display:none"></span></a>
+    </nav>
+    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
+  </aside>
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title">Inicio</span>
+    </header>
+    <main class="page-body">
+      <div class="feed-layout">
+        <div class="feed-main">
+          <div class="card">
+            <div style="display:flex;gap:var(--sm);align-items:flex-start">
+              <div class="avatar avatar-md" id="composer-avatar" style="background:#C9A227;color:#241a00">U</div>
+              <div style="flex:1">
+                <textarea class="composer-textarea" id="post-content" placeholder="¿Qué está pasando en tu facultad?"></textarea>
+                <div class="composer-footer">
+                  <select id="post-visibility" style="border:1px solid var(--outline-var);border-radius:var(--r-sm);padding:5px 10px;font-size:12px;">
+                    <option value="public">🌐 Público</option>
+                    <option value="friends">👥 Amigos</option>
+                    <option value="faculty">🎓 Mi facultad</option>
+                  </select>
+                  <button class="btn btn-primary btn-sm" id="post-submit"><span class="mi">send</span> Publicar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="feed-container"><div class="loading-center"><div class="spinner"></div></div></div>
+        </div>
+        <aside class="feed-sidebar">
+          <div class="card card-sm" style="margin-bottom:var(--sm)">
+            <div class="sidebar-widget">
+              <h3>Solicitudes</h3>
+              <div id="pending-list"><div class="empty-state" style="padding:var(--sm)"><span class="mi" style="font-size:28px">person_add</span><p style="font-size:12px">Sin solicitudes</p></div></div>
+            </div>
+          </div>
+          <div class="card card-sm">
+            <div class="sidebar-widget">
+              <h3>Compañeros</h3>
+              <div id="friends-list"><div class="loading-center" style="padding:var(--sm)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+<script src="../js/api.js"></script>
+<script>
+requireAuth();
+const user = getUser();
+if (user) {
+  document.getElementById('sb-name').textContent = user.name||'';
+  document.getElementById('sb-career').textContent = user.career||'';
+  const c = getFacultyColor(user.career);
+  ['sb-avatar','composer-avatar'].forEach(id => { const el=document.getElementById(id); if(el){el.textContent=initials(user.name);el.style.background=c;el.style.color='#fff';} });
+}
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function ago(d){ const s=Math.floor((Date.now()-new Date(d))/1000); return s<60?'ahora':s<3600?Math.floor(s/60)+'m':s<86400?Math.floor(s/3600)+'h':Math.floor(s/86400)+'d'; }
+
+function renderPost(p) {
+  const c=getFacultyColor(p.author_career), own=user&&p.author_id===user.id;
+  return `<div class="card post-card" id="post-${p.id}">
+    <div class="post-header">
+      <div class="post-author">
+        <div class="avatar avatar-md" style="background:${c}">${initials(p.author_name)}</div>
+        <div>
+          <a class="name" href="profile.html?id=${p.author_id}">${esc(p.author_name||'Usuario')}</a>
+          <div class="meta"><span class="faculty-badge" style="background:${c};font-size:10px">${esc(p.author_career||'')}</span><span>· ${ago(p.created_at)}</span></div>
+        </div>
+      </div>
+      ${own?`<button class="btn btn-ghost btn-icon btn-sm" onclick="delPost(${p.id})"><span class="mi">delete_outline</span></button>`:''}
+    </div>
+    <p class="post-content">${esc(p.content)}</p>
+    ${p.image_url?`<div style="border-radius:var(--r-md);overflow:hidden"><img src="${p.image_url}" style="width:100%;object-fit:cover;max-height:300px"></div>`:''}
+    <div class="post-actions">
+      <button class="post-action-btn ${p.liked?'liked':''}" onclick="toggleLike(${p.id},this)">
+        <span class="mi">${p.liked?'favorite':'favorite_border'}</span><span class="lc">${p.likes_count||0}</span>
+      </button>
+      <button class="post-action-btn" onclick="toggleCmts(${p.id})"><span class="mi">chat_bubble_outline</span><span>${p.comments_count||0}</span></button>
+    </div>
+    <div class="comments-section" id="cmt-${p.id}" style="display:none"></div>
+  </div>`;
+}
+
+async function loadFeed() {
+  const res = await PostsAPI.getFeed();
+  const el = document.getElementById('feed-container');
+  if (!res?.ok||!res.data.length) { el.innerHTML=`<div class="empty-state card"><span class="mi">article</span><p>Sin publicaciones aún.</p></div>`; return; }
+  el.innerHTML = res.data.map(renderPost).join('');
+}
+
+async function loadSidebar() {
+  const [fr,pr] = await Promise.all([SocialAPI.getFriends(), SocialAPI.getPendingRequests()]);
+  const fel=document.getElementById('friends-list');
+  if(fr?.ok&&fr.data.length) { fel.innerHTML=fr.data.slice(0,5).map(f=>`<div class="friend-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(f.career)}">${initials(f.name)}</div><div class="info"><div class="name">${esc(f.name)}</div><div class="career">${esc(f.career||'')}</div></div><a href="messages.html?user=${f.id}" style="margin-left:auto;font-size:12px;color:var(--primary);font-weight:600">Chat</a></div>`).join(''); }
+  else { fel.innerHTML=`<div class="empty-state" style="padding:var(--sm)"><span class="mi" style="font-size:28px">group</span><p style="font-size:12px">Sin compañeros</p></div>`; }
+  if(pr?.ok&&pr.data.length) {
+    document.getElementById('req-dot').style.display='';
+    document.getElementById('pending-list').innerHTML=pr.data.slice(0,3).map(r=>`<div class="friend-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(r.career)}">${initials(r.name)}</div><div class="info"><div class="name">${esc(r.name)}</div></div><button class="btn btn-primary btn-sm" onclick="acceptReq(${r.request_id},this)">Aceptar</button></div>`).join('');
+  }
+}
+
+async function acceptReq(id,btn){ btn.disabled=true; const r=await SocialAPI.acceptRequest(id); if(r?.ok){showToast('Solicitud aceptada','success');loadSidebar();}else{showToast('Error','error');btn.disabled=false;} }
+
+document.getElementById('post-submit').addEventListener('click', async () => {
+  const content=document.getElementById('post-content').value.trim();
+  if(!content) return;
+  const btn=document.getElementById('post-submit'); btn.disabled=true;
+  const res=await PostsAPI.createPost({content,visibility:document.getElementById('post-visibility').value});
+  btn.disabled=false;
+  if(res?.ok){document.getElementById('post-content').value='';showToast('Publicado ✓','success');loadFeed();}
+  else showToast(res?.data?.error||'Error','error');
+});
+
+async function delPost(id){ if(!confirm('¿Eliminar?')) return; const r=await PostsAPI.deletePost(id); if(r?.ok){document.getElementById(`post-${id}`)?.remove();showToast('Eliminado','success');}else showToast('Error','error'); }
+async function toggleLike(id,btn){ const r=await PostsAPI.likePost(id); if(r?.ok){const l=btn.classList.toggle('liked');btn.querySelector('.mi').textContent=l?'favorite':'favorite_border';const lc=btn.querySelector('.lc');lc.textContent=parseInt(lc.textContent)+(l?1:-1);} }
+
+async function toggleCmts(pid) {
+  const s=document.getElementById(`cmt-${pid}`);
+  if(s.style.display==='none'){
+    s.style.display='';
+    s.innerHTML=`<div class="loading-center" style="padding:var(--sm)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>`;
+    const r=await PostsAPI.getComments(pid);
+    const cs=r?.ok?r.data:[];
+    s.innerHTML=cs.map(c=>`<div class="comment-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(c.author_career)}">${initials(c.author_name)}</div><div class="comment-bubble"><div class="cname">${esc(c.author_name)}</div><div class="ctext">${esc(c.content)}</div></div></div>`).join('')+
+    `<div class="comment-input-row"><input type="text" placeholder="Comentar..." id="ci-${pid}" onkeydown="if(event.key==='Enter')postCmt(${pid})"><button class="btn btn-primary btn-sm" onclick="postCmt(${pid})"><span class="mi">send</span></button></div>`;
+  } else s.style.display='none';
+}
+async function postCmt(pid){ const inp=document.getElementById(`ci-${pid}`); const c=inp.value.trim(); if(!c) return; const r=await PostsAPI.addComment(pid,c); if(r?.ok){inp.value='';document.getElementById(`cmt-${pid}`).style.display='none';toggleCmts(pid);} }
+
+loadFeed(); loadSidebar();
+</script>
 </body>
 </html>
