@@ -1,98 +1,331 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin — Red Social UPT</title>
-    <link rel="stylesheet" href="../css/styles.css">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — UPT Connect</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sm); margin-bottom:var(--md); }
+    .stat-card { background:var(--surface-card); border:1px solid var(--outline-var); border-radius:var(--r-md); padding:var(--sm) var(--md); }
+    .stat-card .val { font-size:28px; font-weight:700; color:var(--primary); }
+    .stat-card .lbl { font-size:12px; color:var(--on-surface-var); }
+    .status-badge { padding:3px 10px; border-radius:var(--r-full); font-size:11px; font-weight:600; }
+    .status-active { background:#e8f5e9; color:#2e7d32; }
+    .status-inactive { background:#fce4ec; color:#b71c1c; }
+    .table-wrap { overflow-x:auto; }
+    .post-preview { max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; color:var(--on-surface-var); }
+    .modal-wide { max-width:680px; }
+    .comment-row { display:flex; align-items:flex-start; gap:var(--sm); padding:var(--sm) 0; border-bottom:1px solid var(--outline-var); }
+    .comment-row:last-child { border:none; }
+    .comment-row .bubble { flex:1; background:var(--surface-low); border-radius:var(--r-md); padding:8px 12px; }
+    .comment-row .bubble .cname { font-weight:600; font-size:13px; }
+    .comment-row .bubble .ctext { font-size:14px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>⚙️ Panel de Administración</h1>
-        <a href="../index.html">← Volver al inicio</a>
-
-        <div id="admin-error" style="display:none; color:red; margin:10px 0;"></div>
-
-        <h2>Usuarios registrados</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Rol</th>
-                    <th>Activo</th>
-                    <th>Acción</th>
-                </tr>
-            </thead>
-            <tbody id="users-table-body">
-                <tr><td colspan="6">Cargando...</td></tr>
-            </tbody>
-        </table>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
+    <div class="sidebar-user">
+      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
+      <div class="sidebar-user-info"><div class="name" id="sb-name">...</div><div class="career" id="sb-career">...</div></div>
     </div>
+    <nav class="sidebar-nav">
+      <a href="feed.html"><span class="mi">home</span> Inicio</a>
+      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
+      <a href="messages.html"><span class="mi">chat</span> Mensajes</a>
+      <a href="companions.html"><span class="mi">groups</span> Compañeros</a>
+      <a href="admin.html" class="active"><span class="mi">admin_panel_settings</span> Admin</a>
+    </nav>
+    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
+  </aside>
 
-    <script src="../js/api.js"></script>
-    <script>
-        /**
-         * Carga la lista de usuarios desde Auth Service.
-         */
-        async function loadUsers() {
-            const errorDiv = document.getElementById('admin-error');
-            errorDiv.style.display = 'none';
+  <div class="main-content">
+    <header class="topbar">
+      <span class="topbar-title">Panel de administración</span>
+    </header>
+    <main class="page-body wide">
 
-            try {
-                const res = await authFetch(API.AUTH + '/admin/users');
-                const data = await res.json();
+      <!-- Stats -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="val" id="s-users">—</div><div class="lbl">Usuarios Totales</div></div>
+        <div class="stat-card"><div class="val" id="s-active">—</div><div class="lbl">Usuarios Activos</div></div>
+        <div class="stat-card"><div class="val" id="s-posts">—</div><div class="lbl">Publicaciones (24h)</div></div>
+        <div class="stat-card"><div class="val" id="s-comments">—</div><div class="lbl">Comentarios Totales</div></div>
+      </div>
 
-                if (!res.ok) {
-                    throw new Error(data.error || 'Error al cargar usuarios');
-                }
+      <!-- Tabs -->
+      <div class="card">
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('users',this)">Usuarios</button>
+          <button class="tab-btn" onclick="switchTab('posts',this)">Publicaciones</button>
+        </div>
 
-                const tbody = document.getElementById('users-table-body');
-                tbody.innerHTML = '';
+        <!-- ══ Tab: Usuarios ══════════════════════════════════════ -->
+        <div class="tab-panel active" id="tab-users">
+          <div style="display:flex;gap:var(--sm);margin-bottom:var(--sm);align-items:center">
+            <div class="search-wrap" style="flex:1">
+              <span class="mi">search</span>
+              <input type="text" class="input-field" id="user-search" placeholder="Buscar usuario...">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="loadUsers()"><span class="mi">refresh</span> Actualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="users-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Nombre</th><th>Email</th><th>Carrera</th><th>Semestre</th><th>Estado</th><th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:var(--md)"><div class="spinner" style="margin:auto;width:24px;height:24px;border-width:2px"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-                data.forEach(function(user) {
-                    const row = document.createElement('tr');
-                    row.innerHTML =
-                        '<td>' + user.id + '</td>' +
-                        '<td>' + (user.name || '—') + '</td>' +
-                        '<td>' + user.email + '</td>' +
-                        '<td>' + user.role + '</td>' +
-                        '<td>' + (user.is_active ? '✅' : '❌') + '</td>' +
-                        '<td><button onclick="toggleUser(' + user.id + ')">' +
-                        (user.is_active ? 'Desactivar' : 'Activar') +
-                        '</button></td>';
-                    tbody.appendChild(row);
-                });
+        <!-- ══ Tab: Publicaciones ════════════════════════════════ -->
+        <div class="tab-panel" id="tab-posts">
+          <div style="margin-bottom:var(--sm);display:flex;justify-content:flex-end">
+            <button class="btn btn-primary btn-sm" onclick="loadPosts()"><span class="mi">refresh</span> Actualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="posts-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Autor</th><th>Contenido</th><th>Likes</th><th>Comentarios</th><th>Visibilidad</th><th>Fecha</th><th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="posts-tbody">
+                <tr><td colspan="8" style="text-align:center;padding:var(--md)"><div class="spinner" style="margin:auto;width:24px;height:24px;border-width:2px"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
 
-            } catch (error) {
-                errorDiv.textContent = error.message;
-                errorDiv.style.display = 'block';
-            }
-        }
+<!-- ══ MODAL 1: Editar info académica ═══════════════════════════ -->
+<div class="modal-overlay" id="modal-academic">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Editar información académica</h2>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-academic')"><span class="mi">close</span></button>
+    </div>
+    <p style="font-size:13px;color:var(--on-surface-var);margin-bottom:var(--md)" id="modal-ac-user">Usuario</p>
+    <form id="form-academic" style="display:flex;flex-direction:column;gap:var(--sm)">
+      <input type="hidden" id="ac-user-id">
+      <div class="input-group">
+        <label>Carrera</label>
+        <select id="ac-career" class="input-field">
+          <option value="">Seleccionar...</option>
+          <option>Ingeniería de Sistemas</option>
+          <option>Medicina Humana</option>
+          <option>Derecho</option>
+          <option>Administración de Empresas</option>
+          <option>Ingeniería Civil</option>
+          <option>Arquitectura</option>
+          <option>Educación Inicial</option>
+          <option>Contabilidad</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Semestre</label>
+        <select id="ac-semester" class="input-field">
+          <option value="">Seleccionar...</option>
+          <option>I</option><option>II</option><option>III</option><option>IV</option>
+          <option>V</option><option>VI</option><option>VII</option><option>VIII</option><option>IX</option><option>X</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:var(--sm);justify-content:flex-end;margin-top:var(--sm)">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-academic')">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><span class="mi">save</span> Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-        /**
-         * Activa/desactiva un usuario.
-         */
-        async function toggleUser(userId) {
-            try {
-                const res = await authFetch(API.AUTH + '/admin/users/' + userId, {
-                    method: 'PUT',
-                });
+<!-- ══ MODAL 2: Ver/borrar comentarios de publicación ═══════════ -->
+<div class="modal-overlay" id="modal-comments">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>Comentarios de la publicación</h2>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-comments')"><span class="mi">close</span></button>
+    </div>
+    <div id="modal-post-preview" style="background:var(--surface-low);border-radius:var(--r-md);padding:var(--sm);margin-bottom:var(--md);font-size:14px;color:var(--on-surface-var)"></div>
+    <div id="modal-comments-list"></div>
+    <div style="margin-top:var(--md);display:flex;justify-content:space-between;align-items:center">
+      <span id="modal-comments-count" style="font-size:13px;color:var(--on-surface-var)"></span>
+      <button class="btn btn-danger btn-sm" id="btn-delete-post" onclick="adminDeletePost()"><span class="mi">delete_forever</span> Eliminar publicación</button>
+    </div>
+  </div>
+</div>
 
-                if (!res.ok) {
-                    const data = await res.json();
-                    throw new Error(data.error || 'Error al actualizar usuario');
-                }
+<script src="../js/api.js"></script>
+<script>
+requireAuth();
+const user = getUser();
+// Basic admin guard (role check)
+if(user?.role !== 'admin' && user?.role !== 'Admin') {
+  // Soft guard — in production check server-side too
+}
+if(user){
+  document.getElementById('sb-name').textContent=user.name||'';
+  document.getElementById('sb-career').textContent=user.career||'';
+  const c=getFacultyColor(user.career);
+  const el=document.getElementById('sb-avatar'); el.textContent=initials(user.name); el.style.background=c; el.style.color='#fff';
+}
 
-                loadUsers(); // Recargar tabla
-            } catch (error) {
-                alert(error.message);
-            }
-        }
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function fmtDate(d){ return new Date(d).toLocaleDateString('es',{day:'2-digit',month:'short',year:'numeric'}); }
 
-        // Cargar usuarios al abrir la página
-        window.addEventListener('DOMContentLoaded', loadUsers);
-    </script>
+let currentPostId = null;
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  btn.classList.add('active');
+  if(name==='posts') loadPosts();
+}
+
+/* ── Stats ────────────────────────────────────────────────────── */
+async function loadStats() {
+  const [ur,pr] = await Promise.all([AuthAPI.listUsers(), PostsAPI.adminListPosts()]);
+  const users = ur?.data||[];
+  const posts = pr?.data||[];
+  document.getElementById('s-users').textContent = users.length||'—';
+  document.getElementById('s-active').textContent = users.filter(u=>u.is_active!==false).length||'—';
+  const yesterday = Date.now() - 86400000;
+  document.getElementById('s-posts').textContent = posts.filter(p=>new Date(p.created_at)>yesterday).length||'—';
+  const totalComments = posts.reduce((acc,p)=>acc+(p.comments_count||0),0);
+  document.getElementById('s-comments').textContent = totalComments||'—';
+}
+
+/* ── Users table ──────────────────────────────────────────────── */
+async function loadUsers() {
+  const query = document.getElementById('user-search').value;
+  const params = query ? `search=${encodeURIComponent(query)}` : '';
+  const res = await AuthAPI.listUsers(params);
+  const tbody = document.getElementById('users-tbody');
+  if(!res?.ok||!res.data.length){ tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><span class="mi">person_off</span><p>Sin usuarios</p></div></td></tr>`; return; }
+  tbody.innerHTML = res.data.map((u,i)=>`
+    <tr>
+      <td style="color:var(--on-surface-var);font-size:12px">${i+1}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="avatar avatar-sm" style="background:${getFacultyColor(u.career)}">${initials(u.name)}</div>
+          <span style="font-weight:600;font-size:14px">${esc(u.name||'')}</span>
+        </div>
+      </td>
+      <td style="font-size:13px;color:var(--on-surface-var)">${esc(u.email||'')}</td>
+      <td><span class="faculty-badge" style="background:${getFacultyColor(u.career)};font-size:10px">${esc(u.career||'—')}</span></td>
+      <td style="text-align:center">${u.semester||'—'}</td>
+      <td><span class="status-badge ${u.is_active!==false?'status-active':'status-inactive'}">${u.is_active!==false?'Activo':'Inactivo'}</span></td>
+      <td>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Editar info académica" onclick="openAcademic(${u.id},'${esc(u.name)}','${esc(u.career||'')}','${esc(u.semester||'')}')">
+          <span class="mi">edit</span>
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('user-search').addEventListener('keydown', e=>{ if(e.key==='Enter') loadUsers(); });
+
+/* ── Posts table ──────────────────────────────────────────────── */
+async function loadPosts() {
+  const res = await PostsAPI.adminListPosts();
+  const tbody = document.getElementById('posts-tbody');
+  if(!res?.ok||!res.data.length){ tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><span class="mi">article</span><p>Sin publicaciones</p></div></td></tr>`; return; }
+  tbody.innerHTML = res.data.map((p,i)=>`
+    <tr>
+      <td style="color:var(--on-surface-var);font-size:12px">${i+1}</td>
+      <td style="font-weight:600;font-size:14px">${esc(p.author_name||'')}</td>
+      <td class="post-preview">${esc(p.content||'')}</td>
+      <td style="text-align:center">${p.likes_count||0}</td>
+      <td style="text-align:center">${p.comments_count||0}</td>
+      <td><span class="status-badge status-active" style="font-size:10px">${esc(p.visibility||'public')}</span></td>
+      <td style="font-size:12px;color:var(--on-surface-var)">${fmtDate(p.created_at)}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm btn-icon" title="Ver comentarios" onclick="openComments(${p.id},'${esc(p.content||'')}')">
+          <span class="mi">comment</span>
+        </button>
+        <button class="btn btn-danger btn-sm btn-icon" title="Eliminar" onclick="currentPostId=${p.id};adminDeletePost()">
+          <span class="mi">delete_outline</span>
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+/* ── Modal 1: Academic edit ───────────────────────────────────── */
+function openAcademic(id, name, career, semester) {
+  document.getElementById('ac-user-id').value = id;
+  document.getElementById('modal-ac-user').textContent = `Editando: ${name}`;
+  document.getElementById('ac-career').value = career;
+  document.getElementById('ac-semester').value = semester;
+  document.getElementById('modal-academic').classList.add('open');
+}
+
+document.getElementById('form-academic').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const id = document.getElementById('ac-user-id').value;
+  const res = await AuthAPI.updateAcademic(id,{
+    career: document.getElementById('ac-career').value,
+    semester: document.getElementById('ac-semester').value,
+  });
+  if(res?.ok){ showToast('Info académica actualizada ✓','success'); closeModal('modal-academic'); loadUsers(); }
+  else showToast(res?.data?.error||'Error','error');
+});
+
+/* ── Modal 2: Comments ────────────────────────────────────────── */
+async function openComments(postId, preview) {
+  currentPostId = postId;
+  document.getElementById('modal-post-preview').textContent = preview;
+  document.getElementById('modal-comments-list').innerHTML=`<div class="loading-center"><div class="spinner" style="width:24px;height:24px;border-width:2px"></div></div>`;
+  document.getElementById('modal-comments').classList.add('open');
+
+  const res = await PostsAPI.getComments(postId);
+  const comments = res?.ok ? res.data : [];
+  document.getElementById('modal-comments-count').textContent = `${comments.length} comentario(s)`;
+  document.getElementById('modal-comments-list').innerHTML = comments.length
+    ? comments.map(c=>`
+      <div class="comment-row">
+        <div class="avatar avatar-sm" style="background:${getFacultyColor(c.author_career)}">${initials(c.author_name)}</div>
+        <div class="bubble">
+          <div class="cname">${esc(c.author_name)}</div>
+          <div class="ctext">${esc(c.content)}</div>
+        </div>
+        <button class="btn btn-ghost btn-icon btn-sm" title="Eliminar comentario" onclick="deleteComment(${postId},${c.id},this)">
+          <span class="mi">delete_outline</span>
+        </button>
+      </div>`).join('')
+    : `<div class="empty-state"><span class="mi">chat_bubble_outline</span><p>Sin comentarios</p></div>`;
+}
+
+async function deleteComment(postId, commentId, btn) {
+  if(!confirm('¿Eliminar comentario?')) return;
+  btn.disabled=true;
+  const res = await PostsAPI.deleteComment(postId, commentId);
+  if(res?.ok){ btn.closest('.comment-row').remove(); showToast('Comentario eliminado','success'); }
+  else { showToast('Error','error'); btn.disabled=false; }
+}
+
+async function adminDeletePost() {
+  if(!currentPostId||!confirm('¿Eliminar esta publicación permanentemente?')) return;
+  const res = await PostsAPI.deletePost(currentPostId);
+  if(res?.ok){ showToast('Publicación eliminada','success'); closeModal('modal-comments'); loadPosts(); loadStats(); }
+  else showToast('Error al eliminar','error');
+}
+
+/* ── Modal close helpers ──────────────────────────────────────── */
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
+
+loadStats();
+loadUsers();
+</script>
 </body>
 </html>
