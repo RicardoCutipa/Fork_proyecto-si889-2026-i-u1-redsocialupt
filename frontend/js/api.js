@@ -40,69 +40,43 @@ const AuthAPI = {
   completeProfile: (data) => apiFetch(`${API.auth}/auth/complete-profile`, {
     method: 'POST', body: JSON.stringify(data)
   }),
-  getProfile: (userId) => {
-    if (!userId) return apiFetch(`${API.auth}/auth/me`);
-    return apiFetch(`${API.auth}/auth/users/${userId}`);
-  },
-  updateProfile: (data) => {
-    if (data instanceof FormData) {
-      // Need a special form data fetcher
-      return fetch(`${API.auth}/auth/profile`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-        body: data
-      }).then(res => res.json()).then(data => ({ ok: true, data })).catch(e => ({ ok: false }));
-    }
-    return apiFetch(`${API.auth}/auth/profile`, {
-      method: 'PUT', body: JSON.stringify(data)
-    });
-  },
-  updateAcademic: (userId, data) => apiFetch(`${API.auth}/auth/admin/users/${userId}/academic`, {
+  getProfile: (userId) => apiFetch(`${API.auth}/users/${userId || ''}`),
+  updateProfile: (data) => apiFetch(`${API.auth}/users/profile`, {
     method: 'PUT', body: JSON.stringify(data)
   }),
-  listUsers: (params = '') => apiFetch(`${API.auth}/auth/users?${params}`),
+  updateAcademic: (userId, data) => apiFetch(`${API.auth}/admin/users/${userId}/academic`, {
+    method: 'PUT', body: JSON.stringify(data)
+  }),
+  listUsers: (params = '') => apiFetch(`${API.auth}/users?${params}`),
 };
 
 /* ── Posts Service ────────────────────────────────────────────── */
 const PostsAPI = {
   getFeed: (page = 1) => apiFetch(`${API.posts}/posts?page=${page}`),
-  createPost: (data) => {
-    if (data.imageFile) {
-      const fd = new FormData();
-      fd.append('content', data.content);
-      fd.append('image', data.imageFile);
-      if (data.visibility) fd.append('visibility', data.visibility);
-      return fetch(`${API.posts}/posts`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
-        body: fd
-      }).then(res => res.json()).then(data => ({ ok: true, data })).catch(e => ({ ok: false }));
-    }
-    return apiFetch(`${API.posts}/posts`, {
-      method: 'POST', body: JSON.stringify(data)
-    });
-  },
-  deletePost: (id) => apiFetch(`${API.posts}/${id}`, { method: 'DELETE' }),
-  likePost: (id) => apiFetch(`${API.posts}/${id}/like`, { method: 'POST' }),
-  getComments: (postId) => apiFetch(`${API.posts}/${postId}/comments`),
-  addComment: (postId, content) => apiFetch(`${API.posts}/${postId}/comments`, {
+  createPost: (data) => apiFetch(`${API.posts}/posts`, {
+    method: 'POST', body: JSON.stringify(data)
+  }),
+  deletePost: (id) => apiFetch(`${API.posts}/posts/${id}`, { method: 'DELETE' }),
+  likePost: (id) => apiFetch(`${API.posts}/posts/${id}/like`, { method: 'POST' }),
+  getComments: (postId) => apiFetch(`${API.posts}/posts/${postId}/comments`),
+  addComment: (postId, content) => apiFetch(`${API.posts}/posts/${postId}/comments`, {
     method: 'POST', body: JSON.stringify({ content })
   }),
-  deleteComment: (postId, commentId) => apiFetch(`${API.posts}/${postId}/comments/${commentId}`, { method: 'DELETE' }),
-  adminListPosts: () => apiFetch(`${API.posts}/admin`),
+  deleteComment: (postId, commentId) => apiFetch(`${API.posts}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
+  adminListPosts: () => apiFetch(`${API.posts}/admin/posts`),
 };
 
 /* ── Social Service ───────────────────────────────────────────── */
 const SocialAPI = {
   getDirectory: (params = '') => apiFetch(`${API.social}/directory?${params}`),
-  getFriends: () => apiFetch(`${API.social}/friends`),
-  getPendingRequests: () => apiFetch(`${API.social}/friends/pending`),
-  sendRequest: (receiverId) => apiFetch(`${API.social}/friends/request`, {
+  getFriends: () => apiFetch(`${API.social}/friendships`),
+  getPendingRequests: () => apiFetch(`${API.social}/friendships/pending`),
+  sendRequest: (receiverId) => apiFetch(`${API.social}/friendships/request`, {
     method: 'POST', body: JSON.stringify({ receiver_id: receiverId })
   }),
-  acceptRequest: (requestId) => apiFetch(`${API.social}/friends/${requestId}/accept`, { method: 'PUT' }),
-  rejectRequest: (requestId) => apiFetch(`${API.social}/friends/${requestId}/reject`, { method: 'PUT' }),
-  removeFriend: (friendId) => apiFetch(`${API.social}/friends/${friendId}`, { method: 'DELETE' }),
+  acceptRequest: (requestId) => apiFetch(`${API.social}/friendships/${requestId}/accept`, { method: 'PUT' }),
+  rejectRequest: (requestId) => apiFetch(`${API.social}/friendships/${requestId}/reject`, { method: 'PUT' }),
+  removeFriend: (friendId) => apiFetch(`${API.social}/friendships/${friendId}`, { method: 'DELETE' }),
 };
 
 /* ── Chat Service ─────────────────────────────────────────────── */
