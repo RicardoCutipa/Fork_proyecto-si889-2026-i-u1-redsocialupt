@@ -19,7 +19,22 @@
     .profile-meta .stat .lbl { font-size:12px; color:var(--on-surface-var); }
     .profile-actions { display:flex; gap:var(--sm); margin-top:var(--sm); flex-wrap:wrap; }
     .profile-posts { display:flex; flex-direction:column; gap:var(--sm); margin-top:var(--md); }
-    .edit-form { display:flex; flex-direction:column; gap:var(--sm); }
+    
+    /* Nuevos estilos para la edición en línea y subida de imágenes */
+    .upload-btn { position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.5); color:#fff; border-radius:50%; width:32px; height:32px; display:none; align-items:center; justify-content:center; cursor:pointer; transition:background 0.2s; }
+    .upload-btn:hover { background:rgba(0,0,0,0.8); }
+    .inline-edit-btn { visibility:hidden; opacity:0; cursor:pointer; color:var(--on-surface-var); margin-left:8px; transition:opacity 0.2s; }
+    .inline-edit-container:hover .inline-edit-btn { visibility:visible; opacity:1; }
+    .inline-input { border:1px solid var(--outline-var); border-radius:4px; padding:4px 8px; font-size:14px; outline:none; }
+    .inline-input:focus { border-color:var(--primary); }
+    
+    /* Estilos para modales pequeños (confirmaciones) */
+    .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display: flex; }
+    .modal-sm { background:white; padding:24px; border-radius:12px; max-width:400px; width:90%; box-shadow:0 10px 25px rgba(0,0,0,0.2); }
+    .modal-sm h3 { margin-top:0; margin-bottom:12px; font-size:18px; color:var(--on-surface); }
+    .modal-sm p { margin-bottom:20px; font-size:14px; color:var(--on-surface-var); }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; }
   </style>
 </head>
 <body>
@@ -46,34 +61,63 @@
       <div class="card" id="profile-card">
         <div class="loading-center"><div class="spinner"></div></div>
       </div>
+      <h3 style="margin-top:24px;margin-bottom:16px;font-size:18px;color:var(--on-surface)">Publicaciones</h3>
       <div class="profile-posts" id="profile-posts"></div>
     </main>
   </div>
 </div>
 
-<!-- Edit profile modal (own profile only) -->
-<div class="modal-overlay" id="edit-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>Editar perfil</h2>
-      <button class="btn btn-ghost btn-icon" onclick="closeEdit()"><span class="mi">close</span></button>
+<!-- Modal Previsualización de Imagen -->
+<div class="modal-overlay" id="image-modal">
+  <div class="modal-sm">
+    <h3 id="image-modal-title">Acomodar Imagen</h3>
+    <div style="background:#f1f5f9; border-radius:8px; padding:16px; display:flex; justify-content:center; margin-bottom:16px;">
+      <img id="image-preview" src="" style="max-width:100%; max-height:250px; object-fit:cover;" />
     </div>
-    <form class="edit-form" id="edit-form">
-      <div class="input-group"><label>Biografía</label><input type="text" id="edit-bio" class="input-field" placeholder="Cuéntanos algo de ti..."></div>
-      <div class="input-group"><label>Semestre</label>
-        <select id="edit-semester" class="input-field">
-          <option value="">Seleccionar...</option>
-          <option>I</option><option>II</option><option>III</option><option>IV</option>
-          <option>V</option><option>VI</option><option>VII</option><option>VIII</option><option>IX</option><option>X</option>
-        </select>
-      </div>
-      <div class="input-group"><label>Teléfono</label><input type="tel" id="edit-phone" class="input-field"></div>
-      <button type="submit" class="btn btn-primary"><span class="mi">save</span> Guardar cambios</button>
-    </form>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeImageModal()">Cancelar</button>
+      <button class="btn btn-primary" id="save-image-btn" onclick="saveImage()">Subir imagen</button>
+    </div>
   </div>
 </div>
 
-<script src="../js/api.js"></script>
+<!-- Modal Eliminar Publicación -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal-sm">
+    <h3>¿Eliminar publicación?</h3>
+    <p>Esta acción no se puede deshacer. ¿Estás seguro de que quieres eliminarla?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cancelDelete()">Cancelar</button>
+      <button class="btn btn-primary" style="background:var(--error)" onclick="confirmDelete()" id="confirm-delete-btn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Eliminar Amigo -->
+<div class="modal-overlay" id="remove-friend-modal">
+  <div class="modal-sm">
+    <h3>¿Eliminar de compañeros?</h3>
+    <p>Ya no podrán enviarse mensajes directamente ni aparecerán en tu lista de compañeros.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeRemoveFriendModal()">Cancelar</button>
+      <button class="btn btn-primary" style="background:var(--error)" onclick="confirmRemoveFriend()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Comentar -->
+<div class="modal-overlay" id="comment-modal">
+  <div class="modal-sm" style="max-width:500px">
+    <h3>Escribir comentario</h3>
+    <textarea id="comment-input" class="inline-input" style="width:100%; resize:none; min-height:80px; margin-bottom:16px;" placeholder="Escribe tu comentario..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="cancelComment()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitComment()">Comentar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js?v=7"></script>
 <script>
 requireAuth();
 const me = getUser();
@@ -82,14 +126,26 @@ const viewUserId = urlParams.get('id'); // null = own profile
 const isOwnProfile = !viewUserId || (me && String(me.id) === viewUserId);
 let profileData = null, friendStatus = null;
 
+let pendingImageFile = null;
+let pendingImageType = null;
+let pendingDeleteId = null;
+let pendingCommentId = null;
+let pendingRemoveFriendId = null;
+
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function getFriendBtnLabel(status){ if(status==='friends') return '<span class="mi">how_to_reg</span> Son amigos'; if(status==='pending') return '<span class="mi">hourglass_empty</span> Solicitud enviada'; return '<span class="mi">person_add</span> Mandar solicitud'; }
 
 if(me){
   document.getElementById('sb-name').textContent=me.name||'';
   document.getElementById('sb-career').textContent=me.career||'';
   const c=getFacultyColor(me.career);
-  const el=document.getElementById('sb-avatar'); el.textContent=initials(me.name); el.style.background=c; el.style.color='#fff';
+  const el=document.getElementById('sb-avatar'); 
+  if(me.avatar_url) {
+    el.style.backgroundImage = `url('${me.avatar_url}')`;
+    el.style.backgroundSize = 'cover';
+    el.textContent = '';
+  } else {
+    el.textContent=initials(me.name); el.style.background=c; el.style.color='#fff';
+  }
 }
 
 async function loadProfile() {
@@ -103,7 +159,7 @@ async function loadProfile() {
   // Determine friend status
   let actions = '';
   if(isOwnProfile){
-    actions=`<button class="btn btn-secondary btn-sm" onclick="openEdit()"><span class="mi">edit</span> Editar perfil</button>`;
+    actions=`<button class="btn btn-secondary btn-sm" onclick="window.location.href='onboarding.html?edit=1'"><span class="mi">settings</span> Configuración</button>`;
   } else {
     // Check friendship
     const fr=await SocialAPI.getFriends();
@@ -111,27 +167,55 @@ async function loadProfile() {
     const isFriend=friends.some(f=>f.id===profileData.id);
     if(isFriend){
       friendStatus='friends';
-      actions=`<span style="font-size:14px;font-weight:600;color:var(--on-surface-var);display:flex;align-items:center;gap:4px"><span class="mi">how_to_reg</span> Son amigos</span>
-               <a href="messages.html?user=${profileData.id}" class="btn btn-secondary btn-sm"><span class="mi">chat</span> Mensaje</a>
-               <button class="btn btn-ghost btn-sm" onclick="removeFriend(${profileData.id})"><span class="mi">person_remove</span> Eliminar</button>`;
+      actions=`<span style="font-size:14px;font-weight:600;color:var(--on-surface-var);display:flex;align-items:center;gap:4px"><span class="mi">how_to_reg</span> Amigos</span>
+               <a href="messages.html?user=${profileData.id}" class="btn btn-primary btn-sm"><span class="mi">chat</span> Mensaje</a>
+               <button class="btn btn-ghost btn-sm" onclick="openRemoveFriend(${profileData.id})"><span class="mi">person_remove</span> Eliminar</button>`;
     } else {
       friendStatus='none';
-      actions=`<button class="btn btn-primary btn-sm" id="req-btn" onclick="sendReq(${profileData.id})"><span class="mi">person_add</span> Mandar solicitud</button>
-               <a href="messages.html?user=${profileData.id}" class="btn btn-secondary btn-sm"><span class="mi">chat</span> Mensaje</a>`;
+      actions=`<button class="btn btn-primary btn-sm" id="req-btn" onclick="sendReq(${profileData.id})"><span class="mi">person_add</span> Enviar solicitud</button>`;
     }
   }
 
+  const bannerStyle = profileData.banner_url ? `url('${profileData.banner_url}') center/cover` : `linear-gradient(135deg,${color} 0%,${color}99 100%)`;
+  const avatarContent = profileData.avatar_url ? '' : initials(profileData.name);
+  const avatarBg = profileData.avatar_url ? `url('${profileData.avatar_url}') center/cover` : color;
+
   document.getElementById('profile-card').innerHTML=`
-    <div style="height:120px;border-radius:var(--r-md);background:linear-gradient(135deg,${color} 0%,${color}99 100%);margin:-var(--md) -var(--md) var(--md);border-radius:var(--r-md) var(--r-md) 0 0"></div>
+    <div style="height:140px;position:relative;background:${bannerStyle};margin:-var(--md) -var(--md) var(--md);border-radius:var(--r-md) var(--r-md) 0 0">
+      ${isOwnProfile ? `<label class="upload-btn" style="display:flex" title="Cambiar portada"><span class="mi" style="font-size:18px">edit</span><input type="file" accept="image/*" style="display:none" onchange="previewImage(event, 'banner')"></label>` : ''}
+    </div>
     <div class="profile-header">
-      <div class="profile-avatar-wrap">
-        <div class="avatar profile-avatar" style="background:${color}">${initials(profileData.name)}</div>
+      <div class="profile-avatar-wrap" style="margin-top:-60px">
+        <div class="avatar profile-avatar" style="background:${avatarBg}">${avatarContent}</div>
+        ${isOwnProfile ? `<label class="upload-btn" style="display:flex;bottom:4px;right:4px" title="Cambiar foto"><span class="mi" style="font-size:18px">photo_camera</span><input type="file" accept="image/*" style="display:none" onchange="previewImage(event, 'avatar')"></label>` : ''}
       </div>
       <div class="profile-info">
         <h1>${esc(profileData.name||'Usuario')}</h1>
-        <div class="career">${esc(profileData.career||'')} ${profileData.semester?'· Semestre '+esc(profileData.semester):''}</div>
-        ${profileData.bio?`<p class="bio">${esc(profileData.bio)}</p>`:''}
-        <span class="faculty-badge" style="background:${color};margin-top:6px;font-size:10px">${esc(profileData.career||'')}</span>
+        <div class="career inline-edit-container" style="display:flex;align-items:center;">
+          ${esc(profileData.career||'')}
+          <span style="margin:0 8px">·</span>
+          <span id="profile-semester-display">${profileData.academic_cycle || profileData.semester ? 'Semestre '+esc(profileData.academic_cycle || profileData.semester) : 'Sin semestre'}</span>
+          ${isOwnProfile ? `<span class="mi inline-edit-btn" style="font-size:16px" id="edit-semester-btn" onclick="startEditSemester()">edit</span>` : ''}
+          <select id="edit-semester-select" class="inline-input" style="display:none" onchange="saveSemester()" onblur="cancelEditSemester()">
+            <option value="">N/A</option>
+            <option>I</option><option>II</option><option>III</option><option>IV</option><option>V</option>
+            <option>VI</option><option>VII</option><option>VIII</option><option>IX</option><option>X</option>
+          </select>
+        </div>
+        
+        <div class="inline-edit-container" style="margin-top:8px;position:relative;display:flex;align-items:flex-start;">
+          <p class="bio" id="profile-bio-display" style="flex:1;margin:0">${profileData.bio ? esc(profileData.bio) : 'Sin biografía'}</p>
+          ${isOwnProfile ? `<span class="mi inline-edit-btn" style="font-size:16px" id="edit-bio-btn" onclick="startEditBio()">edit</span>` : ''}
+        </div>
+        <div id="edit-bio-container" style="display:none;margin-top:8px">
+          <textarea id="edit-bio-input" class="inline-input" style="width:100%;resize:none;margin-bottom:8px" rows="2"></textarea>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="saveBio()">Guardar</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEditBio()">Cancelar</button>
+          </div>
+        </div>
+        
+        <span class="faculty-badge" style="background:${color};margin-top:12px;font-size:10px">${esc(profileData.career||'')}</span>
         <div class="profile-meta">
           <div class="stat"><div class="val" id="posts-count">—</div><div class="lbl">Publicaciones</div></div>
           <div class="stat"><div class="val" id="friends-count">—</div><div class="lbl">Compañeros</div></div>
@@ -140,30 +224,248 @@ async function loadProfile() {
       </div>
     </div>`;
 
-  // Load stats
+  loadStatsAndPosts();
+}
+
+async function loadStatsAndPosts() {
   const [postRes, friendRes] = await Promise.all([PostsAPI.getFeed(), SocialAPI.getFriends()]);
-  if(postRes?.ok) document.getElementById('posts-count').textContent=(postRes.data||[]).filter(p=>p.author_id===profileData.id).length;
-  if(friendRes?.ok) document.getElementById('friends-count').textContent=(friendRes.data||[]).length;
+  if(friendRes?.ok) {
+    document.getElementById('friends-count').textContent=(friendRes.data||[]).length;
+  }
+  
+  if(postRes?.ok) {
+    const posts = (postRes.data||[]).filter(p=>p.author_id===profileData.id);
+    document.getElementById('posts-count').textContent=posts.length;
+    
+    const container = document.getElementById('profile-posts');
+    if (posts.length === 0) {
+      container.innerHTML = `<div class="empty-state"><span class="mi">post_add</span><p>No hay publicaciones aún.</p></div>`;
+    } else {
+      container.innerHTML = posts.map(renderPost).join('');
+    }
+  }
 }
 
-async function sendReq(uid){ const r=await SocialAPI.sendRequest(uid); if(r?.ok){showToast('Solicitud enviada ✓','success');const btn=document.getElementById('req-btn');if(btn){btn.disabled=true;btn.innerHTML='<span class="mi">hourglass_empty</span> Pendiente';}}else showToast(r?.data?.error||'Error','error'); }
-async function removeFriend(uid){ if(!confirm('¿Eliminar de compañeros?')) return; const r=await SocialAPI.removeFriend(uid); if(r?.ok){showToast('Eliminado','');loadProfile();}else showToast('Error','error'); }
-
-function openEdit(){
-  if(!profileData) return;
-  document.getElementById('edit-bio').value=profileData.bio||'';
-  document.getElementById('edit-semester').value=profileData.semester||'';
-  document.getElementById('edit-phone').value=profileData.phone||'';
-  document.getElementById('edit-modal').classList.add('open');
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
+  return `hace ${Math.floor(diff/86400)} d`;
 }
-function closeEdit(){ document.getElementById('edit-modal').classList.remove('open'); }
-document.getElementById('edit-form').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const res=await AuthAPI.updateProfile({bio:document.getElementById('edit-bio').value,semester:document.getElementById('edit-semester').value,phone:document.getElementById('edit-phone').value});
-  if(res?.ok){closeEdit();showToast('Perfil actualizado ✓','success');if(res.data.user)localStorage.setItem('upt_user',JSON.stringify({...me,...res.data.user}));loadProfile();}
-  else showToast(res?.data?.error||'Error','error');
-});
-document.getElementById('edit-modal').addEventListener('click', e=>{ if(e.target===document.getElementById('edit-modal')) closeEdit(); });
+
+function renderPost(post) {
+  const color = getFacultyColor(post.user_school || '');
+  const ini = initials(post.user_name || 'Usuario');
+  const avatarHtml = post.user_avatar 
+    ? `<div class="avatar" style="background:url('${post.user_avatar}') center/cover"></div>`
+    : `<div class="avatar" style="background:${color}">${ini}</div>`;
+       
+  return `
+  <div class="card" style="margin-bottom:var(--md)">
+    <div style="display:flex; justify-content:space-between; margin-bottom:var(--sm)">
+      <div style="display:flex; align-items:center; gap:var(--sm)">
+        ${avatarHtml}
+        <div>
+          <div style="font-weight:700; font-size:14px; color:var(--on-surface)">${esc(post.user_name || 'Usuario')}</div>
+          <div style="font-size:12px; color:var(--on-surface-var)">${esc(post.user_school || '')} · ${timeAgo(post.created_at)}</div>
+        </div>
+      </div>
+      ${post.user_id == me?.id ? `<button onclick="openDeleteModal(${post.id})" class="btn btn-ghost btn-icon"><span class="mi">delete</span></button>` : ''}
+    </div>
+    <div style="font-size:14px; color:var(--on-surface); line-height:1.5; margin-bottom:var(--sm)">${esc(post.content)}</div>
+    ${post.image_url ? `<div style="border-radius:var(--r-md); overflow:hidden; margin-bottom:var(--sm)"><img src="${post.image_url}" style="width:100%; display:block" /></div>` : ''}
+    <div style="display:flex; gap:var(--md); border-top:1px solid var(--outline-var); padding-top:var(--sm)">
+      <button onclick="likePost(${post.id})" class="btn btn-ghost btn-sm" style="${post.is_liked ? 'color:var(--error)' : ''}">
+        <span class="mi">${post.is_liked ? 'favorite' : 'favorite_border'}</span> ${post.likes_count || 0} Me gusta
+      </button>
+      <button onclick="openCommentModal(${post.id})" class="btn btn-ghost btn-sm">
+        <span class="mi">chat_bubble_outline</span> ${post.comments_count || 0} Comentar
+      </button>
+    </div>
+  </div>`;
+}
+
+// === UPLOADS (Avatar/Banner) ===
+function previewImage(event, type) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingImageFile = file;
+  pendingImageType = type;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('image-preview').src = e.target.result;
+    document.getElementById('image-modal-title').textContent = type === 'avatar' ? 'Cambiar Foto de Perfil' : 'Cambiar Portada';
+    if (type === 'banner') {
+       document.getElementById('image-preview').style.borderRadius = '0';
+       document.getElementById('image-preview').style.width = '100%';
+       document.getElementById('image-preview').style.height = '140px';
+    } else {
+       document.getElementById('image-preview').style.borderRadius = '50%';
+       document.getElementById('image-preview').style.width = '200px';
+       document.getElementById('image-preview').style.height = '200px';
+    }
+    document.getElementById('image-modal').classList.add('open');
+  };
+  reader.readAsDataURL(file);
+}
+
+function closeImageModal() {
+  document.getElementById('image-modal').classList.remove('open');
+  pendingImageFile = null;
+}
+
+async function saveImage() {
+  if (!pendingImageFile) return;
+  const btn = document.getElementById('save-image-btn');
+  btn.disabled = true;
+  btn.textContent = 'Subiendo...';
+  
+  try {
+    const formData = new FormData();
+    if (pendingImageType === 'avatar') formData.append('avatar_url', pendingImageFile);
+    else formData.append('banner_url', pendingImageFile);
+    
+    const res = await AuthAPI.updateProfile(formData);
+    if (res?.ok) {
+      showToast('Imagen actualizada', 'success');
+      if (res.data.user) localStorage.setItem('upt_user', JSON.stringify({...me, ...res.data.user}));
+      loadProfile();
+    } else {
+      showToast('Error al subir imagen', 'error');
+    }
+  } catch (err) {
+    showToast('Error de conexión', 'error');
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'Subir imagen';
+  closeImageModal();
+}
+
+// === INLINE EDITING ===
+function startEditBio() {
+  document.getElementById('profile-bio-display').style.display = 'none';
+  document.getElementById('edit-bio-btn').style.display = 'none';
+  document.getElementById('edit-bio-container').style.display = 'block';
+  document.getElementById('edit-bio-input').value = profileData.bio || '';
+  document.getElementById('edit-bio-input').focus();
+}
+
+function cancelEditBio() {
+  document.getElementById('edit-bio-container').style.display = 'none';
+  document.getElementById('profile-bio-display').style.display = 'block';
+  document.getElementById('edit-bio-btn').style.display = 'block';
+}
+
+async function saveBio() {
+  const newBio = document.getElementById('edit-bio-input').value;
+  const res = await AuthAPI.updateProfile({ bio: newBio });
+  if (res?.ok) {
+    profileData.bio = newBio;
+    document.getElementById('profile-bio-display').textContent = newBio || 'Sin biografía';
+    showToast('Biografía actualizada', 'success');
+  } else showToast('Error al actualizar', 'error');
+  cancelEditBio();
+}
+
+function startEditSemester() {
+  document.getElementById('profile-semester-display').style.display = 'none';
+  document.getElementById('edit-semester-btn').style.display = 'none';
+  const sel = document.getElementById('edit-semester-select');
+  sel.style.display = 'inline-block';
+  sel.value = profileData.academic_cycle || profileData.semester || '';
+  sel.focus();
+}
+
+function cancelEditSemester() {
+  document.getElementById('edit-semester-select').style.display = 'none';
+  document.getElementById('profile-semester-display').style.display = 'inline-block';
+  document.getElementById('edit-semester-btn').style.display = 'inline-block';
+}
+
+async function saveSemester() {
+  const newSem = document.getElementById('edit-semester-select').value;
+  // Fallback to semester or academic_cycle depending on backend expectation
+  const res = await AuthAPI.updateProfile({ academic_cycle: newSem, semester: newSem });
+  if (res?.ok) {
+    profileData.semester = newSem;
+    profileData.academic_cycle = newSem;
+    document.getElementById('profile-semester-display').textContent = newSem ? 'Semestre ' + newSem : 'Sin semestre';
+    showToast('Semestre actualizado', 'success');
+  } else showToast('Error al actualizar', 'error');
+  cancelEditSemester();
+}
+
+// === SOCIAL ACTIONS ===
+async function sendReq(uid){ 
+  const r=await SocialAPI.sendRequest(uid); 
+  if(r?.ok){
+    showToast('Solicitud enviada ✓','success');
+    loadProfile();
+  } else showToast(r?.data?.error||'Error','error'); 
+}
+
+function openRemoveFriend(uid) {
+  pendingRemoveFriendId = uid;
+  document.getElementById('remove-friend-modal').classList.add('open');
+}
+function closeRemoveFriendModal() {
+  pendingRemoveFriendId = null;
+  document.getElementById('remove-friend-modal').classList.remove('open');
+}
+async function confirmRemoveFriend(){ 
+  if(!pendingRemoveFriendId) return;
+  const r=await SocialAPI.removeFriend(pendingRemoveFriendId); 
+  if(r?.ok){showToast('Eliminado','');loadProfile();}else showToast('Error','error'); 
+  closeRemoveFriendModal();
+}
+
+// === POST ACTIONS ===
+function openDeleteModal(postId) {
+  pendingDeleteId = postId;
+  document.getElementById('delete-modal').classList.add('open');
+}
+function cancelDelete() {
+  pendingDeleteId = null;
+  document.getElementById('delete-modal').classList.remove('open');
+}
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  const btn = document.getElementById('confirm-delete-btn');
+  btn.disabled = true; btn.textContent = 'Eliminando...';
+  const r = await PostsAPI.deletePost(pendingDeleteId);
+  if (r?.ok) { showToast('Publicación eliminada', 'success'); loadProfile(); }
+  else showToast('Error al eliminar', 'error');
+  btn.disabled = false; btn.textContent = 'Eliminar';
+  cancelDelete();
+}
+
+function openCommentModal(postId) {
+  pendingCommentId = postId;
+  document.getElementById('comment-input').value = '';
+  document.getElementById('comment-modal').classList.add('open');
+  setTimeout(() => document.getElementById('comment-input').focus(), 100);
+}
+function cancelComment() {
+  pendingCommentId = null;
+  document.getElementById('comment-modal').classList.remove('open');
+}
+async function submitComment() {
+  if (!pendingCommentId) return;
+  const content = document.getElementById('comment-input').value.trim();
+  if (!content) return;
+  const r = await PostsAPI.createComment(pendingCommentId, { content });
+  if (r?.ok) { showToast('Comentario añadido', 'success'); loadProfile(); cancelComment(); }
+  else showToast('Error al comentar', 'error');
+}
+
+async function likePost(id) {
+  await PostsAPI.likePost(id);
+  loadStatsAndPosts();
+}
 
 loadProfile();
 </script>
