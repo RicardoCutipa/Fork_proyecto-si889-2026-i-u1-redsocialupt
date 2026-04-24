@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY . .
+COPY php.ini /usr/local/etc/php/conf.d/uploads.ini
 
 RUN cp .env.example .env \
     && composer install --no-dev --optimize-autoloader

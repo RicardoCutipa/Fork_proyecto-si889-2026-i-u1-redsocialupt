@@ -30,8 +30,15 @@ class CommentController extends BaseController
             $comment = $this->commentService->store(
                 $request->auth->sub,
                 $id,
-                $request->input('content')
+                $request->input('content'),
+                [
+                    'user_name'    => $request->auth->full_name ?? $request->auth->name ?? 'Usuario',
+                    'user_avatar'  => $request->auth->avatar_url ?? null,
+                    'user_faculty' => $request->auth->faculty ?? '',
+                ]
             );
+            $comment->likes_count = 0;
+            $comment->is_liked = false;
             return response()->json($comment, 201);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
@@ -42,9 +49,14 @@ class CommentController extends BaseController
      * GET /api/posts/{id}/comments
      * Listar comentarios de una publicación.
      */
-    public function index(int $id): JsonResponse
+    public function index(Request $request, int $id): JsonResponse
     {
-        return response()->json($this->commentService->getByPost($id), 200);
+        $sort = $request->query('sort', 'oldest');
+        if (!in_array($sort, ['oldest', 'newest'], true)) {
+            $sort = 'oldest';
+        }
+
+        return response()->json($this->commentService->getByPost($id, $sort, $request->auth->sub), 200);
     }
 
     /**
