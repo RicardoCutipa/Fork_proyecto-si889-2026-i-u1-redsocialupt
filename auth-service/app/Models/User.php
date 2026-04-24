@@ -13,6 +13,7 @@ class User extends Model
         'email',
         'name',
         'avatar_url',
+        'banner_url',
         // Campos del primer acceso (RF-01)
         'full_name',
         'user_type',
@@ -21,6 +22,7 @@ class User extends Model
         'academic_cycle',
         'student_code',
         'bio',
+        'last_seen_at',
         // Control
         'role',
         'is_active',
@@ -34,6 +36,7 @@ class User extends Model
     protected $casts = [
         'is_active'           => 'boolean',
         'is_profile_complete' => 'boolean',
+        'last_seen_at'        => 'datetime',
         'created_at'          => 'datetime',
         'updated_at'          => 'datetime',
     ];

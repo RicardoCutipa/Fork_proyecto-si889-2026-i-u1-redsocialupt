@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\User;
+use Carbon\Carbon;
 use Firebase\JWT\JWT;
 use Google\Client as GoogleClient;
 
 class AuthService
 {
+    private const ONLINE_WINDOW_SECONDS = 120;
+
     /**
      * Autentica con Google OAuth.
      * Verifica el ID Token, comprueba @virtual.upt.pe, crea o encuentra el usuario.
@@ -46,6 +49,8 @@ class AuthService
             throw new \Exception('Tu cuenta ha sido desactivada', 403);
         }
 
+        $user = $this->markPresence($user);
+
         return [
             'token'               => $this->generateJwt($user),
             'is_profile_complete' => $user->is_profile_complete,
@@ -70,7 +75,9 @@ class AuthService
             'is_profile_complete' => true,
         ]);
 
-        return ['user' => $this->formatUser($user->fresh()), 'token' => $this->generateJwt($user->fresh())];
+        $user = $this->markPresence($user);
+
+        return ['user' => $this->formatUser($user), 'token' => $this->generateJwt($user)];
     }
 
     /**
@@ -87,7 +94,9 @@ class AuthService
             'academic_cycle' => $data['academic_cycle'] ?? null,
         ], fn($v) => $v !== null));
 
-        return ['user' => $this->formatUser($user->fresh()), 'token' => $this->generateJwt($user->fresh())];
+        $user = $this->markPresence($user);
+
+        return ['user' => $this->formatUser($user), 'token' => $this->generateJwt($user)];
     }
 
     /**
@@ -96,6 +105,18 @@ class AuthService
     public function getAuthenticatedUser(int $userId): User
     {
         return $this->findOrFail($userId);
+    }
+
+    public function getAuthenticatedUserProfile(int $userId): array
+    {
+        $user = $this->markPresence($this->findOrFail($userId));
+        return $this->formatUser($user);
+    }
+
+    public function touchPresence(int $userId): array
+    {
+        $user = $this->markPresence($this->findOrFail($userId));
+        return $this->formatUser($user);
     }
 
     /**
@@ -118,9 +139,38 @@ class AuthService
     /**
      * Lista pública de usuarios (sin paginación compleja por simplicidad).
      */
-    public function listUsersPublic(): array
+    public function listUsersPublic(?string $query = null, ?string $faculty = null, ?string $career = null, ?int $limit = null): array
     {
-        $users = User::where('is_active', true)->orderBy('created_at', 'desc')->get();
+        $usersQuery = User::query()->where('is_active', true);
+
+        $query = trim((string) $query);
+        if ($query !== '') {
+            $usersQuery->where(function ($builder) use ($query) {
+                $like = '%' . $query . '%';
+                $builder
+                    ->where('name', 'like', $like)
+                    ->orWhere('full_name', 'like', $like)
+                    ->orWhere('career', 'like', $like)
+                    ->orWhere('faculty', 'like', $like)
+                    ->orWhere('student_code', 'like', $like);
+            });
+        }
+
+        if ($faculty) {
+            $usersQuery->where('faculty', $faculty);
+        }
+
+        if ($career) {
+            $usersQuery->where('career', $career);
+        }
+
+        $usersQuery->orderBy('created_at', 'desc');
+
+        if ($limit && $limit > 0) {
+            $usersQuery->limit($limit);
+        }
+
+        $users = $usersQuery->get();
         $formatted = [];
         foreach ($users as $user) {
             $formatted[] = $this->formatUser($user);
@@ -169,13 +219,33 @@ class AuthService
         return $user;
     }
 
+    private function markPresence(User $user): User
+    {
+        $user->forceFill([
+            'last_seen_at' => Carbon::now(),
+        ])->save();
+
+        return $user->fresh();
+    }
+
+    private function isUserOnline(User $user): bool
+    {
+        if (!$user->last_seen_at) {
+            return false;
+        }
+
+        return $user->last_seen_at->greaterThanOrEqualTo(Carbon::now()->subSeconds(self::ONLINE_WINDOW_SECONDS));
+    }
+
     private function generateJwt(User $user): string
     {
         $payload = [
             'sub'        => $user->id,
             'email'      => $user->email,
-            'name'       => $user->name,
-            'school'     => $user->school,
+            'name'       => $user->full_name ?: $user->name,
+            'full_name'  => $user->full_name,
+            'school'     => $user->career,
+            'career'     => $user->career,
             'faculty'    => $user->faculty,
             'role'       => $user->role,
             'avatar_url' => $user->avatar_url,
@@ -197,10 +267,12 @@ class AuthService
             'banner_url'          => $user->banner_url,
             'faculty'             => $user->faculty,
             'career'              => $user->career,
-            'school'              => $user->school,
+            'school'              => $user->career,
             'student_code'        => $user->student_code,
             'academic_cycle'      => $user->academic_cycle,
             'bio'                 => $user->bio,
+            'last_seen_at'        => $user->last_seen_at?->toIso8601String(),
+            'is_online'           => $this->isUserOnline($user),
             'user_type'           => $user->user_type,
             'role'                => $user->role,
             'is_profile_complete' => $user->is_profile_complete,
