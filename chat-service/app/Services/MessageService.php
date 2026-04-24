@@ -6,10 +6,12 @@ use App\Models\Message;
 
 class MessageService
 {
+    private ?array $friendIdsCache = null;
+
     /**
-     * Enviar mensaje a un compañero (RF-08).
+     * Enviar mensaje a un companero (RF-08).
      */
-    public function send(int $senderId, int $receiverId, ?string $content, ?string $imageUrl): Message
+    public function send(int $senderId, int $receiverId, ?string $content, ?string $imageUrl, string $jwt): Message
     {
         if ($senderId === $receiverId) {
             throw new \Exception('No puedes enviarte un mensaje a ti mismo', 422);
@@ -18,6 +20,8 @@ class MessageService
         if (empty($content) && empty($imageUrl)) {
             throw new \Exception('El mensaje debe tener contenido o imagen', 422);
         }
+
+        $this->assertFriendship($receiverId, $jwt);
 
         return Message::create([
             'sender_id'   => $senderId,
@@ -29,22 +33,23 @@ class MessageService
     }
 
     /**
-     * Obtener conversación entre dos usuarios (RF-08).
-     * Retorna mensajes ordenados cronológicamente.
+     * Obtener conversacion entre dos usuarios (RF-08).
+     * Retorna mensajes ordenados cronologicamente.
      */
-    public function getConversation(int $userId, int $otherUserId, int $limit = 50): array
+    public function getConversation(int $userId, int $otherUserId, int $limit = 50, string $jwt = ''): array
     {
+        $this->assertFriendship($otherUserId, $jwt);
+
         $messages = Message::where(function ($q) use ($userId, $otherUserId) {
             $q->where('sender_id', $userId)->where('receiver_id', $otherUserId);
         })->orWhere(function ($q) use ($userId, $otherUserId) {
             $q->where('sender_id', $otherUserId)->where('receiver_id', $userId);
         })
-        ->orderBy('created_at', 'asc')
-        ->limit($limit)
-        ->get()
-        ->toArray();
+            ->orderBy('created_at', 'asc')
+            ->limit($limit)
+            ->get()
+            ->toArray();
 
-        // Marcar como leídos los mensajes recibidos
         Message::where('sender_id', $otherUserId)
             ->where('receiver_id', $userId)
             ->where('is_read', false)
@@ -54,15 +59,23 @@ class MessageService
     }
 
     /**
-     * Inbox: lista de conversaciones recientes con último mensaje (RF-08).
+     * Inbox: lista de conversaciones recientes con ultimo mensaje (RF-08).
      */
-    public function getInbox(int $userId): array
+    public function getInbox(int $userId, string $jwt = ''): array
     {
-        // Obtener IDs de usuarios con los que ha chateado
+        $friendIds = $this->fetchFriendIds($jwt);
+        if ($friendIds === null) {
+            throw new \Exception('No se pudo validar la lista de amigos', 503);
+        }
+
         $sentTo = Message::where('sender_id', $userId)->pluck('receiver_id');
         $receivedFrom = Message::where('receiver_id', $userId)->pluck('sender_id');
 
-        $contactIds = $sentTo->merge($receivedFrom)->unique()->values();
+        $contactIds = $sentTo->merge($receivedFrom)
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => in_array($id, $friendIds, true))
+            ->unique()
+            ->values();
 
         $conversations = [];
         foreach ($contactIds as $contactId) {
@@ -71,8 +84,8 @@ class MessageService
             })->orWhere(function ($q) use ($userId, $contactId) {
                 $q->where('sender_id', $contactId)->where('receiver_id', $userId);
             })
-            ->orderBy('created_at', 'desc')
-            ->first();
+                ->orderBy('created_at', 'desc')
+                ->first();
 
             $unreadCount = Message::where('sender_id', $contactId)
                 ->where('receiver_id', $userId)
@@ -88,11 +101,60 @@ class MessageService
             }
         }
 
-        // Ordenar por último mensaje más reciente
         usort($conversations, fn($a, $b) =>
             strtotime($b['last_message']['created_at']) - strtotime($a['last_message']['created_at'])
         );
 
         return $conversations;
+    }
+
+    private function assertFriendship(int $otherUserId, string $jwt): void
+    {
+        $friendIds = $this->fetchFriendIds($jwt);
+        if ($friendIds === null) {
+            throw new \Exception('No se pudo validar la amistad', 503);
+        }
+
+        if (!in_array($otherUserId, $friendIds, true)) {
+            throw new \Exception('Solo puedes chatear con tus amigos', 403);
+        }
+    }
+
+    private function fetchFriendIds(string $jwt): ?array
+    {
+        if ($this->friendIdsCache !== null) {
+            return $this->friendIdsCache;
+        }
+
+        if ($jwt === '') {
+            return null;
+        }
+
+        $url = rtrim(env('SOCIAL_SERVICE_URL', 'http://profile-social-service:8000'), '/') . '/api/social/friends';
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'header' => "Accept: application/json\r\nAuthorization: Bearer {$jwt}\r\n",
+                'timeout' => 5,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        $response = @file_get_contents($url, false, $context);
+        $statusLine = $http_response_header[0] ?? '';
+        preg_match('/\s(\d{3})\s/', $statusLine, $matches);
+        $status = isset($matches[1]) ? (int) $matches[1] : 0;
+
+        if ($response === false || $status < 200 || $status >= 300) {
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $this->friendIdsCache = array_values(array_unique(array_map('intval', $decoded)));
+        return $this->friendIdsCache;
     }
 }
