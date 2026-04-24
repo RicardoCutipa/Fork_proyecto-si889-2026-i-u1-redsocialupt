@@ -9,12 +9,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY . .
+COPY php.ini /usr/local/etc/php/conf.d/uploads.ini
 
 RUN cp .env.example .env \
     && composer install --no-dev --optimize-autoloader
 
-RUN mkdir -p storage/logs storage/framework/views \
-    && chmod -R 775 storage
+RUN mkdir -p public/chat-uploads storage/logs storage/framework/views \
+    && chmod -R 775 public/chat-uploads storage
 
 EXPOSE 8000
 
