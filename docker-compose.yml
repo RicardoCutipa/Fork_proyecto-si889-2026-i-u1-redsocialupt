@@ -47,6 +47,8 @@ services:
     build: ./auth-service
     ports:
       - "8001:8000"
+    volumes:
+      - ./auth-service/public/auth-uploads:/app/public/auth-uploads
     environment:
       APP_KEY: base64:randomkey
       DB_CONNECTION: mysql
