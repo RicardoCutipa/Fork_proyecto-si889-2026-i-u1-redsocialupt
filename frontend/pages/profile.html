@@ -4,547 +4,167 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Perfil — UPT Connect</title>
   <link rel="stylesheet" href="../css/styles.css">
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   <style>
-    /* Modales Estilo Tailwind Integrados con el Diseño Base */
-    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-    .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
-    
-    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-    .toast { padding: 12px 20px; border-radius: 8px; background: #1a1c1c; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
-    .toast.error { background: #ba1a1a; }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-    /* Fix para evitar conflictos de Tailwind con el app-shell original */
-    .app-shell { display: flex; height: 100vh; overflow: hidden; background: var(--surface); }
-    .sidebar { width: 260px; background: white; border-right: 1px solid var(--outline-var); display: flex; flex-direction: column; padding: var(--md); }
-    .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; overflow-x: hidden; }
-    .page-body { padding: 24px; max-width: 900px; margin: 0 auto; width: 100%; }
-
-    /* Botones de subida de imagen */
-    .profile-banner-upload, .profile-avatar-upload { 
-      background: rgba(0,0,0,0.5); color: white; border-radius: 50%; padding: 8px; 
-      cursor: pointer; transition: background 0.2s; display:none; align-items:center; justify-content:center;
-    }
-    .profile-banner-upload:hover, .profile-avatar-upload:hover { background: rgba(0,0,0,0.8); }
-    .profile-banner-upload { position: absolute; bottom: 16px; right: 16px; }
-    .profile-avatar-upload { position: absolute; bottom: 0; right: 0; }
-
-    .inline-edit-btn { visibility: hidden; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
-    .inline-edit-container:hover .inline-edit-btn { visibility: visible; opacity: 1; }
+    .profile-header { display:flex; align-items:flex-start; gap:var(--md); padding-bottom:var(--md); border-bottom:1px solid var(--outline-var); margin-bottom:var(--md); }
+    .profile-cover { width:100%; height:140px; border-radius:var(--r-md); object-fit:cover; margin-bottom:calc(-1 * var(--xl)); background:linear-gradient(135deg,var(--primary) 0%,var(--primary-container) 100%); }
+    .profile-avatar-wrap { position:relative; flex-shrink:0; }
+    .profile-avatar { width:96px; height:96px; font-size:32px; font-weight:700; border:4px solid var(--surface-card); }
+    .profile-info { flex:1; }
+    .profile-info h1 { font-size:22px; font-weight:700; color:var(--on-surface); margin-bottom:4px; }
+    .profile-info .career { font-size:14px; color:var(--on-surface-var); margin-bottom:var(--xs); }
+    .profile-info .bio { font-size:14px; color:var(--on-surface-var); line-height:1.5; }
+    .profile-meta { display:flex; gap:var(--md); margin-top:var(--sm); }
+    .profile-meta .stat { text-align:center; }
+    .profile-meta .stat .val { font-weight:700; font-size:18px; color:var(--primary); }
+    .profile-meta .stat .lbl { font-size:12px; color:var(--on-surface-var); }
+    .profile-actions { display:flex; gap:var(--sm); margin-top:var(--sm); flex-wrap:wrap; }
+    .profile-posts { display:flex; flex-direction:column; gap:var(--sm); margin-top:var(--md); }
+    .edit-form { display:flex; flex-direction:column; gap:var(--sm); }
   </style>
 </head>
-<body class="bg-surface text-on-surface" style="font-family:'Inter',sans-serif;">
+<body>
 <div class="app-shell">
-  <!-- THE OLD SIDEBAR TO MAINTAIN NORMAL SHAPE -->
   <aside class="sidebar">
-    <div class="sidebar-brand"><div class="logo" style="background:#1B2A6B;color:white;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-weight:bold;">UC</div><span style="font-weight:bold;color:#1B2A6B;margin-left:8px;">UPT Connect</span></div>
-    <div class="sidebar-user" style="display:flex;align-items:center;gap:12px;margin:24px 0;">
-      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;">U</div>
-      <div class="sidebar-user-info"><div class="name" id="sb-name" style="font-weight:600;font-size:14px;">...</div><div class="career" id="sb-career" style="font-size:12px;color:gray;">...</div></div>
+    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
+    <div class="sidebar-user">
+      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
+      <div class="sidebar-user-info"><div class="name" id="sb-name">...</div><div class="career" id="sb-career">...</div></div>
     </div>
-    <nav class="sidebar-nav" style="display:flex;flex-direction:column;gap:4px;">
-      <a href="feed.html" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;color:gray;text-decoration:none;"><span class="material-symbols-outlined">home</span> Inicio</a>
-      <a href="profile.html" class="active" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;background:#f0f4ff;color:#1B2A6B;font-weight:600;text-decoration:none;"><span class="material-symbols-outlined">person</span> Mi Perfil</a>
-      <a href="messages.html" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;color:gray;text-decoration:none;"><span class="material-symbols-outlined">chat</span> Mensajes</a>
-      <a href="companions.html" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;color:gray;text-decoration:none;"><span class="material-symbols-outlined">groups</span> Compañeros</a>
+    <nav class="sidebar-nav">
+      <a href="feed.html"><span class="mi">home</span> Inicio</a>
+      <a href="profile.html" class="active"><span class="mi">person</span> Mi Perfil</a>
+      <a href="messages.html"><span class="mi">chat</span> Mensajes</a>
+      <a href="companions.html"><span class="mi">groups</span> Compañeros</a>
     </nav>
-    <div class="sidebar-footer" style="margin-top:auto;"><button onclick="logout()" style="display:flex;align-items:center;gap:8px;color:#ba1a1a;background:none;border:none;cursor:pointer;font-weight:600;padding:12px;"><span class="material-symbols-outlined">logout</span> Cerrar sesión</button></div>
+    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
   </aside>
-
   <div class="main-content">
-    <header class="topbar" style="height:64px;background:white;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 24px;">
-      <span class="topbar-title font-bold text-lg text-slate-800" id="topbar-title">Perfil</span>
+    <header class="topbar">
+      <span class="topbar-title" id="topbar-title">Perfil</span>
     </header>
-    <main class="page-body w-full">
-      
-      <!-- CONTENEDOR DEL PERFIL TAILWIND -->
-      <div id="profile-container" class="w-full">
-        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-pulse min-h-[400px]">
-          <div class="h-48 bg-slate-200"></div>
-          <div class="px-8 pb-6 relative">
-            <div class="-mt-16 w-32 h-32 rounded-full border-4 border-white bg-slate-300 mb-4"></div>
-            <div class="h-6 bg-slate-200 rounded w-1/3 mb-2"></div>
-            <div class="h-4 bg-slate-200 rounded w-1/4"></div>
-          </div>
-        </div>
+    <main class="page-body">
+      <div class="card" id="profile-card">
+        <div class="loading-center"><div class="spinner"></div></div>
       </div>
-
-      <div class="mt-8">
-        <h2 class="text-xl font-bold text-slate-800 mb-4">Publicaciones Recientes</h2>
-        <div id="profile-posts" class="flex flex-col gap-6">
-          <p class="text-center text-slate-500 py-8">Cargando publicaciones...</p>
-        </div>
-      </div>
-
+      <div class="profile-posts" id="profile-posts"></div>
     </main>
   </div>
 </div>
 
-<!-- MODAL IMAGEN -->
-<div id="image-modal" class="fixed inset-0 bg-black/70 z-[100] hidden flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-    <h3 id="image-modal-title" class="text-lg font-bold text-slate-900 mb-4">Acomodar imagen</h3>
-    <div class="flex justify-center mb-6 overflow-hidden bg-slate-100 rounded-lg" style="max-height:300px;">
-      <img id="image-preview" src="" alt="Preview" class="object-cover" />
+<!-- Edit profile modal (own profile only) -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Editar perfil</h2>
+      <button class="btn btn-ghost btn-icon" onclick="closeEdit()"><span class="mi">close</span></button>
     </div>
-    <div class="flex gap-3 justify-end">
-      <button onclick="closeImageModal()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-      <button id="save-image-btn" onclick="saveImage()" class="px-4 py-2 bg-[#1B2A6B] text-white font-medium hover:bg-blue-900 rounded-lg transition-colors">Guardar foto</button>
-    </div>
+    <form class="edit-form" id="edit-form">
+      <div class="input-group"><label>Biografía</label><input type="text" id="edit-bio" class="input-field" placeholder="Cuéntanos algo de ti..."></div>
+      <div class="input-group"><label>Semestre</label>
+        <select id="edit-semester" class="input-field">
+          <option value="">Seleccionar...</option>
+          <option>I</option><option>II</option><option>III</option><option>IV</option>
+          <option>V</option><option>VI</option><option>VII</option><option>VIII</option><option>IX</option><option>X</option>
+        </select>
+      </div>
+      <div class="input-group"><label>Teléfono</label><input type="tel" id="edit-phone" class="input-field"></div>
+      <button type="submit" class="btn btn-primary"><span class="mi">save</span> Guardar cambios</button>
+    </form>
   </div>
 </div>
 
-<!-- MODAL ELIMINAR POST -->
-<div id="delete-modal" class="fixed inset-0 bg-black/50 z-[100] hidden flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-    <h3 class="text-lg font-bold text-slate-900 mb-2">¿Eliminar publicación?</h3>
-    <p class="text-slate-600 text-sm mb-6">Esta acción no se puede deshacer. ¿Estás seguro de que quieres eliminarla?</p>
-    <div class="flex gap-3 justify-end">
-      <button onclick="cancelDelete()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-      <button id="confirm-delete-btn" onclick="confirmDelete()" class="px-4 py-2 bg-[#ba1a1a] text-white font-medium hover:bg-red-700 rounded-lg transition-colors">Eliminar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL ELIMINAR AMIGO -->
-<div id="remove-friend-modal" class="fixed inset-0 bg-black/50 z-[100] hidden flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-    <h3 class="text-lg font-bold text-slate-900 mb-2">¿Eliminar de compañeros?</h3>
-    <p class="text-slate-600 text-sm mb-6">Ya no podrán enviarse mensajes directamente ni aparecerán en tu lista de compañeros.</p>
-    <div class="flex gap-3 justify-end">
-      <button onclick="closeRemoveFriendModal()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-      <button onclick="confirmRemoveFriend()" class="px-4 py-2 bg-[#ba1a1a] text-white font-medium hover:bg-red-700 rounded-lg transition-colors">Eliminar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL COMENTAR -->
-<div id="comment-modal" class="fixed inset-0 bg-black/50 z-[100] hidden flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-    <h3 class="text-lg font-bold text-slate-900 mb-4">Escribir comentario</h3>
-    <textarea id="comment-input" class="w-full bg-slate-100 border-none rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-[#1B2A6B] outline-none" placeholder="Escribe tu comentario aquí..." rows="3"></textarea>
-    <div class="flex gap-3 justify-end mt-4">
-      <button onclick="cancelComment()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-      <button id="submit-comment-btn" onclick="submitComment()" class="px-4 py-2 bg-[#1B2A6B] text-white font-medium hover:bg-blue-900 rounded-lg transition-colors">Comentar</button>
-    </div>
-  </div>
-</div>
-
-<script src="../js/api.js?v=8"></script>
+<script src="../js/api.js"></script>
 <script>
 requireAuth();
 const me = getUser();
 const urlParams = new URLSearchParams(location.search);
 const viewUserId = urlParams.get('id'); // null = own profile
 const isOwnProfile = !viewUserId || (me && String(me.id) === viewUserId);
-let profileData = null;
-
-// Para los modales
-let pendingImageFile = null;
-let pendingImageType = null;
-let pendingRemoveFriendId = null;
-let pendingDeleteId = null;
-let pendingCommentId = null;
+let profileData = null, friendStatus = null;
 
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function timeAgo(dateStr) {
-  const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
-  if (diff < 60) return 'hace un momento';
-  if (diff < 3600) return `hace ${Math.floor(diff/60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`;
-  return `hace ${Math.floor(diff/86400)}d`;
-}
-function getFacultyColor(faculty) {
-  const c = { 'FAING': '#8B2323', 'FACEM': '#1B2A6B', 'FAU': '#D4A017', 'FADE': '#2E4A22', 'FAIS': '#4A2244' };
-  return c[faculty] || '#666';
-}
-function initials(name) {
-  if(!name) return 'U';
-  return name.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase();
-}
+function getFriendBtnLabel(status){ if(status==='friends') return '<span class="mi">how_to_reg</span> Son amigos'; if(status==='pending') return '<span class="mi">hourglass_empty</span> Solicitud enviada'; return '<span class="mi">person_add</span> Mandar solicitud'; }
 
 if(me){
-  document.getElementById('sb-name').textContent = me.name || '';
-  document.getElementById('sb-career').textContent = me.career || 'Estudiante';
-  document.getElementById('sb-avatar').textContent = initials(me.name);
-  document.getElementById('sb-avatar').style.background = getFacultyColor(me.faculty);
-  document.getElementById('sb-avatar').style.color = '#fff';
+  document.getElementById('sb-name').textContent=me.name||'';
+  document.getElementById('sb-career').textContent=me.career||'';
+  const c=getFacultyColor(me.career);
+  const el=document.getElementById('sb-avatar'); el.textContent=initials(me.name); el.style.background=c; el.style.color='#fff';
 }
 
 async function loadProfile() {
   const uid = viewUserId || (me?.id);
   const res = await AuthAPI.getProfile(uid);
-  if(!res?.ok) {
-    document.getElementById('profile-container').innerHTML = `
-      <div class="bg-white rounded-2xl p-8 text-center text-slate-500 border border-slate-200">
-        <span class="material-symbols-outlined text-[48px] mb-2">error_outline</span>
-        <p>Perfil no encontrado</p>
-      </div>`;
-    return;
-  }
+  if(!res?.ok){ document.getElementById('profile-card').innerHTML=`<div class="empty-state"><span class="mi">error_outline</span><p>Perfil no encontrado</p></div>`; return; }
   profileData = res.data;
+  const color = getFacultyColor(profileData.career);
   document.getElementById('topbar-title').textContent = isOwnProfile ? 'Mi Perfil' : profileData.name;
 
-  const color = getFacultyColor(profileData.faculty);
-  const bgStyle = profileData.banner_url ? `background-image:url(${profileData.banner_url})` : `background:linear-gradient(135deg, ${color} 0%, #1B2A6B 100%)`;
-  const avatarStyle = profileData.avatar_url ? `background-image:url(${profileData.avatar_url})` : `background-color:${color}`;
-  
-  let actionsHtml = '';
-  if(!isOwnProfile) {
+  // Determine friend status
+  let actions = '';
+  if(isOwnProfile){
+    actions=`<button class="btn btn-secondary btn-sm" onclick="openEdit()"><span class="mi">edit</span> Editar perfil</button>`;
+  } else {
     // Check friendship
-    const fr = await SocialAPI.getFriends();
-    const friends = (fr?.data || []);
-    const isFriend = friends.some(f => f.id === profileData.id);
+    const fr=await SocialAPI.getFriends();
+    const friends=(fr?.data||[]);
+    const isFriend=friends.some(f=>f.id===profileData.id);
     if(isFriend){
-      actionsHtml = `
-        <span class="text-[#1B2A6B] font-semibold text-sm flex items-center gap-1.5 mr-2">
-          <span class="material-symbols-outlined text-[20px]">how_to_reg</span> Son amigos
-        </span>
-        <a href="messages.html?user=${profileData.id}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-          <span class="material-symbols-outlined text-[18px]">chat</span> Mensaje
-        </a>
-        <button onclick="openRemoveFriend(${profileData.id})" class="text-slate-500 hover:text-[#ba1a1a] transition-colors p-2 rounded-lg hover:bg-red-50">
-          <span class="material-symbols-outlined text-[20px]">person_remove</span>
-        </button>`;
+      friendStatus='friends';
+      actions=`<span style="font-size:14px;font-weight:600;color:var(--on-surface-var);display:flex;align-items:center;gap:4px"><span class="mi">how_to_reg</span> Son amigos</span>
+               <a href="messages.html?user=${profileData.id}" class="btn btn-secondary btn-sm"><span class="mi">chat</span> Mensaje</a>
+               <button class="btn btn-ghost btn-sm" onclick="removeFriend(${profileData.id})"><span class="mi">person_remove</span> Eliminar</button>`;
     } else {
-      actionsHtml = `
-        <button onclick="sendReq(${profileData.id})" class="bg-[#D4A017] hover:bg-[#C19015] text-black font-semibold text-sm px-6 py-2.5 rounded-lg transition-colors shadow-sm flex items-center gap-2">
-          <span class="material-symbols-outlined text-[20px]">person_add</span> Enviar solicitud
-        </button>
-        <a href="messages.html?user=${profileData.id}" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-2.5 rounded-lg transition-colors ml-2">
-          Mensaje
-        </a>`;
+      friendStatus='none';
+      actions=`<button class="btn btn-primary btn-sm" id="req-btn" onclick="sendReq(${profileData.id})"><span class="mi">person_add</span> Mandar solicitud</button>
+               <a href="messages.html?user=${profileData.id}" class="btn btn-secondary btn-sm"><span class="mi">chat</span> Mensaje</a>`;
     }
   }
 
-  const userTypeMap = { 'student': 'Estudiante', 'teacher': 'Docente', 'admin': 'Admin' };
-  const userTypeStr = userTypeMap[profileData.user_type] || 'Estudiante';
-  const semesterStr = profileData.academic_cycle ? profileData.academic_cycle : 'Sin semestre';
-  const bioStr = profileData.bio || '¡Hola! Estoy usando UPT Connect.';
+  document.getElementById('profile-card').innerHTML=`
+    <div style="height:120px;border-radius:var(--r-md);background:linear-gradient(135deg,${color} 0%,${color}99 100%);margin:-var(--md) -var(--md) var(--md);border-radius:var(--r-md) var(--r-md) 0 0"></div>
+    <div class="profile-header">
+      <div class="profile-avatar-wrap">
+        <div class="avatar profile-avatar" style="background:${color}">${initials(profileData.name)}</div>
+      </div>
+      <div class="profile-info">
+        <h1>${esc(profileData.name||'Usuario')}</h1>
+        <div class="career">${esc(profileData.career||'')} ${profileData.semester?'· Semestre '+esc(profileData.semester):''}</div>
+        ${profileData.bio?`<p class="bio">${esc(profileData.bio)}</p>`:''}
+        <span class="faculty-badge" style="background:${color};margin-top:6px;font-size:10px">${esc(profileData.career||'')}</span>
+        <div class="profile-meta">
+          <div class="stat"><div class="val" id="posts-count">—</div><div class="lbl">Publicaciones</div></div>
+          <div class="stat"><div class="val" id="friends-count">—</div><div class="lbl">Compañeros</div></div>
+        </div>
+        <div class="profile-actions">${actions}</div>
+      </div>
+    </div>`;
 
-  const html = `
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      <!-- Banner -->
-      <div class="h-48 relative flex justify-end items-start p-4 bg-cover bg-center" style="${bgStyle}">
-        ${isOwnProfile ? `
-        <label class="profile-banner-upload flex" id="banner-upload-btn" title="Cambiar portada">
-          <span class="material-symbols-outlined text-[20px]">photo_camera</span>
-          <input type="file" accept="image/*" class="hidden" onchange="previewImage(event, 'banner')"/>
-        </label>` : ''}
-      </div>
-      <!-- Profile Info -->
-      <div class="px-8 pb-6 relative">
-        <div class="flex flex-col md:flex-row justify-between items-start">
-          <div class="-mt-16 flex flex-col">
-            <div class="relative w-32 h-32 mb-4">
-              <div class="w-32 h-32 rounded-full border-4 border-white flex items-center justify-center text-white font-bold text-4xl overflow-hidden shadow-sm bg-cover bg-center" style="${avatarStyle}">
-                ${profileData.avatar_url ? '' : initials(profileData.name)}
-              </div>
-              ${isOwnProfile ? `
-              <label class="profile-avatar-upload flex absolute bottom-1 right-1 w-10 h-10 border-4 border-white" style="background:#1B2A6B;" title="Cambiar foto">
-                <span class="material-symbols-outlined text-[18px]">photo_camera</span>
-                <input type="file" accept="image/*" class="hidden" onchange="previewImage(event, 'avatar')"/>
-              </label>` : ''}
-            </div>
-            <div class="flex flex-col">
-              <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">${esc(profileData.full_name || profileData.name)}</h1>
-              <p class="text-slate-600 mt-1">${esc(profileData.career || 'Sin carrera')}</p>
-              <div class="flex items-center gap-3 mt-3 flex-wrap">
-                <span class="text-white text-xs font-semibold px-3 py-1.5 rounded-full" style="background:${color}">${esc(profileData.faculty || 'UPT')}</span>
-                <span class="bg-white text-slate-600 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-1.5 inline-edit-container group">
-                  <span class="material-symbols-outlined text-[14px]">calendar_month</span>
-                  <span id="profile-semester-display">${esc(semesterStr)}</span>
-                  ${isOwnProfile ? `<span class="material-symbols-outlined text-[14px] inline-edit-btn" onclick="startEditSemester()">edit</span>` : ''}
-                </span>
-                ${isOwnProfile ? `
-                <select id="edit-semester-select" class="hidden text-xs border border-slate-300 rounded px-2 py-1 outline-none" onchange="saveSemester()" onblur="cancelEditSemester()">
-                  <option value="">N/A</option>
-                  <option>I</option><option>II</option><option>III</option><option>IV</option><option>V</option>
-                  <option>VI</option><option>VII</option><option>VIII</option><option>IX</option><option>X</option>
-                </select>` : ''}
-                <span class="bg-white text-slate-600 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-1.5">
-                  ${esc(userTypeStr)}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div class="mt-4 md:mt-16 flex items-center">
-            ${actionsHtml}
-          </div>
-        </div>
-      </div>
-      <!-- Data Row -->
-      <div class="border-t border-slate-200 px-8 py-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-slate-400 text-[24px]">badge</span>
-            <div class="flex flex-col">
-              <span class="text-[11px] font-semibold text-slate-500 tracking-wider">CÓDIGO</span>
-              <span class="text-sm font-medium text-slate-900 mt-0.5">${esc(profileData.student_code || 'No registrado')}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-slate-400 text-[24px]">mail</span>
-            <div class="flex flex-col">
-              <span class="text-[11px] font-semibold text-slate-500 tracking-wider">CORREO</span>
-              <span class="text-sm font-medium text-slate-900 mt-0.5">${esc(profileData.email || 'No registrado')}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Sobre Mi -->
-      <div class="border-t border-slate-200 px-8 py-6">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-sm font-bold text-slate-600 tracking-wide">SOBRE MÍ</h2>
-          ${isOwnProfile ? `
-          <button id="edit-bio-btn" onclick="startEditBio()" class="text-[#1B2A6B] hover:text-blue-800 font-semibold text-sm flex items-center gap-1.5 transition-colors">
-            <span class="material-symbols-outlined text-[18px]">edit</span> Editar
-          </button>` : ''}
-        </div>
-        <div id="profile-bio-display" class="text-sm text-slate-900 leading-relaxed whitespace-pre-wrap">${esc(bioStr)}</div>
-        ${isOwnProfile ? `
-        <div id="edit-bio-container" class="hidden mt-2">
-          <textarea id="edit-bio-input" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none resize-none" rows="3"></textarea>
-          <div class="flex gap-2 mt-3">
-            <button onclick="saveBio()" class="bg-[#1B2A6B] text-white px-4 py-1.5 text-sm rounded-lg font-medium hover:bg-blue-900">Guardar</button>
-            <button onclick="cancelEditBio()" class="bg-slate-200 text-slate-700 px-4 py-1.5 text-sm rounded-lg font-medium hover:bg-slate-300">Cancelar</button>
-          </div>
-        </div>` : ''}
-      </div>
-    </div>
-  `;
-  document.getElementById('profile-container').innerHTML = html;
-  loadStatsAndPosts();
-}
-
-async function loadStatsAndPosts() {
+  // Load stats
   const [postRes, friendRes] = await Promise.all([PostsAPI.getFeed(), SocialAPI.getFriends()]);
-  
-  // Actually we filter posts for this user
-  const allPosts = postRes?.ok ? postRes.data : [];
-  const userPosts = allPosts.filter(p => p.author_id === profileData.id);
-  
-  const postsContainer = document.getElementById('profile-posts');
-  if(userPosts.length === 0) {
-    postsContainer.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 min-h-[200px] flex flex-col items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-slate-300 mb-4">article</span>
-        <p class="text-slate-500 text-sm">No hay publicaciones todavía.</p>
-      </div>`;
-    return;
-  }
-  
-  postsContainer.innerHTML = '';
-  userPosts.forEach(post => {
-    const isLiked = post.is_liked || false;
-    const authorColor = getFacultyColor(post.user_faculty);
-    const authorInitials = initials(post.user_name);
-    
-    postsContainer.innerHTML += `
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
-        <div class="flex justify-between items-start">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full text-white font-bold flex items-center justify-center text-sm bg-cover bg-center" style="${post.user_avatar ? `background-image:url(${post.user_avatar})` : `background-color:${authorColor}`}">
-              ${post.user_avatar ? '' : authorInitials}
-            </div>
-            <div class="flex flex-col">
-              <span class="font-bold text-slate-900 text-sm">${esc(post.user_name)}</span>
-              <span class="text-xs text-slate-500">${esc(post.user_school || '')} · ${timeAgo(post.created_at)}</span>
-            </div>
-          </div>
-          ${post.author_id == me?.id ? `
-          <button onclick="openDeleteModal(${post.id})" class="text-slate-400 hover:text-[#ba1a1a] transition-colors p-1 rounded-full hover:bg-slate-100">
-            <span class="material-symbols-outlined text-[20px]">delete</span>
-          </button>` : ''}
-        </div>
-        <div class="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${esc(post.content)}</div>
-        ${post.image_url ? `
-        <div class="rounded-xl overflow-hidden mt-2">
-          <img src="${post.image_url}" class="w-full object-cover max-h-[400px]" alt="Imagen de la publicación">
-        </div>` : ''}
-        <div class="flex gap-4 border-t border-slate-100 pt-4 mt-2">
-          <button onclick="likePost(${post.id})" class="flex items-center gap-2 text-sm font-medium transition-colors ${isLiked ? 'text-[#ba1a1a]' : 'text-slate-500 hover:text-slate-700'}">
-            <span class="material-symbols-outlined text-[20px] ${isLiked ? 'fill' : ''}">${isLiked ? 'favorite' : 'favorite_border'}</span>
-            ${post.likes_count || 0} Me gusta
-          </button>
-          <button onclick="openCommentModal(${post.id})" class="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">
-            <span class="material-symbols-outlined text-[20px]">chat_bubble_outline</span>
-            ${post.comments_count || 0} Comentar
-          </button>
-        </div>
-      </div>
-    `;
-  });
+  if(postRes?.ok) document.getElementById('posts-count').textContent=(postRes.data||[]).filter(p=>p.author_id===profileData.id).length;
+  if(friendRes?.ok) document.getElementById('friends-count').textContent=(friendRes.data||[]).length;
 }
 
-// === IMAGE UPLOADS ===
-function previewImage(event, type) {
-  const file = event.target.files[0];
-  if (!file) return;
-  pendingImageFile = file;
-  pendingImageType = type;
-  
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const preview = document.getElementById('image-preview');
-    preview.src = e.target.result;
-    document.getElementById('image-modal-title').textContent = type === 'avatar' ? 'Acomodar Foto de Perfil' : 'Acomodar Portada';
-    if (type === 'banner') {
-       preview.style.borderRadius = '8px';
-       preview.style.width = '100%';
-       preview.style.height = '140px';
-    } else {
-       preview.style.borderRadius = '50%';
-       preview.style.width = '200px';
-       preview.style.height = '200px';
-    }
-    document.getElementById('image-modal').classList.add('open');
-  };
-  reader.readAsDataURL(file);
-}
-function closeImageModal() {
-  document.getElementById('image-modal').classList.remove('open');
-  pendingImageFile = null;
-}
-async function saveImage() {
-  if (!pendingImageFile) return;
-  const btn = document.getElementById('save-image-btn');
-  btn.disabled = true; btn.textContent = 'Guardando...';
-  try {
-    const formData = new FormData();
-    if (pendingImageType === 'avatar') formData.append('avatar_url', pendingImageFile);
-    else formData.append('banner_url', pendingImageFile);
-    
-    const res = await AuthAPI.updateProfile(formData);
-    if (res?.ok) {
-      showToast('Imagen actualizada', 'success');
-      if (res.data.user) localStorage.setItem('upt_user', JSON.stringify({...me, ...res.data.user}));
-      loadProfile();
-    } else showToast('Error al subir imagen', 'error');
-  } catch (err) { showToast('Error de conexión', 'error'); }
-  btn.disabled = false; btn.textContent = 'Guardar foto';
-  closeImageModal();
-}
+async function sendReq(uid){ const r=await SocialAPI.sendRequest(uid); if(r?.ok){showToast('Solicitud enviada ✓','success');const btn=document.getElementById('req-btn');if(btn){btn.disabled=true;btn.innerHTML='<span class="mi">hourglass_empty</span> Pendiente';}}else showToast(r?.data?.error||'Error','error'); }
+async function removeFriend(uid){ if(!confirm('¿Eliminar de compañeros?')) return; const r=await SocialAPI.removeFriend(uid); if(r?.ok){showToast('Eliminado','');loadProfile();}else showToast('Error','error'); }
 
-// === INLINE EDITING ===
-function startEditBio() {
-  document.getElementById('profile-bio-display').style.display = 'none';
-  document.getElementById('edit-bio-btn').style.display = 'none';
-  document.getElementById('edit-bio-container').style.display = 'block';
-  document.getElementById('edit-bio-input').value = profileData.bio || '';
-  document.getElementById('edit-bio-input').focus();
+function openEdit(){
+  if(!profileData) return;
+  document.getElementById('edit-bio').value=profileData.bio||'';
+  document.getElementById('edit-semester').value=profileData.semester||'';
+  document.getElementById('edit-phone').value=profileData.phone||'';
+  document.getElementById('edit-modal').classList.add('open');
 }
-function cancelEditBio() {
-  document.getElementById('edit-bio-container').style.display = 'none';
-  document.getElementById('profile-bio-display').style.display = 'block';
-  document.getElementById('edit-bio-btn').style.display = 'flex';
-}
-async function saveBio() {
-  const newBio = document.getElementById('edit-bio-input').value;
-  const res = await AuthAPI.updateProfile({ bio: newBio });
-  if (res?.ok) {
-    profileData.bio = newBio;
-    document.getElementById('profile-bio-display').textContent = newBio || '¡Hola! Estoy usando UPT Connect.';
-    showToast('Sobre mí actualizado', 'success');
-  } else showToast('Error al actualizar', 'error');
-  cancelEditBio();
-}
+function closeEdit(){ document.getElementById('edit-modal').classList.remove('open'); }
+document.getElementById('edit-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const res=await AuthAPI.updateProfile({bio:document.getElementById('edit-bio').value,semester:document.getElementById('edit-semester').value,phone:document.getElementById('edit-phone').value});
+  if(res?.ok){closeEdit();showToast('Perfil actualizado ✓','success');if(res.data.user)localStorage.setItem('upt_user',JSON.stringify({...me,...res.data.user}));loadProfile();}
+  else showToast(res?.data?.error||'Error','error');
+});
+document.getElementById('edit-modal').addEventListener('click', e=>{ if(e.target===document.getElementById('edit-modal')) closeEdit(); });
 
-function startEditSemester() {
-  document.getElementById('profile-semester-display').style.display = 'none';
-  document.querySelector('.inline-edit-btn').style.display = 'none';
-  const sel = document.getElementById('edit-semester-select');
-  sel.style.display = 'inline-block';
-  sel.value = profileData.academic_cycle || '';
-  sel.focus();
-}
-function cancelEditSemester() {
-  document.getElementById('edit-semester-select').style.display = 'none';
-  document.getElementById('profile-semester-display').style.display = 'inline-block';
-  document.querySelector('.inline-edit-btn').style.display = 'inline-block';
-}
-async function saveSemester() {
-  const newSem = document.getElementById('edit-semester-select').value;
-  const res = await AuthAPI.updateProfile({ academic_cycle: newSem });
-  if (res?.ok) {
-    profileData.academic_cycle = newSem;
-    document.getElementById('profile-semester-display').textContent = newSem || 'Sin semestre';
-    showToast('Semestre actualizado', 'success');
-  } else showToast('Error al actualizar', 'error');
-  cancelEditSemester();
-}
-
-// === SOCIAL ACTIONS ===
-async function sendReq(uid){ 
-  const r=await SocialAPI.sendRequest(uid); 
-  if(r?.ok){ showToast('Solicitud enviada','success'); loadProfile(); }
-  else showToast(r?.data?.error||'Error','error'); 
-}
-function openRemoveFriend(uid) {
-  pendingRemoveFriendId = uid;
-  document.getElementById('remove-friend-modal').classList.add('open');
-}
-function closeRemoveFriendModal() {
-  pendingRemoveFriendId = null;
-  document.getElementById('remove-friend-modal').classList.remove('open');
-}
-async function confirmRemoveFriend(){ 
-  if(!pendingRemoveFriendId) return;
-  const r=await SocialAPI.removeFriend(pendingRemoveFriendId); 
-  if(r?.ok){ showToast('Eliminado de compañeros','success'); loadProfile(); }
-  else showToast('Error','error'); 
-  closeRemoveFriendModal();
-}
-
-// === POST ACTIONS ===
-function openDeleteModal(postId) {
-  pendingDeleteId = postId;
-  document.getElementById('delete-modal').classList.add('open');
-}
-function cancelDelete() {
-  pendingDeleteId = null;
-  document.getElementById('delete-modal').classList.remove('open');
-}
-async function confirmDelete() {
-  if (!pendingDeleteId) return;
-  const btn = document.getElementById('confirm-delete-btn');
-  btn.disabled = true; btn.textContent = 'Eliminando...';
-  const r = await PostsAPI.deletePost(pendingDeleteId);
-  if (r?.ok) { showToast('Publicación eliminada', 'success'); loadStatsAndPosts(); }
-  else showToast('Error al eliminar', 'error');
-  btn.disabled = false; btn.textContent = 'Eliminar';
-  cancelDelete();
-}
-function openCommentModal(postId) {
-  pendingCommentId = postId;
-  document.getElementById('comment-input').value = '';
-  document.getElementById('comment-modal').classList.add('open');
-  setTimeout(() => document.getElementById('comment-input').focus(), 100);
-}
-function cancelComment() {
-  pendingCommentId = null;
-  document.getElementById('comment-modal').classList.remove('open');
-}
-async function submitComment() {
-  if (!pendingCommentId) return;
-  const content = document.getElementById('comment-input').value.trim();
-  if (!content) return;
-  const btn = document.getElementById('submit-comment-btn');
-  btn.disabled = true; btn.textContent = 'Enviando...';
-  const r = await PostsAPI.createComment(pendingCommentId, { content });
-  if (r?.ok) { showToast('Comentario publicado', 'success'); loadStatsAndPosts(); cancelComment(); }
-  else showToast('Error al comentar', 'error');
-  btn.disabled = false; btn.textContent = 'Comentar';
-}
-async function likePost(id) {
-  await PostsAPI.likePost(id);
-  loadStatsAndPosts();
-}
-
-// Inicializar
 loadProfile();
 </script>
 </body>

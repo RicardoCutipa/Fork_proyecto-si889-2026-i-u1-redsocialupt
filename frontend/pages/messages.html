@@ -1,151 +1,208 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mensajes — UPT Connect</title>
-  <link rel="stylesheet" href="../css/styles.css">
-  <style>
-    .messages-layout { display:grid; grid-template-columns:280px 1fr; gap:0; height:calc(100vh - var(--topbar-h)); overflow:hidden; }
-    .inbox-panel { border-right:1px solid var(--outline-var); overflow-y:auto; background:var(--surface-card); }
-    .inbox-header { padding:var(--sm) var(--md); border-bottom:1px solid var(--outline-var); font-size:15px; font-weight:700; color:var(--primary); }
-    .inbox-item { display:flex; align-items:center; gap:var(--sm); padding:var(--sm) var(--md); cursor:pointer; transition:background .15s; border-bottom:1px solid var(--outline-var); }
-    .inbox-item:hover { background:var(--surface-low); }
-    .inbox-item.active { background:rgba(27,42,107,.07); }
-    .inbox-item .info { flex:1; min-width:0; }
-    .inbox-item .info .name { font-weight:600; font-size:14px; }
-    .inbox-item .info .preview { font-size:12px; color:var(--on-surface-var); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .inbox-item .unread { background:var(--primary); color:#fff; border-radius:var(--r-full); font-size:11px; font-weight:700; padding:2px 7px; }
-    .chat-panel { display:flex; flex-direction:column; height:100%; }
-    .chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:var(--on-surface-var); gap:var(--sm); }
-    .chat-empty .mi { font-size:56px; opacity:.3; }
-    .chat-header { display:flex; align-items:center; gap:var(--sm); padding:var(--sm) var(--md); border-bottom:1px solid var(--outline-var); background:var(--surface-card); }
-    .chat-header .name { font-weight:700; font-size:16px; }
-    .chat-header .career { font-size:12px; color:var(--on-surface-var); }
-    .chat-messages { flex:1; overflow-y:auto; padding:var(--md); display:flex; flex-direction:column; gap:var(--sm); background:var(--surface); }
-    .msg { max-width:70%; padding:10px 14px; border-radius:var(--r-lg); font-size:14px; line-height:1.5; word-break:break-word; }
-    .msg.sent { background:var(--primary); color:#fff; align-self:flex-end; border-bottom-right-radius:var(--r-sm); }
-    .msg.recv { background:var(--surface-card); border:1px solid var(--outline-var); align-self:flex-start; border-bottom-left-radius:var(--r-sm); }
-    .msg .msg-time { font-size:11px; opacity:.65; margin-top:4px; text-align:right; }
-    .chat-input-bar { display:flex; gap:var(--sm); padding:var(--sm) var(--md); border-top:1px solid var(--outline-var); background:var(--surface-card); }
-    .chat-input-bar input { flex:1; padding:10px 16px; border-radius:var(--r-full); border:1.5px solid var(--outline-var); font-size:14px; }
-    .chat-input-bar input:focus { outline:none; border-color:var(--primary); }
-  </style>
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>UPT Connect — Mensajes</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+            "primary": "#001256",
+            "primary-container": "#1b2a6b",
+            "surface": "#f3f4f6",
+            "on-surface": "#1a1c1c",
+            "on-surface-variant": "#454650",
+            "outline": "#767681",
+            "outline-variant": "#c6c5d2",
+            "secondary-container": "#fed255",
+            "error": "#ba1a1a"
+        },
+        "borderRadius": {
+            "DEFAULT": "0.125rem", "lg": "0.5rem", "xl": "1rem", "full": "9999px"
+        }
+      },
+    },
+  }
+</script>
+<style>
+    body { font-family: 'Inter', sans-serif; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #dadada; border-radius: 10px; }
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; background: #1a1c1c; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
+    .toast.error { background: #ba1a1a; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+<script src="../js/components.js?v=6"></script>
 </head>
-<body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
-    <div class="sidebar-user">
-      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
-      <div class="sidebar-user-info"><div class="name" id="sb-name">...</div><div class="career" id="sb-career">...</div></div>
-    </div>
-    <nav class="sidebar-nav">
-      <a href="feed.html"><span class="mi">home</span> Inicio</a>
-      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
-      <a href="messages.html" class="active"><span class="mi">chat</span> Mensajes</a>
-      <a href="companions.html"><span class="mi">groups</span> Compañeros</a>
-    </nav>
-    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
-  </aside>
-  <div class="main-content">
-    <header class="topbar">
-      <span class="topbar-title">Mensajes</span>
-    </header>
-    <div class="messages-layout">
-      <!-- Inbox -->
-      <div class="inbox-panel">
-        <div class="inbox-header">Conversaciones</div>
-        <div id="inbox-list"><div class="loading-center"><div class="spinner" style="width:24px;height:24px;border-width:2px"></div></div></div>
-      </div>
-      <!-- Chat -->
-      <div class="chat-panel" id="chat-panel">
-        <div class="chat-empty"><span class="mi">forum</span><p>Selecciona una conversación</p></div>
-      </div>
-    </div>
-  </div>
+<body class="bg-surface text-on-surface min-h-screen pt-16" style="font-family:'Inter',sans-serif;">
+<app-header></app-header>
+<div class="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-12 gap-6 py-6" style="height:calc(100vh - 4rem);">
+<!-- Left Column -->
+<app-sidebar active-nav="messages"></app-sidebar>
+<!-- Center Column: Messaging Interface -->
+<main class="col-span-1 md:col-span-9 flex bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm" style="height:calc(100vh - 7rem);">
+<!-- Messages List Panel -->
+<div class="w-[320px] flex flex-col border-r border-slate-200 bg-white flex-shrink-0">
+<div class="p-4">
+<h2 class="text-xl font-bold text-slate-900 mb-4">Mensajes</h2>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+<input class="w-full bg-slate-100 border border-slate-200 rounded-full py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none" placeholder="Buscar conversación..." type="text"/>
 </div>
-<script src="../js/api.js"></script>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar" id="inbox-list">
+<p class="text-sm text-slate-400 p-4">Cargando conversaciones...</p>
+</div>
+</div>
+<!-- Chat Window Panel -->
+<div class="flex-1 flex flex-col bg-[#F0F2F5]" id="chat-panel">
+<div class="flex-1 flex items-center justify-center">
+<p class="text-slate-400 text-sm">Selecciona una conversación</p>
+</div>
+</div>
+</main>
+</div>
+
+<script src="../js/api.js?v=6"></script>
 <script>
 requireAuth();
 const user = getUser();
-if(user){
-  document.getElementById('sb-name').textContent=user.name||'';
-  document.getElementById('sb-career').textContent=user.career||'';
-  const c=getFacultyColor(user.career);
-  const el=document.getElementById('sb-avatar'); el.textContent=initials(user.name); el.style.background=c; el.style.color='#fff';
-}
+let activeChat = null;
 
-let pollTimer=null, activeUserId=null;
-function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function msgTime(d){ return new Date(d).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'}); }
 
+if(window.setupLayoutData) window.setupLayoutData(user);
+
+// Load inbox
 async function loadInbox() {
-  const res = await ChatAPI.getInbox();
-  const el = document.getElementById('inbox-list');
-  if(!res?.ok||!res.data.length){ el.innerHTML=`<div class="empty-state" style="padding:var(--md)"><span class="mi">chat_bubble_outline</span><p>Sin conversaciones</p></div>`; return; }
-  el.innerHTML=res.data.map(c=>`
-    <div class="inbox-item ${activeUserId===c.contact_id?'active':''}" onclick="openChat(${c.contact_id},'${esc(c.contact_name||'Usuario')}','${esc(c.contact_career||'')}')">
-      <div class="avatar avatar-sm" style="background:${getFacultyColor(c.contact_career)}">${initials(c.contact_name)}</div>
-      <div class="info">
-        <div class="name">${esc(c.contact_name||'Usuario')}</div>
-        <div class="preview">${esc(c.last_message?.content||'')}</div>
-      </div>
-      ${c.unread_count>0?`<span class="unread">${c.unread_count}</span>`:''}
-    </div>`).join('');
-
-  // Open from URL ?user=
-  const urlUser=new URLSearchParams(location.search).get('user');
-  if(urlUser&&!activeUserId){
-    const item=res.data.find(c=>c.contact_id==urlUser);
-    if(item) openChat(urlUser,item.contact_name||'Usuario',item.contact_career||'');
+  const result = await ChatAPI.getInbox();
+  const container = document.getElementById('inbox-list');
+  const convs = getList(result);
+  if (convs.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-400 p-4">No hay conversaciones aún</p>';
+    return;
   }
-}
+  container.innerHTML = convs.map(conv => {
+    const color = getFacultyColor(conv.other_user?.school || '');
+    const ini = initials(conv.other_user?.name);
+    
+    const avatarUrl = conv.other_user?.avatar_url || '';
+    const avatarHtml = avatarUrl
+      ? `<div class="w-12 h-12 rounded-full shrink-0 relative bg-cover bg-center" style="background-image: url('${avatarUrl}')">
+           <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+         </div>`
+      : `<div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shrink-0 relative" style="background:${color}">
+          ${ini}
+          <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+         </div>`;
 
-function openChat(uid, name, career) {
-  activeUserId=parseInt(uid);
-  if(pollTimer) clearInterval(pollTimer);
-  const color=getFacultyColor(career);
-  document.getElementById('chat-panel').innerHTML=`
-    <div class="chat-header">
-      <div class="avatar avatar-md" style="background:${color}">${initials(name)}</div>
-      <div><div class="name">${esc(name)}</div><div class="career">${esc(career)}</div></div>
-    </div>
-    <div class="chat-messages" id="chat-msgs"></div>
-    <div class="chat-input-bar">
-      <input type="text" id="msg-input" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') sendMsg()">
-      <button class="btn btn-primary btn-icon" onclick="sendMsg()"><span class="mi">send</span></button>
+    return `
+    <div class="flex items-start gap-3 p-3 mx-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors" onclick="openChat(${conv.other_user?.id}, '${(conv.other_user?.name||'').replace(/'/g,"\\'")}', '${color}', '${ini}', '${(conv.other_user?.school||'').replace(/'/g,"\\'")}', '${(conv.other_user?.faculty||'').replace(/'/g,"\\'")}', '${avatarUrl}')" >
+      ${avatarHtml}
+      <div class="flex-1 min-w-0">
+        <div class="flex justify-between items-center mb-0.5">
+          <div class="flex items-center gap-1.5">
+            <h3 class="font-bold text-sm text-slate-900 truncate">${conv.other_user?.name || 'Usuario'}</h3>
+            <span class="text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style="background:${color}">${conv.other_user?.faculty || ''}</span>
+          </div>
+        </div>
+        <p class="text-sm text-slate-500 truncate">${conv.last_message?.content || ''}</p>
+      </div>
     </div>`;
-  loadMessages(uid);
-  pollTimer=setInterval(()=>loadMessages(uid),3000);
-  // mark inbox active
-  document.querySelectorAll('.inbox-item').forEach(el=>el.classList.remove('active'));
+  }).join('');
 }
+loadInbox();
 
-async function loadMessages(uid) {
-  const res=await ChatAPI.getConversation(uid);
-  if(!res?.ok) return;
-  const el=document.getElementById('chat-msgs');
-  if(!el) return;
-  const atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<80;
-  el.innerHTML=res.data.length?res.data.map(m=>{
-    const sent=m.sender_id===(user?.id);
-    return `<div class="msg ${sent?'sent':'recv'}">${esc(m.content)}<div class="msg-time">${msgTime(m.created_at)}</div></div>`;
-  }).join(''):`<div class="empty-state"><span class="mi">waving_hand</span><p>¡Di hola para empezar!</p></div>`;
-  if(atBottom||res.data.length===0) el.scrollTop=el.scrollHeight;
+async function openChat(userId, name, color, ini, school, faculty, avatarUrl) {
+  activeChat = userId;
+  const panel = document.getElementById('chat-panel');
+  const avatarHtml = avatarUrl
+    ? `<div class="w-12 h-12 rounded-full shrink-0 relative mr-3 bg-cover bg-center" style="background-image: url('${avatarUrl}')">
+         <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+       </div>`
+    : `<div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shrink-0 relative mr-3" style="background:${color}">
+        ${ini}
+        <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+       </div>`;
+
+  panel.innerHTML = `
+    <div class="flex items-center p-4 bg-white border-b border-slate-200 shrink-0">
+      ${avatarHtml}
+      <div>
+        <div class="flex items-center gap-1">
+          <h2 class="font-bold text-slate-900 text-lg leading-tight">${name}</h2>
+          <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-1" style="background:${color}">${faculty}</span>
+        </div>
+        <p class="text-sm text-slate-500">${school} · En línea</p>
+      </div>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar" id="messages-area">
+      <p class="text-center text-slate-400 text-sm">Cargando mensajes...</p>
+    </div>
+    <div class="p-4 bg-white border-t border-slate-200 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 relative">
+          <input id="msg-input" class="w-full bg-slate-100 border-none rounded-full py-3 pl-4 pr-10 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none" placeholder="Mensaje para ${name}..." type="text" onkeydown="if(event.key==='Enter')sendMsg()"/>
+        </div>
+        <button onclick="sendMsg()" class="w-12 h-12 rounded-full bg-[#D4A017] flex items-center justify-center text-white hover:bg-[#b88a14] transition-colors shrink-0 shadow-sm">
+          <span class="material-symbols-outlined text-[20px] ml-1">send</span>
+        </button>
+      </div>
+    </div>`;
+  // Load messages
+  const result = await ChatAPI.getConversation(userId);
+  const area = document.getElementById('messages-area');
+  const msgs = getList(result);
+  if (msgs.length === 0) {
+    area.innerHTML = '<p class="text-center text-slate-400 text-sm">No hay mensajes. ¡Empieza la conversación!</p>';
+    return;
+  }
+  area.innerHTML = msgs.map(msg => {
+    const isMine = msg.sender_id == user?.id;
+    return isMine ? `
+    <div class="flex flex-col items-end self-end max-w-[70%]">
+      <div class="bg-[#2B3567] text-white px-5 py-3 rounded-2xl rounded-tr-sm shadow-sm">${msg.content}</div>
+      <span class="text-[11px] text-slate-500 mt-1 mr-1">${new Date(msg.created_at).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})}</span>
+    </div>` : `
+    <div class="flex flex-col items-start max-w-[70%]">
+      <div class="bg-white text-slate-800 px-5 py-3 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100">${msg.content}</div>
+      <span class="text-[11px] text-slate-500 mt-1 ml-1">${new Date(msg.created_at).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'})}</span>
+    </div>`;
+  }).join('');
+  area.scrollTop = area.scrollHeight;
 }
 
 async function sendMsg() {
-  const inp=document.getElementById('msg-input');
-  const content=inp.value.trim();
-  if(!content||!activeUserId) return;
-  inp.value='';
-  const res=await ChatAPI.sendMessage(activeUserId,content);
-  if(res?.ok) loadMessages(activeUserId);
-  else showToast('Error al enviar','error');
+  const input = document.getElementById('msg-input');
+  const content = input.value.trim();
+  if (!content || !activeChat) return;
+  input.value = '';
+  await ChatAPI.sendMessage(activeChat, content);
+  // Reload messages
+  const result = await ChatAPI.getConversation(activeChat);
+  const area = document.getElementById('messages-area');
+  if (result && result.ok) {
+    const msgs = getList(result);
+    area.innerHTML = msgs.map(msg => {
+      const isMine = msg.sender_id == user?.id;
+      return isMine ? `
+      <div class="flex flex-col items-end self-end max-w-[70%]">
+        <div class="bg-[#2B3567] text-white px-5 py-3 rounded-2xl rounded-tr-sm shadow-sm">${msg.content}</div>
+      </div>` : `
+      <div class="flex flex-col items-start max-w-[70%]">
+        <div class="bg-white text-slate-800 px-5 py-3 rounded-2xl rounded-tl-sm shadow-sm border border-slate-100">${msg.content}</div>
+      </div>`;
+    }).join('');
+    area.scrollTop = area.scrollHeight;
+  }
 }
-
-loadInbox();
-setInterval(loadInbox,10000);
 </script>
-</body>
-</html>
+</body></html>
