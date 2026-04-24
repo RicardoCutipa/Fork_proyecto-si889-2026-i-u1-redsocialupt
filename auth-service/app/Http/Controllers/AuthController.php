@@ -11,6 +11,11 @@ class AuthController extends BaseController
 {
     private AuthService $authService;
 
+    private function publicUploadsPath(string $directory): string
+    {
+        return app()->basePath('public/' . trim($directory, '/'));
+    }
+
     public function __construct()
     {
         $this->authService = new AuthService();
@@ -67,8 +72,8 @@ class AuthController extends BaseController
     public function updateProfile(Request $request): JsonResponse
     {
         $this->validate($request, [
-            'avatar'         => 'nullable|image|max:2048',
-            'banner'         => 'nullable|image|max:2048',
+            'avatar'         => 'nullable|image|max:5120',
+            'banner'         => 'nullable|image|max:5120',
             'avatar_url'     => 'nullable|string|max:500',
             'banner_url'     => 'nullable|string|max:500',
             'bio'            => 'nullable|string',
@@ -77,7 +82,7 @@ class AuthController extends BaseController
 
         $data = $request->only(['bio', 'avatar_url', 'banner_url', 'academic_cycle']);
         
-        $uploadDir = public_path('auth-uploads');
+        $uploadDir = $this->publicUploadsPath('auth-uploads');
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0775, true);
         }
@@ -123,8 +128,22 @@ class AuthController extends BaseController
     public function me(Request $request): JsonResponse
     {
         try {
-            $user = $this->authService->getAuthenticatedUser($request->auth->sub);
+            $user = $this->authService->getAuthenticatedUserProfile($request->auth->sub);
             return response()->json($user, 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+        }
+    }
+
+    /**
+     * POST /api/auth/presence
+     * Marca actividad reciente del usuario autenticado.
+     */
+    public function touchPresence(Request $request): JsonResponse
+    {
+        try {
+            $user = $this->authService->touchPresence($request->auth->sub);
+            return response()->json(['message' => 'Presencia actualizada', 'user' => $user], 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
@@ -148,9 +167,14 @@ class AuthController extends BaseController
      * GET /api/auth/users
      * Lista todos los usuarios (público para autenticados).
      */
-    public function listUsersPublic(): JsonResponse
+    public function listUsersPublic(Request $request): JsonResponse
     {
-        return response()->json($this->authService->listUsersPublic(), 200);
+        return response()->json($this->authService->listUsersPublic(
+            $request->query('q'),
+            $request->query('faculty'),
+            $request->query('career'),
+            $request->query('limit') ? (int) $request->query('limit') : null
+        ), 200);
     }
 
     /**
