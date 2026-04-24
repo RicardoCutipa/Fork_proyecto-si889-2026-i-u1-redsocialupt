@@ -8,29 +8,42 @@ use App\Models\Post;
 class CommentService
 {
     /**
-     * Agrega un comentario a una publicación (RF-05).
+     * Agrega un comentario a una publicacion (RF-05).
      */
-    public function store(int $userId, int $postId, string $content): Comment
+    public function store(int $userId, int $postId, string $content, array $meta = []): Comment
     {
         if (!Post::find($postId)) {
-            throw new \Exception('Publicación no encontrada', 404);
+            throw new \Exception('Publicacion no encontrada', 404);
         }
 
         return Comment::create([
-            'user_id' => $userId,
-            'post_id' => $postId,
-            'content' => $content,
+            'user_id'      => $userId,
+            'post_id'      => $postId,
+            'content'      => $content,
+            'user_name'    => $meta['user_name'] ?? 'Usuario',
+            'user_avatar'  => $meta['user_avatar'] ?? null,
+            'user_faculty' => $meta['user_faculty'] ?? '',
         ]);
     }
 
     /**
-     * Lista los comentarios de una publicación.
+     * Lista los comentarios de una publicacion.
      */
-    public function getByPost(int $postId): \Illuminate\Support\Collection
+    public function getByPost(int $postId, string $sort = 'oldest', ?int $userId = null): \Illuminate\Support\Collection
     {
-        return Comment::where('post_id', $postId)
-                      ->orderBy('created_at', 'asc')
-                      ->get();
+        $direction = $sort === 'newest' ? 'desc' : 'asc';
+
+        $comments = Comment::where('post_id', $postId)
+            ->orderBy('created_at', $direction)
+            ->orderBy('id', $direction)
+            ->get();
+
+        $comments->each(function (Comment $comment) use ($userId) {
+            $comment->likes_count = $comment->likes()->count();
+            $comment->is_liked = $userId ? $comment->likes()->where('user_id', $userId)->exists() : false;
+        });
+
+        return $comments;
     }
 
     /**

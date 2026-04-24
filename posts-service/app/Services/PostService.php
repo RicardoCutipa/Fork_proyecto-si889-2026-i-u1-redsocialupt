@@ -16,6 +16,7 @@ class PostService
             'user_name'    => $data['user_name']    ?? 'Usuario',
             'user_school'  => $data['user_school']  ?? '',
             'user_faculty' => $data['user_faculty'] ?? '',
+            'user_avatar'  => $data['user_avatar']  ?? null,
             'content'      => $data['content']      ?? null,
             'image_url'    => $data['image_url']    ?? null,
             'visibility'   => $data['visibility']   ?? 'all',

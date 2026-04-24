@@ -11,6 +11,11 @@ class PostController extends BaseController
 {
     private PostService $postService;
 
+    private function publicUploadsPath(string $directory): string
+    {
+        return app()->basePath('public/' . trim($directory, '/'));
+    }
+
     public function __construct()
     {
         $this->postService = new PostService();
@@ -40,7 +45,7 @@ class PostController extends BaseController
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $file      = $request->file('image');
             $filename  = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $uploadDir = public_path('uploads');
+            $uploadDir = $this->publicUploadsPath('uploads');
 
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0775, true);
