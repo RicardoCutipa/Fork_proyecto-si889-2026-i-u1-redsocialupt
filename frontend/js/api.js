@@ -10,9 +10,60 @@ const API = {
   chat:   '/api/chat',
 };
 
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return null;
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const binary = atob(padded);
+    const encoded = Array.from(binary)
+      .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+      .join('');
+
+    return JSON.parse(decodeURIComponent(encoded));
+  } catch (error) {
+    console.warn('No se pudo decodificar el JWT local:', error);
+    return null;
+  }
+}
+
+function buildUserFromToken(token) {
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+
+  const numericId = Number(payload.sub);
+  const id = Number.isFinite(numericId) ? numericId : payload.sub;
+
+  return {
+    id,
+    email: payload.email || '',
+    name: payload.name || payload.full_name || 'Usuario',
+    full_name: payload.full_name || payload.name || 'Usuario',
+    avatar_url: payload.avatar_url || null,
+    faculty: payload.faculty || '',
+    career: payload.career || payload.school || '',
+    school: payload.school || payload.career || '',
+    role: payload.role || 'user',
+  };
+}
+
 /* ── Token helpers ───────────────────────────────────────────── */
 function getToken() { return localStorage.getItem('upt_token'); }
-function getUser()  { const u = localStorage.getItem('upt_user'); return u ? JSON.parse(u) : null; }
+function getUser()  {
+  const u = localStorage.getItem('upt_user');
+  if (!u) return buildUserFromToken(getToken());
+
+  try {
+    const parsed = JSON.parse(u);
+    return parsed && typeof parsed === 'object' ? parsed : buildUserFromToken(getToken());
+  } catch (error) {
+    console.warn('No se pudo leer upt_user desde localStorage:', error);
+    localStorage.removeItem('upt_user');
+    return buildUserFromToken(getToken());
+  }
+}
 function isLoggedIn() { return !!getToken(); }
 
 function authHeaders() {

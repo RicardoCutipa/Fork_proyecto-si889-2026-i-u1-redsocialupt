@@ -1,4 +1,4 @@
-(function () {
+(async function () {
   requireAuth();
 
   const appView = document.getElementById('app-view');
@@ -14,14 +14,43 @@
   };
   const PRESENCE_PING_INTERVAL_MS = 60000;
   const PRESENCE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
+  let presencePingTimer = null;
+  let presencePingInFlight = false;
 
   if (!appState.user) {
+    logout();
     return;
   }
 
-  if (!appState.user.is_profile_complete) {
+  if (appState.user.is_profile_complete === false) {
     window.location.href = '/pages/onboarding.html';
     return;
+  }
+
+  if (isLoggedIn() && (!localStorage.getItem('upt_user') || !appState.user.id || appState.user.is_profile_complete == null)) {
+    AuthAPI.getProfile().then((bootstrapProfile) => {
+      if (!bootstrapProfile?.ok || !bootstrapProfile.data) {
+        return;
+      }
+
+      updateStoredUser(bootstrapProfile.data);
+      appState.user = getUser();
+
+      if (appState.user?.is_profile_complete === false) {
+        window.location.href = '/pages/onboarding.html';
+        return;
+      }
+
+      if (window.setupLayoutData) {
+        window.setupLayoutData(appState.user);
+      }
+
+      if (window.AppRouter?.currentRoute) {
+        window.AppRouter.render();
+      }
+    }).catch((error) => {
+      console.error('No se pudo hidratar la sesion desde /auth/me:', error);
+    });
   }
 
   startPresenceHeartbeat();
@@ -306,9 +335,6 @@
     }
     if (window.setupLayoutData) window.setupLayoutData(appState.user);
   }
-
-  let presencePingTimer = null;
-  let presencePingInFlight = false;
 
   async function refreshPresence(forceUsers = false) {
     if (!appState.user?.id || presencePingInFlight) {
@@ -1205,25 +1231,27 @@
                 </button>
               </div>
               <div class="post-comments-body">
-                <div id="comment-post-preview" class="post-comments-preview custom-scrollbar"></div>
-                <div class="post-comments-side">
-                  <div class="post-comments-section-head">
-                    <span class="post-comments-section-title">Comentarios</span>
-                    <select id="comment-sort" class="post-comments-sort">
-                      <option value="newest">Mas recientes</option>
-                      <option value="oldest">Mas antiguos</option>
-                    </select>
-                  </div>
-                  <div id="comment-list" class="post-comments-list custom-scrollbar">
-                    <p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>
-                  </div>
-                  <div class="post-comments-compose">
-                    <div class="post-comments-compose-row">
-                      <textarea id="comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
-                      <button id="confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario">
-                        <span class="material-symbols-outlined text-[18px]">send</span>
-                      </button>
+                <div class="post-comments-scroll custom-scrollbar">
+                  <div id="comment-post-preview" class="post-comments-preview"></div>
+                  <div class="post-comments-side">
+                    <div class="post-comments-section-head">
+                      <span class="post-comments-section-title">Comentarios</span>
+                      <select id="comment-sort" class="post-comments-sort">
+                        <option value="newest">Mas recientes</option>
+                        <option value="oldest">Mas antiguos</option>
+                      </select>
                     </div>
+                    <div id="comment-list" class="post-comments-list">
+                      <p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="post-comments-compose">
+                  <div class="post-comments-compose-row">
+                    <textarea id="comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
+                    <button id="confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario">
+                      <span class="material-symbols-outlined text-[18px]">send</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1959,25 +1987,27 @@
                 </button>
               </div>
               <div class="post-comments-body">
-                <div id="profile-comment-post-preview" class="post-comments-preview custom-scrollbar"></div>
-                <div class="post-comments-side">
-                  <div class="post-comments-section-head">
-                    <span class="post-comments-section-title">Comentarios</span>
-                    <select id="profile-comment-sort" class="post-comments-sort">
-                      <option value="newest">Mas recientes</option>
-                      <option value="oldest">Mas antiguos</option>
-                    </select>
-                  </div>
-                  <div id="profile-comment-list" class="post-comments-list custom-scrollbar">
-                    <p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>
-                  </div>
-                  <div class="post-comments-compose">
-                    <div class="post-comments-compose-row">
-                      <textarea id="profile-comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
-                      <button id="profile-confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario del perfil">
-                        <span class="material-symbols-outlined text-[18px]">send</span>
-                      </button>
+                <div class="post-comments-scroll custom-scrollbar">
+                  <div id="profile-comment-post-preview" class="post-comments-preview"></div>
+                  <div class="post-comments-side">
+                    <div class="post-comments-section-head">
+                      <span class="post-comments-section-title">Comentarios</span>
+                      <select id="profile-comment-sort" class="post-comments-sort">
+                        <option value="newest">Mas recientes</option>
+                        <option value="oldest">Mas antiguos</option>
+                      </select>
                     </div>
+                    <div id="profile-comment-list" class="post-comments-list">
+                      <p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="post-comments-compose">
+                  <div class="post-comments-compose-row">
+                    <textarea id="profile-comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
+                    <button id="profile-confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario del perfil">
+                      <span class="material-symbols-outlined text-[18px]">send</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3452,4 +3482,15 @@
 
   if (window.setupLayoutData) window.setupLayoutData(appState.user);
   AppRouter.render();
-})();
+})().catch((error) => {
+  console.error('App bootstrap error:', error);
+  const appView = document.getElementById('app-view');
+  if (appView) {
+    appView.innerHTML = `
+      <div class="bg-white rounded-2xl border border-red-200 p-6 shadow-sm">
+        <h2 class="text-base font-bold text-red-600 mb-2">No se pudo iniciar la aplicacion</h2>
+        <p class="text-sm text-slate-600">Recarga la pagina. Si el problema continua, vuelve a iniciar sesion.</p>
+      </div>
+    `;
+  }
+});
