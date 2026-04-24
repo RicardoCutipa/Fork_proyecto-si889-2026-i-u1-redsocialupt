@@ -1,188 +1,378 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Feed — UPT Connect</title>
-  <link rel="stylesheet" href="../css/styles.css">
-  <style>
-    .feed-layout { display: grid; grid-template-columns: 1fr 260px; gap: var(--md); }
-    .feed-main { display: flex; flex-direction: column; gap: var(--md); }
-    .composer-textarea { width:100%; border:1.5px solid var(--outline-var); border-radius:var(--r-md); padding:var(--sm); font-size:15px; resize:none; min-height:80px; font-family:inherit; transition:border-color .15s; }
-    .composer-textarea:focus { outline:none; border-color:var(--primary); }
-    .composer-footer { display:flex; align-items:center; justify-content:space-between; margin-top:var(--xs); }
-    .post-card { display:flex; flex-direction:column; gap:var(--sm); }
-    .post-header { display:flex; align-items:flex-start; justify-content:space-between; }
-    .post-author { display:flex; align-items:center; gap:var(--sm); }
-    .post-author .name { font-weight:600; font-size:15px; }
-    .post-author .meta { font-size:12px; color:var(--on-surface-var); display:flex; align-items:center; gap:4px; }
-    .post-content { font-size:15px; line-height:1.6; }
-    .post-actions { display:flex; gap:var(--sm); border-top:1px solid var(--outline-var); padding-top:var(--sm); }
-    .post-action-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:var(--r-full); background:transparent; font-size:13px; font-weight:500; color:var(--on-surface-var); transition:background .15s; }
-    .post-action-btn:hover { background:var(--surface-container); }
-    .post-action-btn.liked { color:var(--error); }
-    .comments-section { border-top:1px solid var(--outline-var); padding-top:var(--sm); display:flex; flex-direction:column; gap:6px; }
-    .comment-item { display:flex; gap:8px; align-items:flex-start; }
-    .comment-bubble { background:var(--surface-low); border-radius:var(--r-md); padding:8px 12px; flex:1; }
-    .comment-bubble .cname { font-weight:600; font-size:13px; }
-    .comment-bubble .ctext { font-size:14px; }
-    .comment-input-row { display:flex; gap:8px; }
-    .comment-input-row input { flex:1; padding:8px 12px; border-radius:var(--r-full); border:1.5px solid var(--outline-var); font-size:14px; }
-    .comment-input-row input:focus { outline:none; border-color:var(--primary); }
-    .sidebar-widget h3 { font-size:13px; font-weight:700; color:var(--primary); margin-bottom:var(--sm); text-transform:uppercase; letter-spacing:.04em; }
-    .friend-item { display:flex; align-items:center; gap:var(--sm); padding:8px 0; border-bottom:1px solid var(--outline-var); }
-    .friend-item:last-child { border:none; }
-    .friend-item .info .name { font-weight:600; font-size:14px; }
-    .friend-item .info .career { font-size:12px; color:var(--on-surface-var); }
-    @media(max-width:768px){ .feed-layout { grid-template-columns:1fr; } .feed-sidebar { display:none; } }
-  </style>
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>UPT Connect — Feed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+            "primary": "#001256",
+            "primary-container": "#1b2a6b",
+            "surface": "#f3f4f6",
+            "on-surface": "#1a1c1c",
+            "on-surface-variant": "#454650",
+            "outline": "#767681",
+            "outline-variant": "#c6c5d2",
+            "secondary-container": "#fed255",
+            "error": "#ba1a1a"
+        },
+        "borderRadius": {
+            "DEFAULT": "0.125rem", "lg": "0.5rem", "xl": "1rem", "full": "9999px"
+        }
+      },
+    },
+  }
+</script>
+<style>
+    body { font-family: 'Inter', sans-serif; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; background: #1a1c1c; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
+    .toast.error { background: #ba1a1a; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    /* Emoji picker */
+    #emoji-picker { position:absolute; bottom:48px; left:0; z-index:100; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.12); display:none; width:280px; }
+    #emoji-picker.open { display:block; }
+    #emoji-picker .emoji-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:2px; max-height:200px; overflow-y:auto; }
+    #emoji-picker .emoji-grid button { font-size:20px; padding:4px; border:none; background:none; cursor:pointer; border-radius:6px; transition:background .15s; line-height:1; }
+    #emoji-picker .emoji-grid button:hover { background:#f1f5f9; }
+    #emoji-picker .emoji-cats { display:flex; gap:4px; margin-bottom:6px; border-bottom:1px solid #f1f5f9; padding-bottom:6px; }
+    #emoji-picker .emoji-cats button { font-size:16px; padding:3px 6px; border:none; background:none; cursor:pointer; border-radius:6px; }
+    #emoji-picker .emoji-cats button.active, #emoji-picker .emoji-cats button:hover { background:#e8edff; }
+    /* Image preview */
+    #img-preview-wrap { display:none; position:relative; margin-top:8px; }
+    #img-preview-wrap img { width:100%; max-height:200px; object-fit:cover; border-radius:10px; }
+    #img-preview-wrap button { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.5); border:none; border-radius:50%; width:24px; height:24px; color:#fff; cursor:pointer; font-size:14px; line-height:1; }
+</style>
+<script src="../js/components.js?v=6"></script>
 </head>
-<body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-brand"><div class="logo">UC</div><span>UPT Connect</span></div>
-    <div class="sidebar-user">
-      <div class="avatar avatar-sm" id="sb-avatar" style="background:#C9A227;color:#241a00">U</div>
-      <div class="sidebar-user-info">
-        <div class="name" id="sb-name">...</div>
-        <div class="career" id="sb-career">...</div>
-      </div>
+<body class="bg-surface text-on-surface min-h-screen pt-16" style="font-family:'Inter',sans-serif;">
+<app-header></app-header>
+<div class="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-12 gap-6 py-6">
+<!-- Left Column -->
+<app-sidebar active-nav="feed"></app-sidebar>
+<!-- Center Column: Main Feed -->
+<main class="col-span-1 md:col-span-6 flex flex-col gap-6 w-full">
+<!-- Post Composer -->
+<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+<div class="flex gap-3 mb-4">
+<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0" id="composer-avatar" style="background:#1B2A6B">U</div>
+<textarea id="post-content" class="w-full bg-slate-100 border-none rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-slate-300 outline-none" placeholder="¿Qué estás pensando?" rows="2"></textarea>
+</div>
+<!-- Image preview -->
+<div id="img-preview-wrap">
+  <img id="img-preview" src="" alt="Vista previa"/>
+  <button onclick="clearImage()" title="Quitar imagen">✕</button>
+</div>
+<input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleImageSelect(event)"/>
+<div class="flex justify-between items-center pt-2">
+<div class="flex gap-2 relative">
+  <!-- Botón Foto -->
+  <button onclick="document.getElementById('file-input').click()" class="flex items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+    <span class="material-symbols-outlined text-[20px] text-blue-500">image</span><span class="text-sm font-medium">Foto</span>
+  </button>
+  <!-- Botón Emoji -->
+  <div class="relative">
+    <button onclick="toggleEmojiPicker()" class="flex items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+      <span class="material-symbols-outlined text-[20px] text-yellow-500">mood</span><span class="text-sm font-medium">Emoji</span>
+    </button>
+    <!-- Emoji Picker -->
+    <div id="emoji-picker">
+      <div class="emoji-cats" id="emoji-cats"></div>
+      <div class="emoji-grid" id="emoji-grid"></div>
     </div>
-    <nav class="sidebar-nav">
-      <a href="feed.html" class="active"><span class="mi">home</span> Inicio</a>
-      <a href="profile.html"><span class="mi">person</span> Mi Perfil</a>
-      <a href="messages.html"><span class="mi">chat</span> Mensajes <span class="badge-dot" id="msg-dot" style="display:none"></span></a>
-      <a href="companions.html"><span class="mi">groups</span> Compañeros <span class="badge-dot" id="req-dot" style="display:none"></span></a>
-    </nav>
-    <div class="sidebar-footer"><button onclick="logout()"><span class="mi">logout</span> Cerrar sesión</button></div>
-  </aside>
-  <div class="main-content">
-    <header class="topbar">
-      <span class="topbar-title">Inicio</span>
-    </header>
-    <main class="page-body">
-      <div class="feed-layout">
-        <div class="feed-main">
-          <div class="card">
-            <div style="display:flex;gap:var(--sm);align-items:flex-start">
-              <div class="avatar avatar-md" id="composer-avatar" style="background:#C9A227;color:#241a00">U</div>
-              <div style="flex:1">
-                <textarea class="composer-textarea" id="post-content" placeholder="¿Qué está pasando en tu facultad?"></textarea>
-                <div class="composer-footer">
-                  <select id="post-visibility" style="border:1px solid var(--outline-var);border-radius:var(--r-sm);padding:5px 10px;font-size:12px;">
-                    <option value="public">🌐 Público</option>
-                    <option value="friends">👥 Amigos</option>
-                    <option value="faculty">🎓 Mi facultad</option>
-                  </select>
-                  <button class="btn btn-primary btn-sm" id="post-submit"><span class="mi">send</span> Publicar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="feed-container"><div class="loading-center"><div class="spinner"></div></div></div>
-        </div>
-        <aside class="feed-sidebar">
-          <div class="card card-sm" style="margin-bottom:var(--sm)">
-            <div class="sidebar-widget">
-              <h3>Solicitudes</h3>
-              <div id="pending-list"><div class="empty-state" style="padding:var(--sm)"><span class="mi" style="font-size:28px">person_add</span><p style="font-size:12px">Sin solicitudes</p></div></div>
-            </div>
-          </div>
-          <div class="card card-sm">
-            <div class="sidebar-widget">
-              <h3>Compañeros</h3>
-              <div id="friends-list"><div class="loading-center" style="padding:var(--sm)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div></div>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </main>
   </div>
 </div>
-<script src="../js/api.js"></script>
+<button id="btn-publish" class="bg-[#E5D59A] text-[#5A4A1A] px-6 py-1.5 rounded-full text-sm font-bold hover:bg-[#d8c686] transition-colors">Publicar</button>
+</div>
+</div>
+<!-- Feed Posts -->
+<div id="feed-posts" class="flex flex-col gap-6">
+<p class="text-center text-slate-500 py-8">Cargando publicaciones...</p>
+</div>
+</main>
+<!-- Right Column: Online Classmates -->
+<aside class="hidden md:flex md:col-span-3 flex-col gap-6">
+<div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+<h3 class="font-bold text-sm text-slate-900 mb-4">Compañeros en línea</h3>
+<div id="online-friends" class="flex flex-col gap-4">
+<p class="text-sm text-slate-400">Cargando...</p>
+</div>
+</div>
+</aside>
+</div>
+<div id="delete-modal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 mx-4">
+    <h3 class="text-xl font-bold text-slate-900 mb-2">Eliminar publicación</h3>
+    <p class="text-slate-600 text-sm mb-6">¿Estás seguro de que deseas eliminar esta publicación? Esta acción no se puede deshacer.</p>
+    <div class="flex justify-end gap-3">
+      <button onclick="cancelDelete()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+      <button onclick="confirmDelete()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div id="comment-modal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 mx-4">
+    <h3 class="text-xl font-bold text-slate-900 mb-4">Comentar publicación</h3>
+    <textarea id="comment-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#1B2A6B] outline-none resize-none mb-4" rows="3" placeholder="Escribe tu comentario..."></textarea>
+    <div class="flex justify-end gap-3">
+      <button onclick="cancelComment()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+      <button onclick="confirmComment()" class="px-4 py-2 text-sm font-medium text-white bg-[#1B2A6B] hover:bg-[#152259] rounded-xl transition-colors shadow-sm">Comentar</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js?v=6"></script>
 <script>
 requireAuth();
 const user = getUser();
-if (user) {
-  document.getElementById('sb-name').textContent = user.name||'';
-  document.getElementById('sb-career').textContent = user.career||'';
-  const c = getFacultyColor(user.career);
-  ['sb-avatar','composer-avatar'].forEach(id => { const el=document.getElementById(id); if(el){el.textContent=initials(user.name);el.style.background=c;el.style.color='#fff';} });
-}
-function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function ago(d){ const s=Math.floor((Date.now()-new Date(d))/1000); return s<60?'ahora':s<3600?Math.floor(s/60)+'m':s<86400?Math.floor(s/3600)+'h':Math.floor(s/86400)+'d'; }
 
-function renderPost(p) {
-  const c=getFacultyColor(p.author_career), own=user&&p.author_id===user.id;
-  return `<div class="card post-card" id="post-${p.id}">
-    <div class="post-header">
-      <div class="post-author">
-        <div class="avatar avatar-md" style="background:${c}">${initials(p.author_name)}</div>
-        <div>
-          <a class="name" href="profile.html?id=${p.author_id}">${esc(p.author_name||'Usuario')}</a>
-          <div class="meta"><span class="faculty-badge" style="background:${c};font-size:10px">${esc(p.author_career||'')}</span><span>· ${ago(p.created_at)}</span></div>
-        </div>
-      </div>
-      ${own?`<button class="btn btn-ghost btn-icon btn-sm" onclick="delPost(${p.id})"><span class="mi">delete_outline</span></button>`:''}
-    </div>
-    <p class="post-content">${esc(p.content)}</p>
-    ${p.image_url?`<div style="border-radius:var(--r-md);overflow:hidden"><img src="${p.image_url}" style="width:100%;object-fit:cover;max-height:300px"></div>`:''}
-    <div class="post-actions">
-      <button class="post-action-btn ${p.liked?'liked':''}" onclick="toggleLike(${p.id},this)">
-        <span class="mi">${p.liked?'favorite':'favorite_border'}</span><span class="lc">${p.likes_count||0}</span>
-      </button>
-      <button class="post-action-btn" onclick="toggleCmts(${p.id})"><span class="mi">chat_bubble_outline</span><span>${p.comments_count||0}</span></button>
-    </div>
-    <div class="comments-section" id="cmt-${p.id}" style="display:none"></div>
-  </div>`;
-}
-
-async function loadFeed() {
-  const res = await PostsAPI.getFeed();
-  const el = document.getElementById('feed-container');
-  if (!res?.ok||!res.data.length) { el.innerHTML=`<div class="empty-state card"><span class="mi">article</span><p>Sin publicaciones aún.</p></div>`; return; }
-  el.innerHTML = res.data.map(renderPost).join('');
-}
-
-async function loadSidebar() {
-  const [fr,pr] = await Promise.all([SocialAPI.getFriends(), SocialAPI.getPendingRequests()]);
-  const fel=document.getElementById('friends-list');
-  if(fr?.ok&&fr.data.length) { fel.innerHTML=fr.data.slice(0,5).map(f=>`<div class="friend-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(f.career)}">${initials(f.name)}</div><div class="info"><div class="name">${esc(f.name)}</div><div class="career">${esc(f.career||'')}</div></div><a href="messages.html?user=${f.id}" style="margin-left:auto;font-size:12px;color:var(--primary);font-weight:600">Chat</a></div>`).join(''); }
-  else { fel.innerHTML=`<div class="empty-state" style="padding:var(--sm)"><span class="mi" style="font-size:28px">group</span><p style="font-size:12px">Sin compañeros</p></div>`; }
-  if(pr?.ok&&pr.data.length) {
-    document.getElementById('req-dot').style.display='';
-    document.getElementById('pending-list').innerHTML=pr.data.slice(0,3).map(r=>`<div class="friend-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(r.career)}">${initials(r.name)}</div><div class="info"><div class="name">${esc(r.name)}</div></div><button class="btn btn-primary btn-sm" onclick="acceptReq(${r.request_id},this)">Aceptar</button></div>`).join('');
+// Set sidebar info
+function setupPageSpecific() {
+  if (!user) return;
+  const ini = initials(user.name);
+  const color = getFacultyColor(user.school || user.career || '');
+  const composerAvatar = document.getElementById('composer-avatar');
+  if (composerAvatar) {
+    if (user.avatar_url) {
+      composerAvatar.textContent = '';
+      composerAvatar.style.backgroundImage = `url('${user.avatar_url}')`;
+      composerAvatar.style.backgroundSize = 'cover';
+      composerAvatar.style.backgroundPosition = 'center';
+    } else {
+      composerAvatar.textContent = ini;
+      composerAvatar.style.background = color;
+      composerAvatar.style.backgroundImage = '';
+    }
   }
 }
+if(window.setupLayoutData) window.setupLayoutData(user); setupPageSpecific();
 
-async function acceptReq(id,btn){ btn.disabled=true; const r=await SocialAPI.acceptRequest(id); if(r?.ok){showToast('Solicitud aceptada','success');loadSidebar();}else{showToast('Error','error');btn.disabled=false;} }
+// Load feed
+async function loadFeed() {
+  const result = await PostsAPI.getFeed();
+  const container = document.getElementById('feed-posts');
+  const posts = getList(result);
+  if (posts.length === 0) {
+    container.innerHTML = '<p class="text-center text-slate-400 py-8">No hay publicaciones todavía. ¡Sé el primero!</p>';
+    return;
+  }
+  container.innerHTML = posts.map(post => {
+    const color = getFacultyColor(post.user_school || '');
+    const ini = initials(post.user_name || 'Usuario');
+    const avatarHtml = post.user_avatar 
+      ? `<div class="w-10 h-10 rounded-full shrink-0 relative bg-cover bg-center" style="background-image: url('${post.user_avatar}')">
+           <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+         </div>`
+      : `<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 relative" style="background:${color}">
+          ${ini}
+          <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+         </div>`;
+         
+    return `
+    <article class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div class="flex justify-between items-start mb-3">
+        <div class="flex items-center gap-3">
+          ${avatarHtml}
+          <div>
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-sm text-slate-900">${post.user_name || 'Usuario'}</span>
+              <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-1" style="background:${color}">${post.user_faculty || 'UPT'}</span>
+            </div>
+            <div class="text-slate-500 text-xs mt-0.5">
+              <span>${post.user_school || ''}</span>
+              <span>·</span>
+              <span>${timeAgo(post.created_at)}</span>
+            </div>
+          </div>
+        </div>
+        ${post.user_id == user?.id ? `<button onclick="deletePost(${post.id})" class="text-slate-400 hover:bg-slate-50 p-1 rounded-full"><span class="material-symbols-outlined">delete</span></button>` : ''}
+      </div>
+      <div class="text-sm text-slate-800 mb-4"><p>${post.content}</p></div>
+      ${post.image_url ? `<div class="w-full h-64 bg-slate-100 overflow-hidden rounded-lg mb-3"><img alt="" class="w-full h-full object-cover" src="${post.image_url}"/></div>` : ''}
+      <div class="pt-3 border-t border-slate-100 flex justify-start gap-6 items-center text-slate-500">
+        <button onclick="likePost(${post.id})" class="flex items-center gap-1.5 transition-colors ${post.is_liked ? 'text-red-500 hover:text-red-600' : 'hover:text-slate-700'}">
+          <span class="material-symbols-outlined text-[18px] ${post.is_liked ? 'fill-current' : ''}">favorite</span>
+          <span class="text-sm">${post.likes_count || 0} Me gusta</span>
+        </button>
+        <button onclick="commentPost(${post.id})" class="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
+          <span class="material-symbols-outlined text-[18px]">chat_bubble_outline</span>
+          <span class="text-sm">${post.comments_count || 0} Comentar</span>
+        </button>
+      </div>
+    </article>`;
+  }).join('');
+}
+loadFeed();
 
-document.getElementById('post-submit').addEventListener('click', async () => {
-  const content=document.getElementById('post-content').value.trim();
-  if(!content) return;
-  const btn=document.getElementById('post-submit'); btn.disabled=true;
-  const res=await PostsAPI.createPost({content,visibility:document.getElementById('post-visibility').value});
-  btn.disabled=false;
-  if(res?.ok){document.getElementById('post-content').value='';showToast('Publicado ✓','success');loadFeed();}
-  else showToast(res?.data?.error||'Error','error');
+// Load friends
+async function loadFriends() {
+  const result = await SocialAPI.getFriends();
+  const container = document.getElementById('online-friends');
+  const friends = getList(result);
+  if (friends.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-400">Sin compañeros aún</p>';
+    return;
+  }
+  container.innerHTML = friends.slice(0, 5).map(f => {
+    const color = getFacultyColor(f.school || '');
+    return `
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 relative" style="background:${color}">
+        ${initials(f.name)}
+        <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+      </div>
+      <div>
+        <p class="text-sm font-bold text-slate-900 leading-tight">${f.name}</p>
+        <p class="text-xs text-slate-500">${f.school || ''}</p>
+      </div>
+      <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto" style="background:${color}">${f.faculty || 'UPT'}</span>
+    </div>`;
+  }).join('');
+}
+loadFriends();
+
+// ── Imagen ────────────────────────────────────────────────────
+let selectedImageFile = null;
+function handleImageSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedImageFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('img-preview').src = ev.target.result;
+    document.getElementById('img-preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearImage() {
+  selectedImageFile = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('img-preview-wrap').style.display = 'none';
+  document.getElementById('img-preview').src = '';
+}
+
+// ── Emoji Picker ───────────────────────────────────────────────
+const EMOJI_DATA = {
+  '😀': ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','☺️','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','🥴','😠','😡','🤬','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥸','🤠','🥺','🫠','😶‍🌫️'],
+  '👍': ['👍','👎','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👋','🤚','🖐️','✋','🖖','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄','🤝','🙏','✍️','💅','🤳'],
+  '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️'],
+  '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀'],
+  '🍕': ['🍕','🍔','🌮','🌯','🥙','🧆','🥚','🍳','🥘','🍲','🫕','🥣','🥗','🍿','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🧃','🥤','🧋','☕','🍵','🧉','🍺','🍻'],
+  '⚽': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪀','🪆','🎮','🕹️','🎲','♟️','🎭','🎨','🖼️','🎪','🎤','🎧','🎷','🎺','🎸','🪕','🎻','🎹','🥁','🪘'],
+};
+const CAT_ICONS = { '😀':'😀', '👍':'👍', '❤️':'❤️', '🐶':'🐶', '🍕':'🍕', '⚽':'⚽' };
+let currentCat = '😀';
+
+function renderEmojiPicker() {
+  const cats = document.getElementById('emoji-cats');
+  const grid = document.getElementById('emoji-grid');
+  cats.innerHTML = Object.keys(EMOJI_DATA).map(k =>
+    `<button class="${k===currentCat?'active':''}" onclick="switchCat('${k}')">${CAT_ICONS[k]}</button>`
+  ).join('');
+  grid.innerHTML = EMOJI_DATA[currentCat].map(e =>
+    `<button onclick="insertEmoji('${e}')">${e}</button>`
+  ).join('');
+}
+function switchCat(cat) { currentCat = cat; renderEmojiPicker(); }
+function toggleEmojiPicker() {
+  const p = document.getElementById('emoji-picker');
+  p.classList.toggle('open');
+  if (p.classList.contains('open')) renderEmojiPicker();
+}
+function insertEmoji(e) {
+  const ta = document.getElementById('post-content');
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + e + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + e.length;
+  ta.focus();
+}
+// Cerrar picker al hacer click fuera
+document.addEventListener('click', e => {
+  const picker = document.getElementById('emoji-picker');
+  if (picker && !picker.closest('#emoji-picker') && !e.target.closest('[onclick="toggleEmojiPicker()"]')) {
+    picker.classList.remove('open');
+  }
 });
 
-async function delPost(id){ if(!confirm('¿Eliminar?')) return; const r=await PostsAPI.deletePost(id); if(r?.ok){document.getElementById(`post-${id}`)?.remove();showToast('Eliminado','success');}else showToast('Error','error'); }
-async function toggleLike(id,btn){ const r=await PostsAPI.likePost(id); if(r?.ok){const l=btn.classList.toggle('liked');btn.querySelector('.mi').textContent=l?'favorite':'favorite_border';const lc=btn.querySelector('.lc');lc.textContent=parseInt(lc.textContent)+(l?1:-1);} }
+// ── Publicar ───────────────────────────────────────────────────
+document.getElementById('btn-publish').addEventListener('click', async () => {
+  const content = document.getElementById('post-content').value.trim();
+  if (!content && !selectedImageFile) { showToast('Escribe algo o adjunta una imagen', 'error'); return; }
+  document.getElementById('btn-publish').disabled = true;
+  document.getElementById('btn-publish').textContent = 'Publicando...';
+  const result = await PostsAPI.createPost({ content, imageFile: selectedImageFile });
+  document.getElementById('btn-publish').disabled = false;
+  document.getElementById('btn-publish').textContent = 'Publicar';
+  if (result && result.ok) {
+    document.getElementById('post-content').value = '';
+    clearImage();
+    showToast('Publicación creada');
+    loadFeed();
+  } else {
+    showToast(result?.data?.error || 'Error al publicar', 'error');
+  }
+});
 
-async function toggleCmts(pid) {
-  const s=document.getElementById(`cmt-${pid}`);
-  if(s.style.display==='none'){
-    s.style.display='';
-    s.innerHTML=`<div class="loading-center" style="padding:var(--sm)"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>`;
-    const r=await PostsAPI.getComments(pid);
-    const cs=r?.ok?r.data:[];
-    s.innerHTML=cs.map(c=>`<div class="comment-item"><div class="avatar avatar-sm" style="background:${getFacultyColor(c.author_career)}">${initials(c.author_name)}</div><div class="comment-bubble"><div class="cname">${esc(c.author_name)}</div><div class="ctext">${esc(c.content)}</div></div></div>`).join('')+
-    `<div class="comment-input-row"><input type="text" placeholder="Comentar..." id="ci-${pid}" onkeydown="if(event.key==='Enter')postCmt(${pid})"><button class="btn btn-primary btn-sm" onclick="postCmt(${pid})"><span class="mi">send</span></button></div>`;
-  } else s.style.display='none';
+async function likePost(id) {
+  await PostsAPI.likePost(id);
+  loadFeed();
 }
-async function postCmt(pid){ const inp=document.getElementById(`ci-${pid}`); const c=inp.value.trim(); if(!c) return; const r=await PostsAPI.addComment(pid,c); if(r?.ok){inp.value='';document.getElementById(`cmt-${pid}`).style.display='none';toggleCmts(pid);} }
 
-loadFeed(); loadSidebar();
+let pendingDeleteId = null;
+function deletePost(id) {
+  pendingDeleteId = id;
+  document.getElementById('delete-modal').classList.remove('hidden');
+}
+function cancelDelete() {
+  pendingDeleteId = null;
+  document.getElementById('delete-modal').classList.add('hidden');
+}
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  document.getElementById('delete-modal').classList.add('hidden');
+  const r = await PostsAPI.deletePost(pendingDeleteId);
+  if (r && r.ok) { showToast('Publicación eliminada'); loadFeed(); }
+  pendingDeleteId = null;
+}
+
+let pendingCommentId = null;
+function commentPost(id) {
+  pendingCommentId = id;
+  document.getElementById('comment-input').value = '';
+  document.getElementById('comment-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('comment-input').focus(), 100);
+}
+function cancelComment() {
+  pendingCommentId = null;
+  document.getElementById('comment-modal').classList.add('hidden');
+}
+async function confirmComment() {
+  if (!pendingCommentId) return;
+  const content = document.getElementById('comment-input').value.trim();
+  if (!content) return;
+  document.getElementById('comment-modal').classList.add('hidden');
+  const r = await PostsAPI.addComment(pendingCommentId, content);
+  if (r && r.ok) { showToast('Comentario añadido'); loadFeed(); }
+  else { showToast(r?.data?.error || 'Error al comentar', 'error'); }
+  pendingCommentId = null;
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
+  return `hace ${Math.floor(diff/86400)} d`;
+}
 </script>
-</body>
-</html>
+</body></html>
