@@ -2,10 +2,13 @@
 
 namespace Tests;
 
+use Laravel\Lumen\Testing\DatabaseMigrations;
 use Laravel\Lumen\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    use DatabaseMigrations;
+
     /**
      * Crea la aplicación para los tests.
      */
