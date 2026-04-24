@@ -187,6 +187,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Definir namespace de imagen
+        run: echo "IMAGE_NAMESPACE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -195,17 +197,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & Push auth-service
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/auth-service:latest ./auth-service
-          docker push ghcr.io/${{ github.repository }}/auth-service:latest
+          docker build -t ${IMAGE_NAMESPACE}/auth-service:latest ./auth-service
+          docker push ${IMAGE_NAMESPACE}/auth-service:latest
       - name: Build & Push posts-service
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/posts-service:latest ./posts-service
-          docker push ghcr.io/${{ github.repository }}/posts-service:latest
+          docker build -t ${IMAGE_NAMESPACE}/posts-service:latest ./posts-service
+          docker push ${IMAGE_NAMESPACE}/posts-service:latest
       - name: Build & Push profile-social-service
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/profile-social-service:latest ./profile-social-service
-          docker push ghcr.io/${{ github.repository }}/profile-social-service:latest
+          docker build -t ${IMAGE_NAMESPACE}/profile-social-service:latest ./profile-social-service
+          docker push ${IMAGE_NAMESPACE}/profile-social-service:latest
       - name: Build & Push chat-service
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/chat-service:latest ./chat-service
-          docker push ghcr.io/${{ github.repository }}/chat-service:latest
+          docker build -t ${IMAGE_NAMESPACE}/chat-service:latest ./chat-service
+          docker push ${IMAGE_NAMESPACE}/chat-service:latest
