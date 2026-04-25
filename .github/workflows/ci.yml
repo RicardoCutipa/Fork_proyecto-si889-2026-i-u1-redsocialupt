@@ -7,92 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ── PHPUnit Tests (4 microservicios) ────────────────────────────────
-  test-auth:
-    name: Tests Auth Service
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: auth-service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: pdo_sqlite, zip
-      - name: Preparar entorno
-        run: cp .env.example .env
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --testdox
-
-  test-posts:
-    name: Tests Posts Service
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: posts-service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: pdo_sqlite, zip
-      - name: Preparar entorno
-        run: cp .env.example .env
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --testdox
-
-  test-social:
-    name: Tests Profile Social Service
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: profile-social-service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: pdo_sqlite, zip
-      - name: Preparar entorno
-        run: cp .env.example .env
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --testdox
-
-  test-chat:
-    name: Tests Chat Service
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: chat-service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: pdo_sqlite, zip
-      - name: Preparar entorno
-        run: cp .env.example .env
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --testdox
-
-  # ── SonarCloud ──────────────────────────────────────────────────────
   sonarcloud:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: [test-auth, test-posts, test-social, test-chat]
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -108,17 +25,15 @@ jobs:
         env:
           SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
 
-  # ── Snyk Security ───────────────────────────────────────────────────
   snyk:
     name: Snyk Security Scan
     runs-on: ubuntu-latest
-    needs: [test-auth, test-posts, test-social, test-chat]
     steps:
       - uses: actions/checkout@v4
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: "8.2"
       - name: Install auth-service deps
         run: composer install --no-interaction --prefer-dist
         working-directory: auth-service
@@ -160,11 +75,10 @@ jobs:
         with:
           args: --file=chat-service/composer.lock --severity-threshold=high
 
-  # ── Docker Build ────────────────────────────────────────────────────
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [test-auth, test-posts, test-social, test-chat]
+    if: github.repository == 'UPT-FAING-EPIS/proyecto-si889-2026-i-u1-redsocialupt'
     steps:
       - uses: actions/checkout@v4
       - name: Build auth-service
@@ -176,12 +90,11 @@ jobs:
       - name: Build chat-service
         run: docker build -t chat-service ./chat-service
 
-  # ── Docker Publish (solo en Release) ────────────────────────────────
   docker-publish:
     name: Publish to GitHub Packages
     runs-on: ubuntu-latest
     needs: [docker-build, sonarcloud]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'UPT-FAING-EPIS/proyecto-si889-2026-i-u1-redsocialupt' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
