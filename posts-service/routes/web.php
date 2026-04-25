@@ -28,4 +28,6 @@ $router->group(['prefix' => 'api', 'middleware' => 'jwt'], function () use ($rou
     $router->get('/posts/{id}/comments',     'CommentController@index');
     $router->delete('/comments/{id}',        'CommentController@destroy');
     $router->delete('/comments/{id}/admin',  'CommentController@adminDestroy');
+    $router->post('/comments/{id}/like',     'CommentLikeController@toggle');
+    $router->get('/comments/{id}/likes',     'CommentLikeController@count');
 });

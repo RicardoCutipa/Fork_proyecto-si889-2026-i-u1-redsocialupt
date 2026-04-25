@@ -11,6 +11,11 @@ class MessageController extends BaseController
 {
     private MessageService $messageService;
 
+    private function publicUploadsPath(string $directory): string
+    {
+        return app()->basePath('public/' . trim($directory, '/'));
+    }
+
     public function __construct()
     {
         $this->messageService = new MessageService();
@@ -25,15 +30,32 @@ class MessageController extends BaseController
         $this->validate($request, [
             'receiver_id' => 'required|integer',
             'content'     => 'nullable|string',
-            'image_url'   => 'nullable|string|url',
+            'image'       => 'nullable|file|mimes:jpg,jpeg,png,gif,webp|max:5120',
+            'image_url'   => 'nullable|string|max:500',
         ]);
 
         try {
+            $imageUrl = $request->input('image_url');
+
+            if ($request->hasFile('image') && $request->file('image')->isValid()) {
+                $file = $request->file('image');
+                $filename = time() . '_chat_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $uploadDir = $this->publicUploadsPath('chat-uploads');
+
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
+                }
+
+                $file->move($uploadDir, $filename);
+                $imageUrl = '/chat-uploads/' . $filename;
+            }
+
             $message = $this->messageService->send(
                 $request->auth->sub,
                 $request->input('receiver_id'),
                 $request->input('content'),
-                $request->input('image_url')
+                $imageUrl,
+                $request->bearerToken() ?? ''
             );
             return response()->json($message, 201);
         } catch (\Exception $e) {
@@ -48,10 +70,14 @@ class MessageController extends BaseController
      */
     public function conversation(Request $request, int $userId): JsonResponse
     {
-        $limit    = (int) $request->query('limit', 50);
-        $messages = $this->messageService->getConversation($request->auth->sub, $userId, $limit);
+        try {
+            $limit    = (int) $request->query('limit', 50);
+            $messages = $this->messageService->getConversation($request->auth->sub, $userId, $limit, $request->bearerToken() ?? '');
 
-        return response()->json($messages, 200);
+            return response()->json($messages, 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
     }
 
     /**
@@ -60,7 +86,11 @@ class MessageController extends BaseController
      */
     public function inbox(Request $request): JsonResponse
     {
-        $conversations = $this->messageService->getInbox($request->auth->sub);
-        return response()->json($conversations, 200);
+        try {
+            $conversations = $this->messageService->getInbox($request->auth->sub, $request->bearerToken() ?? '');
+            return response()->json($conversations, 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
     }
 }

@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client;
-
 class UserDirectoryService
 {
     /**
@@ -13,14 +11,11 @@ class UserDirectoryService
      */
     public function listUsers(string $jwt, ?string $faculty = null, ?string $career = null)
     {
-        $users = $this->fetchUsersFromAuth($jwt);
-
-        if ($faculty) {
-            $users = array_filter($users, fn($u) => ($u['faculty'] ?? '') === $faculty);
-        }
-        if ($career) {
-            $users = array_filter($users, fn($u) => ($u['career'] ?? '') === $career);
-        }
+        $users = $this->fetchUsersFromAuth($jwt, array_filter([
+            'faculty' => $faculty,
+            'career' => $career,
+        ], fn($value) => $value !== null && $value !== ''));
+        $users = array_filter($users, fn($u) => (bool) ($u['is_profile_complete'] ?? false));
 
         return array_values($users);
     }
@@ -30,28 +25,48 @@ class UserDirectoryService
      */
     public function search(string $jwt, string $query)
     {
-        $users = $this->fetchUsersFromAuth($jwt);
-        $query = strtolower($query);
+        $users = $this->fetchUsersFromAuth($jwt, [
+            'q' => $query,
+            'limit' => 12,
+        ]);
+        $users = array_filter($users, fn($u) => (bool) ($u['is_profile_complete'] ?? false));
 
-        return array_values(array_filter($users, function ($u) use ($query) {
-            $name     = strtolower($u['name'] ?? '');
-            $fullName = strtolower($u['full_name'] ?? '');
-            return str_contains($name, $query) || str_contains($fullName, $query);
-        }));
+        return array_values($users);
     }
 
     /**
      * Obtiene la lista de usuarios desde auth-service.
      */
-    private function fetchUsersFromAuth(string $jwt): array
+    private function fetchUsersFromAuth(string $jwt, array $query = []): array
     {
         try {
-            $client   = new Client(['base_uri' => env('AUTH_SERVICE_URL', 'http://auth-service:8000')]);
-            $response = $client->get('/api/auth/users', [
-                'headers' => ['Authorization' => 'Bearer ' . $jwt],
-                'timeout' => 5,
+            $baseUrl = rtrim(env('AUTH_SERVICE_URL', 'http://auth-service:8000'), '/');
+            $url = $baseUrl . '/api/auth/users';
+
+            if (!empty($query)) {
+                $url .= '?' . http_build_query($query);
+            }
+
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => "Accept: application/json\r\nAuthorization: Bearer {$jwt}\r\n",
+                    'timeout' => 5,
+                    'ignore_errors' => true,
+                ],
             ]);
-            return json_decode($response->getBody()->getContents(), true) ?? [];
+
+            $response = @file_get_contents($url, false, $context);
+            $statusLine = $http_response_header[0] ?? '';
+            preg_match('/\s(\d{3})\s/', $statusLine, $matches);
+            $status = isset($matches[1]) ? (int) $matches[1] : 0;
+
+            if ($response === false || $status < 200 || $status >= 300) {
+                return [];
+            }
+
+            $decoded = json_decode($response, true);
+            return is_array($decoded) ? $decoded : [];
         } catch (\Exception $e) {
             return [];
         }

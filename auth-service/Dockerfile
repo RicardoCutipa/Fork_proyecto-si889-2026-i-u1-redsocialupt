@@ -9,6 +9,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 COPY . .
+COPY php.ini /usr/local/etc/php/conf.d/uploads.ini
 
 RUN cp .env.example .env \
     && composer install --no-dev --optimize-autoloader
