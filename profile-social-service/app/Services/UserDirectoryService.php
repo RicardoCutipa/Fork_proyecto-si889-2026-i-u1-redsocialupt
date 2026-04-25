@@ -47,7 +47,7 @@ class UserDirectoryService
     {
         try {
             $client   = new Client(['base_uri' => env('AUTH_SERVICE_URL', 'http://auth-service:8000')]);
-            $response = $client->get('/api/auth/admin/users', [
+            $response = $client->get('/api/auth/users', [
                 'headers' => ['Authorization' => 'Bearer ' . $jwt],
                 'timeout' => 5,
             ]);

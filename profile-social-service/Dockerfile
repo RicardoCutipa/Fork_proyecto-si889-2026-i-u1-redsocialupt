@@ -10,8 +10,12 @@ WORKDIR /app
 
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader
+RUN cp .env.example .env \
+    && composer install --no-dev --optimize-autoloader
+
+RUN mkdir -p storage/logs storage/framework/views \
+    && chmod -R 775 storage
 
 EXPOSE 8000
 
-CMD php artisan migrate --force && php -S 0.0.0.0:8000 -t public
+CMD php artisan migrate --force 2>/dev/null; php -S 0.0.0.0:8000 -t public
