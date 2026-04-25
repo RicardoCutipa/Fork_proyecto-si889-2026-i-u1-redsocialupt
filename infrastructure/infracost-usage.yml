@@ -1,0 +1,24 @@
+# Infracost usage file — Red Social UPT
+# Ejecutar: infracost breakdown --path infrastructure/ --usage-file infrastructure/infracost-usage.yml
+version: 0.1
+
+resource_usage:
+  hcloud_server.web:
+    # cx22: 2 vCPU, 4 GB RAM, 40 GB SSD
+    # Costo estimado: ~$4.75/mes
+    monthly_hrs: 730
+
+  hcloud_volume.data:
+    # 20 GB almacenamiento extra para MySQL
+    # Costo estimado: ~$0.96/mes
+    monthly_gb: 20
+
+# ── Estimacion Total ──────────────────────────────────────────────────
+# | Recurso            | Especificacion        | Costo/mes (USD) |
+# |--------------------|-----------------------|-----------------|
+# | VPS cx22           | 2 vCPU, 4 GB, 40 GB   | ~$4.75          |
+# | Volumen 20 GB      | Almacenamiento MySQL   | ~$0.96          |
+# | Firewall           | Incluido               | $0.00           |
+# | IPv4 publica       | Incluida               | $0.00           |
+# | Trafico            | 20 TB incluido         | $0.00           |
+# | TOTAL              |                        | ~$5.71/mes      |
