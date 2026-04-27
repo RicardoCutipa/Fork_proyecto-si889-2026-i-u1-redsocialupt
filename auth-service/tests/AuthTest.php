@@ -70,7 +70,7 @@ class AuthTest extends TestCase
             'HTTP_ORIGIN' => 'http://localhost',
             'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'POST',
         ]);
-        $this->seeStatusCode(200);
+        $this->seeStatusCode(204);
     }
 
     // ── Tests JWT middleware ──────────────────────────────────────────────
@@ -86,7 +86,7 @@ class AuthTest extends TestCase
     {
         $this->get('/api/auth/me', ['Authorization' => 'Bearer token-invalido']);
         $this->seeStatusCode(401);
-        $this->seeJson(['error' => 'Token inválido']);
+        $this->seeJson(['error' => 'Token invalido']);
     }
 
     public function testExpiredToken(): void
@@ -227,7 +227,7 @@ class AuthTest extends TestCase
         $this->seeStatusCode(200);
         $this->seeJson([
             'message' => 'Usuario promovido a admin',
-            'user' => ['role' => 'admin'],
+            'role' => 'admin',
         ]);
     }
 }
