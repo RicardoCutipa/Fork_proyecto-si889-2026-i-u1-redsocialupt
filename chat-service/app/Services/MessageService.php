@@ -127,35 +127,33 @@ class MessageService
             return $this->friendIdsCache;
         }
 
-        if ($jwt === '') {
-            return null;
+        $friendIds = null;
+        if ($jwt !== '') {
+            $url = rtrim(env('SOCIAL_SERVICE_URL', 'http://profile-social-service:8000'), '/') . '/api/social/friends';
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => "Accept: application/json\r\nAuthorization: Bearer {$jwt}\r\n",
+                    'timeout' => 5,
+                    'ignore_errors' => true,
+                ],
+            ]);
+
+            $response = @file_get_contents($url, false, $context);
+            $statusLine = $http_response_header[0] ?? '';
+            preg_match('/\s(\d{3})\s/', $statusLine, $matches);
+            $status = isset($matches[1]) ? (int) $matches[1] : 0;
+            $isSuccess = $response !== false && $status >= 200 && $status < 300;
+
+            if ($isSuccess) {
+                $decoded = json_decode($response, true);
+                if (is_array($decoded)) {
+                    $friendIds = array_values(array_unique(array_map('intval', $decoded)));
+                }
+            }
         }
 
-        $url = rtrim(env('SOCIAL_SERVICE_URL', 'http://profile-social-service:8000'), '/') . '/api/social/friends';
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => "Accept: application/json\r\nAuthorization: Bearer {$jwt}\r\n",
-                'timeout' => 5,
-                'ignore_errors' => true,
-            ],
-        ]);
-
-        $response = @file_get_contents($url, false, $context);
-        $statusLine = $http_response_header[0] ?? '';
-        preg_match('/\s(\d{3})\s/', $statusLine, $matches);
-        $status = isset($matches[1]) ? (int) $matches[1] : 0;
-
-        if ($response === false || $status < 200 || $status >= 300) {
-            return null;
-        }
-
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
-            return null;
-        }
-
-        $this->friendIdsCache = array_values(array_unique(array_map('intval', $decoded)));
+        $this->friendIdsCache = $friendIds;
         return $this->friendIdsCache;
     }
 }
