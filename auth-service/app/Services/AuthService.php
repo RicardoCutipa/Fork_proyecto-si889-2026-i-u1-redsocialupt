@@ -123,8 +123,7 @@ class AuthService
 
     public function touchPresence(int $userId): array
     {
-        $user = $this->markPresence($this->ensureUserIsActive($this->findOrFail($userId)));
-        return $this->formatUser($user);
+        return $this->getAuthenticatedUserProfile($userId);
     }
 
     /**
@@ -198,9 +197,14 @@ class AuthService
         }
 
         $user->is_active = !$user->is_active;
-        $user->blocked_reason = $user->is_active
-            ? null
-            : (($blockedReason !== null && trim($blockedReason) !== '') ? trim($blockedReason) : null);
+        $normalizedBlockedReason = null;
+        if ($blockedReason !== null) {
+            $trimmedReason = trim($blockedReason);
+            if ($trimmedReason !== '') {
+                $normalizedBlockedReason = $trimmedReason;
+            }
+        }
+        $user->blocked_reason = $user->is_active ? null : $normalizedBlockedReason;
         $user->save();
 
         return $user;
