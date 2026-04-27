@@ -172,6 +172,9 @@ const AuthAPI = {
   updateAcademic: (userId, data) => apiFetch(`${API.auth}/auth/admin/users/${userId}/academic`, {
     method: 'PUT', body: JSON.stringify(data)
   }),
+  updateUserRole: (userId, role) => apiFetch(`${API.auth}/auth/admin/users/${userId}/role`, {
+    method: 'PUT', body: JSON.stringify({ role })
+  }),
   toggleUser: (userId) => apiFetch(`${API.auth}/auth/admin/users/${userId}`, {
     method: 'PUT'
   }),

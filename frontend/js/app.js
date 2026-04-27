@@ -2963,11 +2963,12 @@
                       <th class="py-3 px-5 text-[12px] font-bold text-slate-500 uppercase tracking-wider">Carrera</th>
                       <th class="py-3 px-5 text-[12px] font-bold text-slate-500 uppercase tracking-wider">Facultad</th>
                       <th class="py-3 px-5 text-[12px] font-bold text-slate-500 uppercase tracking-wider">Estado</th>
+                      <th class="py-3 px-5 text-[12px] font-bold text-slate-500 uppercase tracking-wider">Rol</th>
                       <th class="py-3 px-5 text-[12px] font-bold text-slate-500 uppercase tracking-wider text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody id="users-tbody" class="divide-y divide-slate-100">
-                    <tr><td colspan="5" class="py-8 text-center text-slate-400">Cargando usuarios...</td></tr>
+                    <tr><td colspan="6" class="py-8 text-center text-slate-400">Cargando usuarios...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -3028,7 +3029,7 @@
           </div>
         `;
       },
-      mount({ container, router }) {
+      mount({ container, router, user }) {
         const stats = container.querySelector('#admin-user-stats');
         const tbody = container.querySelector('#users-tbody');
         const searchInput = container.querySelector('#admin-user-search');
@@ -3075,12 +3076,14 @@
 
         function renderUsers(users) {
           if (!users.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-400">No se encontraron usuarios.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400">No se encontraron usuarios.</td></tr>';
             return;
           }
 
           tbody.innerHTML = users.map((listedUser) => {
             const active = listedUser.is_active !== false;
+            const isAdmin = listedUser.role === 'admin';
+            const isSelf = Number(listedUser.id) === Number(user.id);
             return `
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-3 px-5">
@@ -3101,9 +3104,18 @@
                   }
                 </td>
                 <td class="py-3 px-5">
-                  <div class="flex justify-end gap-2">
+                  ${isAdmin
+                    ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-[#1B2A6B] bg-[#E8EDFF]"><span class="w-1.5 h-1.5 rounded-full bg-[#1B2A6B]"></span> Admin</span>'
+                    : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Usuario</span>'
+                  }
+                </td>
+                <td class="py-3 px-5">
+                  <div class="flex justify-end gap-2 flex-wrap">
                     <button type="button" data-edit-user="${listedUser.id}" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">edit</span> Editar
+                    </button>
+                    <button type="button" data-role-user="${listedUser.id}" data-next-role="${isAdmin ? 'user' : 'admin'}" ${isSelf && isAdmin ? 'disabled' : ''} class="flex items-center gap-1.5 px-3 py-1.5 ${isAdmin ? 'bg-[#EEF2FF] text-[#1B2A6B] border border-[#C7D2FE]' : 'bg-[#1B2A6B] text-white border border-[#1B2A6B]'} rounded-lg text-xs font-medium ${isSelf && isAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'} transition-colors shadow-sm">
+                      <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span> ${isAdmin ? 'Quitar admin' : 'Hacer admin'}
                     </button>
                     <button type="button" data-toggle-user="${listedUser.id}" class="flex items-center gap-1.5 px-3 py-1.5 ${active ? 'bg-white text-slate-700 border border-slate-200' : 'bg-[#1B2A6B] text-white'} rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">power_settings_new</span> ${active ? 'Desactivar' : 'Activar'}
@@ -3153,6 +3165,19 @@
           }
 
           const toggleButton = event.target.closest('[data-toggle-user]');
+          const roleButton = event.target.closest('[data-role-user]');
+
+          if (roleButton) {
+            const result = await AuthAPI.updateUserRole(roleButton.dataset.roleUser, roleButton.dataset.nextRole);
+            if (result?.ok) {
+              showToast(result.data?.message || 'Rol actualizado', 'success');
+              loadUsers();
+              return;
+            }
+            showToast(result?.data?.error || 'No se pudo actualizar el rol', 'error');
+            return;
+          }
+
           if (!toggleButton) return;
           const result = await AuthAPI.toggleUser(toggleButton.dataset.toggleUser);
           if (result?.ok) {

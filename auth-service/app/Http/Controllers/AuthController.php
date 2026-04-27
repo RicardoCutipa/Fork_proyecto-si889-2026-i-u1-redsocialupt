@@ -252,4 +252,29 @@ class AuthController extends BaseController
             return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
+
+    /**
+     * PUT /api/auth/admin/users/{id}/role
+     * Cambia el rol entre user y admin.
+     */
+    public function updateRole(Request $request, int $id): JsonResponse
+    {
+        if ($request->auth->role !== 'admin') {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $this->validate($request, [
+            'role' => 'required|in:user,admin',
+        ]);
+
+        try {
+            $user = $this->authService->updateRole($id, $request->input('role'), (int) $request->auth->sub);
+            return response()->json([
+                'message' => $user->role === 'admin' ? 'Usuario promovido a admin' : 'Permisos de admin retirados',
+                'user' => $user,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+        }
+    }
 }

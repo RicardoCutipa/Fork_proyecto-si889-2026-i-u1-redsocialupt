@@ -33,5 +33,6 @@ $router->group(['prefix' => 'api/auth'], function () use ($router) {
         $router->get('/users',                  'AuthController@listUsers');
         $router->put('/users/{id}',             'AuthController@toggleUser');
         $router->put('/users/{id}/academic',    'AuthController@updateAcademic');
+        $router->put('/users/{id}/role',        'AuthController@updateRole');
     });
 });

@@ -208,6 +208,34 @@ class AuthService
         return $user->fresh();
     }
 
+    /**
+     * Actualiza el rol de un usuario (solo admin).
+     */
+    public function updateRole(int $targetUserId, string $role, int $actorUserId): User
+    {
+        $user = $this->findOrFail($targetUserId);
+
+        if (!in_array($role, ['user', 'admin'], true)) {
+            throw new \Exception('Rol invalido', 422);
+        }
+
+        if ($user->id === $actorUserId && $role !== 'admin') {
+            throw new \Exception('No puedes quitarte tus propios permisos de administrador', 422);
+        }
+
+        if ($user->role === 'admin' && $role !== 'admin') {
+            $adminCount = User::where('role', 'admin')->count();
+            if ($adminCount <= 1) {
+                throw new \Exception('Debe existir al menos un administrador activo', 422);
+            }
+        }
+
+        $user->role = $role;
+        $user->save();
+
+        return $user->fresh();
+    }
+
     // ─── Privados ─────────────────────────────────────────
 
     private function findOrFail(int $userId): User
