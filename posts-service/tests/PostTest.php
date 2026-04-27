@@ -35,6 +35,15 @@ class PostTest extends TestCase
         $this->seeJson(['service' => 'posts-service']);
     }
 
+    public function testCorsPreflightAllowsTrustedOrigin(): void
+    {
+        $this->call('OPTIONS', '/api/posts', [], [], [], [
+            'HTTP_ORIGIN' => 'http://localhost',
+            'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
+        ]);
+        $this->seeStatusCode(200);
+    }
+
     // ── Middleware JWT ────────────────────────────────────────────────
 
     public function testPostsRequireJwt(): void

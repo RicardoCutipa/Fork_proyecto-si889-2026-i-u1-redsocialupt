@@ -35,6 +35,15 @@ class ChatTest extends TestCase
         $this->seeJson(['service' => 'chat-service']);
     }
 
+    public function testCorsPreflightAllowsTrustedOrigin(): void
+    {
+        $this->call('OPTIONS', '/api/chat/inbox', [], [], [], [
+            'HTTP_ORIGIN' => 'http://localhost',
+            'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
+        ]);
+        $this->seeStatusCode(200);
+    }
+
     // ── JWT middleware ────────────────────────────────────────────────
 
     public function testInboxRequiresJwt(): void

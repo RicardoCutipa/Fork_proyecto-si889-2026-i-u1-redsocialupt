@@ -35,6 +35,15 @@ class ProfileTest extends TestCase
         $this->seeJson(['service' => 'profile-social-service']);
     }
 
+    public function testCorsPreflightAllowsTrustedOrigin(): void
+    {
+        $this->call('OPTIONS', '/api/social/friends', [], [], [], [
+            'HTTP_ORIGIN' => 'http://localhost',
+            'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
+        ]);
+        $this->seeStatusCode(200);
+    }
+
     // ── JWT middleware ────────────────────────────────────────────────
 
     public function testFriendsRequireJwt(): void
