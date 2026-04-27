@@ -22,6 +22,7 @@ class User extends Model
         'academic_cycle',
         'student_code',
         'bio',
+        'blocked_reason',
         'last_seen_at',
         // Control
         'role',

@@ -51,6 +51,25 @@ function buildUserFromToken(token) {
 
 /* ── Token helpers ───────────────────────────────────────────── */
 function getToken() { return localStorage.getItem('upt_token'); }
+function getBlockedNotice() {
+  const raw = localStorage.getItem('upt_blocked_notice');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    localStorage.removeItem('upt_blocked_notice');
+    return null;
+  }
+}
+function setBlockedNotice(reason = null) {
+  localStorage.setItem('upt_blocked_notice', JSON.stringify({
+    reason: reason || null,
+    created_at: new Date().toISOString(),
+  }));
+}
+function clearBlockedNotice() {
+  localStorage.removeItem('upt_blocked_notice');
+}
 function getUser()  {
   const u = localStorage.getItem('upt_user');
   if (!u) return buildUserFromToken(getToken());
@@ -65,6 +84,10 @@ function getUser()  {
   }
 }
 function isLoggedIn() { return !!getToken(); }
+function clearSession() {
+  localStorage.removeItem('upt_token');
+  localStorage.removeItem('upt_user');
+}
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
@@ -114,6 +137,12 @@ async function apiFetch(url, options = {}) {
     }
     const text = await res.text();
     const data = buildResponseData(res, text);
+    if (res.status === 403 && data?.code === 'ACCOUNT_BLOCKED') {
+      setBlockedNotice(data.reason || null);
+      clearSession();
+      window.location.href = '/index.html';
+      return { ok: false, status: 403, data };
+    }
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
     console.error('API error:', e);
@@ -139,6 +168,12 @@ async function apiFetchForm(url, formData, options = {}) {
     }
     const text = await res.text();
     const data = buildResponseData(res, text);
+    if (res.status === 403 && data?.code === 'ACCOUNT_BLOCKED') {
+      setBlockedNotice(data.reason || null);
+      clearSession();
+      window.location.href = '/index.html';
+      return { ok: false, status: 403, data };
+    }
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
     console.error('API error (form):', e);
@@ -175,8 +210,9 @@ const AuthAPI = {
   updateUserRole: (userId, role) => apiFetch(`${API.auth}/auth/admin/users/${userId}/role`, {
     method: 'PUT', body: JSON.stringify({ role })
   }),
-  toggleUser: (userId) => apiFetch(`${API.auth}/auth/admin/users/${userId}`, {
-    method: 'PUT'
+  toggleUser: (userId, data = {}) => apiFetch(`${API.auth}/auth/admin/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
   }),
   listUsers: (params = '') => apiFetch(`${API.auth}/auth/users?${params}`),
   listPublicUsers: (params = '') => apiFetch(`${API.auth}/auth/users?${params}`),
@@ -211,6 +247,7 @@ const PostsAPI = {
   }),
   likeComment: (commentId) => apiFetch(`/api/comments/${commentId}/like`, { method: 'POST' }),
   deleteComment: (postId, commentId) => apiFetch(`${API.posts}/${postId}/comments/${commentId}`, { method: 'DELETE' }),
+  adminDeleteComment: (commentId) => apiFetch(`/api/comments/${commentId}/admin`, { method: 'DELETE' }),
 };
 
 /* ── Social Service ───────────────────────────────────────────── */
@@ -261,8 +298,8 @@ function updateStoredUser(patch) {
 }
 
 function logout() {
-  localStorage.removeItem('upt_token');
-  localStorage.removeItem('upt_user');
+  clearBlockedNotice();
+  clearSession();
   window.location.href = '/index.html';
 }
 
@@ -365,6 +402,7 @@ function requireAuth() {
 
 /* ── Guard: redirect to feed if already authenticated ─────────── */
 function requireGuest() {
+  if (getBlockedNotice()) return;
   if (!isLoggedIn()) return;
 
   const user = getUser();

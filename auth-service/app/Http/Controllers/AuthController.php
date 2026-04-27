@@ -33,9 +33,21 @@ class AuthController extends BaseController
 
         try {
             $result = $this->authService->googleAuth($request->input('id_token'));
+            if (!empty($result['blocked'])) {
+                return response()->json([
+                    'error' => 'Tu cuenta ha sido bloqueada',
+                    'code' => 'ACCOUNT_BLOCKED',
+                    'reason' => $result['reason'] ?? null,
+                ], 403);
+            }
             return response()->json($result, 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -61,7 +73,12 @@ class AuthController extends BaseController
             );
             return response()->json(['message' => 'Perfil completado', 'user' => $user['user'], 'token' => $user['token']], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -108,7 +125,12 @@ class AuthController extends BaseController
             );
             return response()->json(['message' => 'Perfil actualizado', 'user' => $user['user'], 'token' => $user['token']], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -131,7 +153,12 @@ class AuthController extends BaseController
             $user = $this->authService->getAuthenticatedUserProfile($request->auth->sub);
             return response()->json($user, 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -145,7 +172,12 @@ class AuthController extends BaseController
             $user = $this->authService->touchPresence($request->auth->sub);
             return response()->json(['message' => 'Presencia actualizada', 'user' => $user], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -214,14 +246,27 @@ class AuthController extends BaseController
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
+        $this->validate($request, [
+            'blocked_reason' => 'nullable|string|max:1000',
+        ]);
+
         try {
-            $user = $this->authService->toggleUser($id);
+            $user = $this->authService->toggleUser(
+                $id,
+                (int) $request->auth->sub,
+                $request->input('blocked_reason')
+            );
             return response()->json([
                 'message' => $user->is_active ? 'Usuario activado' : 'Usuario desactivado',
                 'user'    => $user,
             ], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+            [$message, $code, $reason] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
     }
 
@@ -276,5 +321,18 @@ class AuthController extends BaseController
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
         }
+    }
+
+    private function normalizeExceptionResponse(\Exception $e): array
+    {
+        if (str_starts_with($e->getMessage(), 'ACCOUNT_BLOCKED|')) {
+            return [
+                'Tu cuenta ha sido bloqueada',
+                'ACCOUNT_BLOCKED',
+                trim(substr($e->getMessage(), strlen('ACCOUNT_BLOCKED|'))) ?: null,
+            ];
+        }
+
+        return [$e->getMessage(), null, null];
     }
 }

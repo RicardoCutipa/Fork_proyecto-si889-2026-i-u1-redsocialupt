@@ -67,6 +67,8 @@ services:
     build: ./posts-service
     ports:
       - "8002:8000"
+    volumes:
+      - ./posts-service/public/uploads:/app/public/uploads
     environment:
       APP_KEY: base64:randomkey
       DB_CONNECTION: mysql

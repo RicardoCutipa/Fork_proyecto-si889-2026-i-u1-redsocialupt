@@ -62,18 +62,253 @@ body {
   border-radius: 10px;
 }
 
+.feed-composer-card {
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+}
+
+.content-break {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.feed-composer-header {
+  display: flex;
+  gap: .8rem;
+  align-items: flex-start;
+}
+
+.feed-composer-input-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.feed-composer-input {
+  width: 100%;
+  min-height: 4.9rem;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: .05rem 0 0;
+  font-size: .98rem;
+  line-height: 1.5;
+  color: #0f172a;
+  outline: none;
+}
+
+.feed-composer-input:focus {
+  box-shadow: none;
+}
+
+.feed-composer-input::placeholder {
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.feed-composer-preview {
+  margin: 0;
+  border-radius: 1rem;
+  max-width: 320px;
+}
+
+.feed-composer-footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: .75rem;
+  padding-top: .75rem;
+  border-top: 1px solid #eef2f7;
+}
+
+.feed-composer-tools {
+  display: flex;
+  gap: .45rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.feed-composer-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: none;
+  color: #2563eb;
+  background: transparent;
+  transition: background .18s ease, color .18s ease;
+  cursor: pointer;
+}
+
+.feed-composer-tool:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.feed-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.feed-composer-visibility {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon select";
+  column-gap: .6rem;
+  row-gap: .08rem;
+  min-width: 204px;
+  max-width: 100%;
+  position: relative;
+  padding: .38rem 1.9rem .38rem .7rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #d4dce6;
+  border-radius: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75);
+}
+
+.feed-composer-visibility::after {
+  content: 'expand_more';
+  font-family: 'Material Symbols Outlined';
+  font-size: .9rem;
+  color: #64748b;
+  position: absolute;
+  right: .65rem;
+  bottom: .48rem;
+  pointer-events: none;
+}
+
+.feed-composer-visibility-icon {
+  grid-area: icon;
+  align-self: center;
+  font-size: 1rem;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.feed-composer-visibility-copy {
+  min-width: 0;
+  display: contents;
+}
+
+.feed-composer-visibility-label {
+  grid-area: label;
+  font-size: .6rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.feed-composer-select {
+  grid-area: select;
+  display: block;
+  background: transparent;
+  border: none;
+  border-radius: .75rem;
+  padding: 0;
+  font-size: .8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #0f172a;
+  outline: none;
+  min-width: 0;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.feed-composer-select:focus {
+  box-shadow: none;
+}
+
+.feed-composer-select-menu {
+  position: absolute;
+  top: calc(100% + .55rem);
+  left: 0;
+  z-index: 120;
+  width: min(280px, calc(100vw - 2rem));
+  padding: .4rem;
+  border: 1px solid #dbe4ee;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, .14);
+}
+
+.feed-composer-select-option {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  padding: .6rem .65rem;
+  border: none;
+  border-radius: .85rem;
+  background: transparent;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease;
+}
+
+.feed-composer-select-option:hover,
+.feed-composer-select-option.is-active {
+  background: #f8fafc;
+}
+
+.feed-composer-select-option.is-active {
+  color: #1b2a6b;
+}
+
+.feed-composer-select-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+
+.feed-composer-select-option-title {
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.feed-composer-select-option-desc {
+  font-size: .68rem;
+  line-height: 1.25;
+  color: #64748b;
+}
+
+.feed-composer-submit {
+  min-width: 90px;
+  min-height: 32px;
+  box-shadow: none;
+  font-size: .78rem;
+}
+
 #emoji-picker {
   position: absolute;
-  bottom: 56px;
-  left: 0;
+  top: calc(100% + 8px);
+  left: calc(100% + 6px);
+  bottom: auto;
+  right: auto;
   z-index: 100;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  padding: 12px;
+  border-radius: 16px;
+  padding: 10px;
   box-shadow: 0 18px 45px rgba(15, 23, 42, .16);
   display: none;
-  width: min(380px, calc(100vw - 2rem));
+  width: min(280px, calc(100vw - 3rem));
 }
 
 #emoji-picker.open {
@@ -82,16 +317,16 @@ body {
 
 #emoji-picker .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  max-height: 260px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 208px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 #emoji-picker .emoji-grid button {
-  font-size: 26px;
-  padding: 8px 0;
+  font-size: 22px;
+  padding: 6px 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -106,16 +341,16 @@ body {
 
 #emoji-picker .emoji-cats {
   display: flex;
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: 3px;
+  margin-bottom: 8px;
   border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   overflow-x: auto;
 }
 
 #emoji-picker .emoji-cats button {
-  font-size: 18px;
-  padding: 6px 10px;
+  font-size: 15px;
+  padding: 5px 8px;
   border: none;
   background: none;
   cursor: pointer;
@@ -606,6 +841,45 @@ body {
 }
 
 @media (max-width: 767px) {
+  .feed-composer-footer {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .feed-composer-tools,
+  .feed-composer-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .feed-composer-actions {
+    gap: .55rem;
+    align-items: stretch;
+  }
+
+  .feed-composer-visibility {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .feed-composer-select {
+    width: 100%;
+  }
+
+  .feed-composer-select-menu {
+    width: 100%;
+  }
+
+  .feed-composer-submit {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  #emoji-picker {
+    left: calc(100% - 2rem);
+    width: min(250px, calc(100vw - 2rem));
+  }
+
   .profile-view .profile-banner {
     height: 10rem;
   }

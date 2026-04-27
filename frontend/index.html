@@ -1,184 +1,226 @@
 <!DOCTYPE html>
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>UPT Connect — Acceso institucional</title>
-<meta name="description" content="Accede a UPT Connect con tu cuenta institucional @virtual.upt.pe de la Universidad Privada de Tacna.">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<style>
+<html class="light" lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>UPT Connect - Acceso institucional</title>
+  <meta name="description" content="Accede a UPT Connect con tu cuenta institucional @virtual.upt.pe de la Universidad Privada de Tacna.">
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <style>
     body { font-family: 'Inter', sans-serif; }
-    .dot-grid {
-        background-color: #f8f9fa;
-    }
+    .dot-grid { background-color: #f8f9fa; }
     .login-dot-wave {
-        position: absolute;
-        inset: 0;
-        overflow: hidden;
-        pointer-events: none;
-        z-index: 0;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
     }
     .login-wave-dot {
-        position: absolute;
-        width: 2.5px;
-        height: 2.5px;
-        border-radius: 50%;
-        background: #c8c8c8;
-        animation: loginWave 2s ease-in-out infinite;
-        opacity: 0.3;
-        will-change: transform, opacity;
+      position: absolute;
+      width: 2.5px;
+      height: 2.5px;
+      border-radius: 50%;
+      background: #c8c8c8;
+      animation: loginWave 2s ease-in-out infinite;
+      opacity: 0.3;
+      will-change: transform, opacity;
     }
     @keyframes loginWave {
-        0%, 100% { opacity: 0.3; transform: translateY(0); }
-        50% { opacity: 1; transform: translateY(-12px); }
+      0%, 100% { opacity: 0.3; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-12px); }
     }
-    /* Toast styles */
-    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-    .toast { padding: 12px 20px; border-radius: 8px; background: #1a1c1c; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
-    .toast.error { background: #ba1a1a; }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-</style>
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        "colors": {
-            "upt-blue": "#001256",
-            "upt-gold": "#d4af37",
-            "on-surface-variant": "#6c757d",
-            "outline-variant": "#dee2e6"
-        },
-        "borderRadius": {
-            "DEFAULT": "0.125rem",
-            "lg": "0.5rem",
-            "xl": "1.5rem",
-            "full": "9999px"
+  </style>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'upt-blue': '#001256',
+            'upt-gold': '#d4af37',
+            'on-surface-variant': '#6c757d',
+            'outline-variant': '#dee2e6'
+          },
+          borderRadius: {
+            DEFAULT: '0.125rem',
+            lg: '0.5rem',
+            xl: '1.5rem',
+            full: '9999px'
+          }
         }
-      },
-    },
-  }
-</script>
+      }
+    };
+  </script>
 </head>
 <body class="bg-surface dot-grid min-h-screen flex items-center justify-center p-6 relative w-full">
-<div id="login-dot-wave" class="login-dot-wave" aria-hidden="true"></div>
-<div class="flex flex-col items-center w-full max-w-[540px] gap-8 relative z-10">
-<!-- Header Branding (Logo & Title) -->
-<div class="flex flex-col items-center text-center">
-<!-- Logo with Golden Dot -->
-<div class="relative mb-4">
-<div class="w-14 h-14 bg-upt-blue rounded-2xl flex items-center justify-center">
-<span class="text-white font-bold text-2xl">U</span>
-</div>
-<div class="absolute bottom-0 right-0 transform translate-x-1/4 translate-y-1/4 w-3.5 h-3.5 bg-upt-gold border-2 border-white rounded-full"></div>
-</div>
-<div class="flex items-center space-x-1.5 mb-1.5">
-<span class="text-upt-blue text-2xl font-extrabold tracking-tight">UPT</span>
-<span class="text-upt-gold text-2xl font-extrabold tracking-tight">Connect</span>
-</div>
-<p class="text-on-surface-variant text-xs font-medium">Universidad Privada de Tacna</p>
-</div>
-<!-- Main Login Card -->
-<main class="w-full bg-white rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.05)] overflow-hidden">
-<div class="px-10 py-8 flex flex-col items-center">
-<h1 class="text-[#001256] text-xl font-semibold mb-2">Bienvenido de vuelta</h1>
-<p class="text-on-surface-variant text-sm mb-8">Accede con tu cuenta institucional de Google</p>
-<!-- Google Sign-In Button Container -->
-<div id="google-btn-container" class="w-full max-w-[380px] flex items-center justify-center min-h-[48px]">
-    <p class="text-on-surface-variant text-sm">Cargando inicio de sesión...</p>
-</div>
-<!-- Info Box -->
-<div class="mt-6 w-full max-w-[380px] py-2 px-4 bg-[#f0f4ff] border border-dashed border-[#8694db] rounded-xl flex items-center justify-center gap-3">
-<span class="material-symbols-outlined text-upt-blue text-[16px] fill-1" data-icon="info">info</span>
-<p class="text-upt-blue text-[11px] font-medium text-center leading-tight">
-    Solo cuentas @virtual.upt.pe de la Universidad Privada de Tacna
-</p>
-</div>
-</div>
-</main>
-</div>
-<!-- Global Viewport Footer -->
-<footer class="absolute bottom-8 w-full text-center left-0 z-10">
-<p class="text-on-surface-variant text-[10px] font-medium tracking-[0.2em] uppercase opacity-60">
-    UPT Connect — Universidad Privada de Tacna
-</p>
-</footer>
+  <div id="login-dot-wave" class="login-dot-wave" aria-hidden="true"></div>
+  <div class="flex flex-col items-center w-full max-w-[540px] gap-8 relative z-10">
+    <div class="flex flex-col items-center text-center">
+      <div class="relative mb-4">
+        <div class="w-14 h-14 bg-upt-blue rounded-2xl flex items-center justify-center">
+          <span class="text-white font-bold text-2xl">U</span>
+        </div>
+        <div class="absolute bottom-0 right-0 transform translate-x-1/4 translate-y-1/4 w-3.5 h-3.5 bg-upt-gold border-2 border-white rounded-full"></div>
+      </div>
+      <div class="flex items-center space-x-1.5 mb-1.5">
+        <span class="text-upt-blue text-2xl font-extrabold tracking-tight">UPT</span>
+        <span class="text-upt-gold text-2xl font-extrabold tracking-tight">Connect</span>
+      </div>
+      <p class="text-on-surface-variant text-xs font-medium">Universidad Privada de Tacna</p>
+    </div>
 
-<script src="js/api.js"></script>
-<script>
-  requireGuest();
+    <main class="w-full bg-white rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.05)] overflow-hidden">
+      <div class="px-10 py-8 flex flex-col items-center">
+        <div id="blocked-section" class="hidden w-full max-w-[380px]">
+          <div class="w-16 h-16 mx-auto rounded-2xl bg-[#FEE2E2] text-[#B91C1C] flex items-center justify-center mb-4">
+            <span class="material-symbols-outlined text-[34px]">gpp_bad</span>
+          </div>
+          <h2 class="text-[#001256] text-xl font-semibold text-center mb-2">Cuenta bloqueada</h2>
+          <p class="text-on-surface-variant text-sm text-center mb-5">Un administrador desactivo tu acceso a UPT Connect.</p>
+          <div id="blocked-reason-card" class="hidden rounded-2xl border border-[#FCD34D] bg-[#FFF7D6] p-4 mb-5">
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-[#8A6A00] mb-2">Motivo registrado</p>
+            <p id="blocked-reason-text" class="text-sm text-[#4A3B00] leading-6"></p>
+          </div>
+          <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4 text-center text-sm text-slate-600">
+            Si crees que esto fue un error, comunicate con un administrador.
+          </div>
+        </div>
 
-  const loginDotWave = document.getElementById('login-dot-wave');
-  let loginDotWaveResizeTimer = null;
+        <div id="login-section" class="w-full flex flex-col items-center">
+          <h1 class="text-[#001256] text-xl font-semibold mb-2">Bienvenido de vuelta</h1>
+          <p class="text-on-surface-variant text-sm mb-8">Accede con tu cuenta institucional de Google</p>
+          <div id="google-btn-container" class="w-full max-w-[380px] flex items-center justify-center min-h-[48px]">
+            <p class="text-on-surface-variant text-sm">Cargando inicio de sesion...</p>
+          </div>
+          <div class="mt-6 w-full max-w-[380px] py-2 px-4 bg-[#f0f4ff] border border-dashed border-[#8694db] rounded-xl flex items-center justify-center gap-3">
+            <span class="material-symbols-outlined text-upt-blue text-[16px] fill-1">info</span>
+            <p class="text-upt-blue text-[11px] font-medium text-center leading-tight">
+              Solo cuentas @virtual.upt.pe de la Universidad Privada de Tacna
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 
-  function renderLoginDotWave() {
-    if (!loginDotWave) return;
+  <footer class="absolute bottom-8 w-full text-center left-0 z-10">
+    <p class="text-on-surface-variant text-[10px] font-medium tracking-[0.2em] uppercase opacity-60">
+      UPT Connect - Universidad Privada de Tacna
+    </p>
+  </footer>
 
-    const spacing = 20;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const fragment = document.createDocumentFragment();
+  <script src="js/api.js"></script>
+  <script>
+    requireGuest();
 
-    loginDotWave.innerHTML = '';
+    const loginDotWave = document.getElementById('login-dot-wave');
+    let loginDotWaveResizeTimer = null;
 
-    for (let y = 0; y < height; y += spacing) {
-      for (let x = 0; x < width; x += spacing) {
-        const dot = document.createElement('div');
-        const distance = Math.max(Math.abs(x - centerX), Math.abs(y - centerY));
+    function renderBlockedState(reason) {
+      const blockedSection = document.getElementById('blocked-section');
+      const loginSection = document.getElementById('login-section');
+      const reasonCard = document.getElementById('blocked-reason-card');
+      const reasonText = document.getElementById('blocked-reason-text');
 
-        dot.className = 'login-wave-dot';
-        dot.style.left = `${x}px`;
-        dot.style.top = `${y}px`;
-        dot.style.animationDelay = `${(distance / 500) * 0.6}s`;
-        fragment.appendChild(dot);
+      blockedSection.classList.remove('hidden');
+      loginSection.classList.add('hidden');
+
+      if (reason) {
+        reasonText.textContent = reason;
+        reasonCard.classList.remove('hidden');
+      } else {
+        reasonText.textContent = '';
+        reasonCard.classList.add('hidden');
       }
     }
 
-    loginDotWave.appendChild(fragment);
-  }
+    function renderLoginDotWave() {
+      if (!loginDotWave) return;
 
-  window.addEventListener('resize', () => {
-    if (loginDotWaveResizeTimer) clearTimeout(loginDotWaveResizeTimer);
-    loginDotWaveResizeTimer = setTimeout(renderLoginDotWave, 120);
-  });
+      const spacing = 20;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const fragment = document.createDocumentFragment();
 
-  window.onload = () => {
-    renderLoginDotWave();
-    if (typeof google === 'undefined') {
-      document.getElementById('google-btn-container').innerHTML =
-        `<p class="text-red-600 text-sm">No se pudo cargar Google Sign-In. Revisa tu conexión.</p>`;
-      return;
+      loginDotWave.innerHTML = '';
+
+      for (let y = 0; y < height; y += spacing) {
+        for (let x = 0; x < width; x += spacing) {
+          const dot = document.createElement('div');
+          const distance = Math.max(Math.abs(x - centerX), Math.abs(y - centerY));
+
+          dot.className = 'login-wave-dot';
+          dot.style.left = `${x}px`;
+          dot.style.top = `${y}px`;
+          dot.style.animationDelay = `${(distance / 500) * 0.6}s`;
+          fragment.appendChild(dot);
+        }
+      }
+
+      loginDotWave.appendChild(fragment);
     }
-    google.accounts.id.initialize({
-      client_id: '955206169841-jpg61cp2k46i1bdfbg7mujqukqqfsbgs.apps.googleusercontent.com',
-      callback: handleCredentialResponse,
-      auto_select: false,
+
+    window.addEventListener('resize', () => {
+      if (loginDotWaveResizeTimer) clearTimeout(loginDotWaveResizeTimer);
+      loginDotWaveResizeTimer = setTimeout(renderLoginDotWave, 120);
     });
-    google.accounts.id.renderButton(
-      document.getElementById('google-btn-container'),
-      { theme: 'outline', size: 'large', text: 'signin_with', width: 320 }
-    );
-  };
 
-  async function handleCredentialResponse(response) {
-    const result = await AuthAPI.googleLogin(response.credential);
-    if (!result || !result.ok) {
-      const msg = result?.data?.error || 'Error al iniciar sesión';
-      document.getElementById('google-btn-container').innerHTML =
-        `<p class="text-red-600 text-sm p-2">${msg}</p>`;
-      return;
+    window.onload = () => {
+      renderLoginDotWave();
+      const blockedNotice = getBlockedNotice();
+      if (blockedNotice) {
+        renderBlockedState(blockedNotice.reason);
+        return;
+      }
+
+      if (typeof google === 'undefined') {
+        document.getElementById('google-btn-container').innerHTML =
+          '<p class="text-red-600 text-sm">No se pudo cargar Google Sign-In. Revisa tu conexion.</p>';
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: '955206169841-jpg61cp2k46i1bdfbg7mujqukqqfsbgs.apps.googleusercontent.com',
+        callback: handleCredentialResponse,
+        auto_select: false,
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById('google-btn-container'),
+        { theme: 'outline', size: 'large', text: 'signin_with', width: 320 }
+      );
+    };
+
+    async function handleCredentialResponse(response) {
+      const result = await AuthAPI.googleLogin(response.credential);
+      if (!result || !result.ok) {
+        if (result?.status === 403 && result?.data?.code === 'ACCOUNT_BLOCKED') {
+          setBlockedNotice(result.data.reason || null);
+          renderBlockedState(result.data.reason || null);
+          return;
+        }
+
+        const msg = result?.data?.error || 'Error al iniciar sesion';
+        document.getElementById('google-btn-container').innerHTML =
+          `<p class="text-red-600 text-sm p-2">${msg}</p>`;
+        return;
+      }
+
+      clearBlockedNotice();
+      const { token, user, is_profile_complete } = result.data;
+      saveSession(token, user);
+      if (!is_profile_complete) {
+        window.location.href = '/pages/onboarding.html';
+      } else {
+        window.location.href = '/app.html#feed';
+      }
     }
-    const { token, user, is_profile_complete } = result.data;
-    saveSession(token, user);
-    if (!is_profile_complete) {
-      window.location.href = '/pages/onboarding.html';
-    } else {
-      window.location.href = '/app.html#feed';
-    }
-  }
-</script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-</body></html>
+  </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</body>
+</html>

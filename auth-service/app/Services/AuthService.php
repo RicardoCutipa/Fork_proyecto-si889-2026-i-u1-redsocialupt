@@ -46,7 +46,10 @@ class AuthService
         );
 
         if (!$user->is_active) {
-            throw new \Exception('Tu cuenta ha sido desactivada', 403);
+            return [
+                'blocked' => true,
+                'reason' => $user->blocked_reason,
+            ];
         }
 
         $user = $this->markPresence($user);
@@ -64,6 +67,10 @@ class AuthService
     public function completeProfile(int $userId, array $data): array
     {
         $user = $this->findOrFail($userId);
+
+        if (($data['user_type'] ?? 'student') === 'student' && !empty($data['student_code']) && !preg_match('/^\d+$/', (string) $data['student_code'])) {
+            throw new \Exception('El codigo de estudiante solo debe contener numeros', 422);
+        }
 
         $user->update([
             'full_name'      => $data['full_name'],
@@ -104,18 +111,18 @@ class AuthService
      */
     public function getAuthenticatedUser(int $userId): User
     {
-        return $this->findOrFail($userId);
+        return $this->ensureUserIsActive($this->findOrFail($userId));
     }
 
     public function getAuthenticatedUserProfile(int $userId): array
     {
-        $user = $this->markPresence($this->findOrFail($userId));
+        $user = $this->markPresence($this->ensureUserIsActive($this->findOrFail($userId)));
         return $this->formatUser($user);
     }
 
     public function touchPresence(int $userId): array
     {
-        $user = $this->markPresence($this->findOrFail($userId));
+        $user = $this->markPresence($this->ensureUserIsActive($this->findOrFail($userId)));
         return $this->formatUser($user);
     }
 
@@ -181,10 +188,18 @@ class AuthService
     /**
      * Activa o desactiva un usuario (RF-09 — solo admin).
      */
-    public function toggleUser(int $userId): User
+    public function toggleUser(int $userId, ?int $actorUserId = null, ?string $blockedReason = null): User
     {
         $user = $this->findOrFail($userId);
+
+        if ($actorUserId !== null && $user->id === $actorUserId) {
+            throw new \Exception('No puedes desactivar tu propia cuenta', 422);
+        }
+
         $user->is_active = !$user->is_active;
+        $user->blocked_reason = $user->is_active
+            ? null
+            : (($blockedReason !== null && trim($blockedReason) !== '') ? trim($blockedReason) : null);
         $user->save();
 
         return $user;
@@ -196,6 +211,10 @@ class AuthService
     public function updateAcademic(int $userId, array $data): User
     {
         $user = $this->findOrFail($userId);
+
+        if (($data['user_type'] ?? $user->user_type) === 'student' && !empty($data['student_code']) && !preg_match('/^\d+$/', (string) $data['student_code'])) {
+            throw new \Exception('El codigo de estudiante solo debe contener numeros', 422);
+        }
 
         $user->update(array_filter([
             'faculty'        => $data['faculty']        ?? null,
@@ -303,7 +322,18 @@ class AuthService
             'is_online'           => $this->isUserOnline($user),
             'user_type'           => $user->user_type,
             'role'                => $user->role,
+            'is_active'           => (bool) $user->is_active,
+            'blocked_reason'      => $user->blocked_reason,
             'is_profile_complete' => $user->is_profile_complete,
         ];
+    }
+
+    private function ensureUserIsActive(User $user): User
+    {
+        if (!$user->is_active) {
+            throw new \Exception('ACCOUNT_BLOCKED|' . ($user->blocked_reason ?? ''), 403);
+        }
+
+        return $user;
     }
 }

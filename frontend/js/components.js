@@ -72,7 +72,7 @@ class AppSidebar extends HTMLElement {
         : 'flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200'
     );
 
-    this.className = 'hidden md:flex md:col-span-3 flex-col gap-6 h-full overflow-y-auto custom-scrollbar pr-1';
+    this.className = 'hidden md:flex md:col-span-3 flex-col gap-6 self-start';
     this.innerHTML = `
       <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div class="h-16 bg-cover bg-center" id="profile-banner" style="background:#1B2A6B"></div>

@@ -279,6 +279,7 @@
   function renderCommentCard(comment, options = {}) {
     const interactive = options.interactive !== false;
     const compact = options.compact !== false;
+    const footerActions = options.footerActions || '';
     const author = resolveProfileData({
       id: comment.user_id,
       user_name: comment.user_name,
@@ -300,7 +301,7 @@
               ` : ''}
               <span class="text-[11px] text-slate-500">${escapeHtml(timeAgo(comment.created_at))}</span>
             </div>
-            <p class="text-[13px] text-slate-700 ${compact ? 'leading-5' : 'leading-6'}">${nl2br(comment.content || '')}</p>
+            <p class="content-break text-[13px] text-slate-700 ${compact ? 'leading-5' : 'leading-6'}">${nl2br(comment.content || '')}</p>
             <div class="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
               ${interactive ? `
                 <button type="button" data-action="toggle-comment-like" data-comment-id="${comment.id}" class="flex items-center gap-1.5 transition-colors ${comment.is_liked ? 'text-red-500 hover:text-red-600' : 'hover:text-slate-700'}">
@@ -314,6 +315,7 @@
                 </div>
               `}
             </div>
+            ${footerActions ? `<div class="mt-2 flex items-center justify-end gap-2">${footerActions}</div>` : ''}
           </div>
         </div>
       </article>
@@ -440,8 +442,8 @@
             </button>
           ` : ''}
         </div>
-        <div class="text-sm text-slate-800 mb-4"><p>${nl2br(post.content || '')}</p></div>
-        ${post.image_url ? `<div class="w-full ${mediaHeightClass} bg-slate-100 overflow-hidden rounded-xl mb-3"><img alt="Imagen de la publicacion" class="w-full h-full object-cover" src="${safeUrl(post.image_url)}"/></div>` : ''}
+        <div class="text-sm text-slate-800 mb-4"><p class="content-break">${nl2br(post.content || '')}</p></div>
+        ${post.image_url ? `<div class="w-full ${mediaHeightClass} bg-slate-100 overflow-hidden rounded-xl mb-3"><img alt="Imagen de la publicacion" class="w-full h-full object-cover" src="${safeUrl(post.image_url)}" onerror="this.parentElement.style.display='none'"/></div>` : ''}
         ${interactive ? `
           <div class="pt-3 border-t border-slate-100 flex justify-start gap-6 items-center text-slate-500">
             <button type="button" data-action="like-post" data-post-id="${post.id}" class="flex items-center gap-1.5 transition-colors ${post.is_liked ? 'text-red-500 hover:text-red-600' : 'hover:text-slate-700'}">
@@ -495,12 +497,12 @@
             </div>
           </div>
           ${post.content ? `
-            <div class="post-modal-preview-copy">${nl2br(post.content)}</div>
+            <div class="post-modal-preview-copy content-break">${nl2br(post.content)}</div>
           ` : ''}
         </div>
         ${post.image_url ? `
           <div class="post-modal-preview-media">
-            <img src="${safeUrl(post.image_url)}" alt="Imagen de la publicacion"/>
+            <img src="${safeUrl(post.image_url)}" alt="Imagen de la publicacion" onerror="this.parentElement.style.display='none'"/>
           </div>
         ` : ''}
         <div class="post-modal-preview-stats">
@@ -1171,43 +1173,68 @@
         return `
           <div class="grid grid-cols-1 md:grid-cols-9 gap-6">
             <main class="md:col-span-6 flex flex-col gap-6 min-w-0">
-              <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <div class="flex gap-3 mb-4">
-                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 bg-cover bg-center" id="composer-avatar" style="background:#1B2A6B">U</div>
-                  <textarea id="post-content" class="w-full bg-slate-100 border-none rounded-xl p-3 text-sm resize-none focus:ring-1 focus:ring-slate-300 outline-none" placeholder="Que estas pensando?" rows="2"></textarea>
-                </div>
-                <div id="img-preview-wrap">
-                  <img id="img-preview" alt="Vista previa"/>
-                  <button id="clear-image-btn" type="button" title="Quitar imagen">x</button>
-                </div>
-                <input type="file" id="file-input" accept="image/*" class="hidden"/>
-                <div class="flex flex-col gap-3 pt-2">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-2">
-                      <label for="post-visibility" class="text-sm font-medium text-slate-500">Mostrar a</label>
-                      <select id="post-visibility" class="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none">
-                        <option value="all">Toda la comunidad UPT</option>
-                        <option value="friends">Solo amigos</option>
-                        <option value="faculty">Solo mi facultad</option>
-                      </select>
+              <div class="feed-composer-card bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="feed-composer-header">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 bg-cover bg-center" id="composer-avatar" style="background:#1B2A6B">U</div>
+                  <div class="feed-composer-input-wrap">
+                    <textarea id="post-content" class="feed-composer-input" placeholder="¿Que esta pasando?" rows="2"></textarea>
+                    <div id="img-preview-wrap" class="feed-composer-preview">
+                      <img id="img-preview" alt="Vista previa"/>
+                      <button id="clear-image-btn" type="button" title="Quitar imagen">x</button>
                     </div>
                   </div>
-                  <div class="flex justify-between items-center">
-                    <div class="flex gap-2 relative">
-                    <button id="pick-image-btn" type="button" class="flex items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
-                      <span class="material-symbols-outlined text-[20px] text-blue-500">image</span><span class="text-sm font-medium">Foto</span>
+                </div>
+                <input type="file" id="file-input" accept="image/*" class="hidden"/>
+                <div class="feed-composer-footer">
+                  <div class="feed-composer-tools">
+                    <button id="pick-image-btn" type="button" class="feed-composer-tool">
+                      <span class="material-symbols-outlined text-[19px]">image</span>
                     </button>
-                    <div class="relative">
-                      <button id="toggle-emoji-btn" type="button" class="flex items-center gap-2 px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
-                        <span class="material-symbols-outlined text-[20px] text-yellow-500">mood</span><span class="text-sm font-medium">Emoji</span>
+                    <div class="relative feed-composer-emoji-anchor">
+                      <button id="toggle-emoji-btn" type="button" class="feed-composer-tool">
+                        <span class="material-symbols-outlined text-[19px]">mood</span>
                       </button>
                       <div id="emoji-picker">
                         <div class="emoji-cats" id="emoji-cats"></div>
                         <div class="emoji-grid" id="emoji-grid"></div>
                       </div>
                     </div>
+                  </div>
+                  <div class="feed-composer-actions">
+                    <div class="feed-composer-visibility">
+                      <span class="material-symbols-outlined feed-composer-visibility-icon">groups</span>
+                      <span class="feed-composer-visibility-copy">
+                        <span class="feed-composer-visibility-label">Visible para</span>
+                        <input id="post-visibility" type="hidden" value="all"/>
+                        <button id="post-visibility-trigger" type="button" class="feed-composer-select" aria-haspopup="listbox" aria-expanded="false">
+                          <span id="post-visibility-text">Toda la comunidad UPT</span>
+                        </button>
+                        <div id="post-visibility-menu" class="feed-composer-select-menu hidden" role="listbox" aria-label="Opciones de visibilidad">
+                          <button type="button" class="feed-composer-select-option is-active" data-visibility-option="all">
+                            <span class="material-symbols-outlined text-[16px]">public</span>
+                            <span class="feed-composer-select-option-copy">
+                              <span class="feed-composer-select-option-title">Toda la comunidad UPT</span>
+                              <span class="feed-composer-select-option-desc">Visible para todos en la red.</span>
+                            </span>
+                          </button>
+                          <button type="button" class="feed-composer-select-option" data-visibility-option="friends">
+                            <span class="material-symbols-outlined text-[16px]">group</span>
+                            <span class="feed-composer-select-option-copy">
+                              <span class="feed-composer-select-option-title">Solo amigos</span>
+                              <span class="feed-composer-select-option-desc">Solo tus amistades podran verla.</span>
+                            </span>
+                          </button>
+                          <button type="button" class="feed-composer-select-option" data-visibility-option="faculty">
+                            <span class="material-symbols-outlined text-[16px]">school</span>
+                            <span class="feed-composer-select-option-copy">
+                              <span class="feed-composer-select-option-title">Solo mi facultad</span>
+                              <span class="feed-composer-select-option-desc">Visible para usuarios de tu facultad.</span>
+                            </span>
+                          </button>
+                        </div>
+                      </span>
                     </div>
-                    <button id="btn-publish" type="button" class="bg-[#E5D59A] text-[#5A4A1A] px-6 py-1.5 rounded-full text-sm font-bold hover:bg-[#d8c686] transition-colors">Publicar</button>
+                    <button id="btn-publish" type="button" class="feed-composer-submit bg-[#E5D59A] text-[#5A4A1A] px-6 py-1.5 rounded-full text-sm font-bold hover:bg-[#d8c686] transition-colors">Publicar</button>
                   </div>
                 </div>
               </div>
@@ -1287,6 +1314,9 @@
         const previewImage = container.querySelector('#img-preview');
         const postContent = container.querySelector('#post-content');
         const postVisibility = container.querySelector('#post-visibility');
+        const postVisibilityTrigger = container.querySelector('#post-visibility-trigger');
+        const postVisibilityText = container.querySelector('#post-visibility-text');
+        const postVisibilityMenu = container.querySelector('#post-visibility-menu');
         const emojiPicker = container.querySelector('#emoji-picker');
         const emojiCats = container.querySelector('#emoji-cats');
         const emojiGrid = container.querySelector('#emoji-grid');
@@ -1297,6 +1327,11 @@
         const commentSort = container.querySelector('#comment-sort');
         const commentInput = container.querySelector('#comment-input');
         const publishButton = container.querySelector('#btn-publish');
+        const visibilityLabels = {
+          all: 'Toda la comunidad UPT',
+          friends: 'Solo amigos',
+          faculty: 'Solo mi facultad',
+        };
 
         setAvatarElement(composerAvatar, user);
 
@@ -1315,6 +1350,29 @@
           fileInput.value = '';
           previewWrap.style.display = 'none';
           previewImage.src = '';
+        }
+
+        function setPostVisibility(value = 'all') {
+          if (postVisibility) postVisibility.value = value;
+          if (postVisibilityText) postVisibilityText.textContent = visibilityLabels[value] || visibilityLabels.all;
+          if (postVisibilityMenu) {
+            postVisibilityMenu.querySelectorAll('[data-visibility-option]').forEach((option) => {
+              option.classList.toggle('is-active', option.dataset.visibilityOption === value);
+            });
+          }
+        }
+
+        function closeVisibilityMenu() {
+          if (!postVisibilityMenu || !postVisibilityTrigger) return;
+          postVisibilityMenu.classList.add('hidden');
+          postVisibilityTrigger.setAttribute('aria-expanded', 'false');
+        }
+
+        function toggleVisibilityMenu() {
+          if (!postVisibilityMenu || !postVisibilityTrigger) return;
+          const willOpen = postVisibilityMenu.classList.contains('hidden');
+          postVisibilityMenu.classList.toggle('hidden', !willOpen);
+          postVisibilityTrigger.setAttribute('aria-expanded', String(willOpen));
         }
 
         function findFeedPost(postId) {
@@ -1453,7 +1511,7 @@
 
           if (result?.ok) {
             postContent.value = '';
-            if (postVisibility) postVisibility.value = 'all';
+            setPostVisibility('all');
             clearImage();
             showToast('Publicacion creada', 'success');
             loadFeed();
@@ -1505,6 +1563,11 @@
           if (!insidePicker && !insideToggle) {
             emojiPicker.classList.remove('open');
           }
+
+          const insideVisibility = event.target.closest('#post-visibility-trigger, #post-visibility-menu');
+          if (!insideVisibility) {
+            closeVisibilityMenu();
+          }
         };
 
         container.querySelector('#pick-image-btn').addEventListener('click', () => fileInput.click());
@@ -1513,6 +1576,7 @@
           emojiPicker.classList.toggle('open');
           if (emojiPicker.classList.contains('open')) renderEmojiPicker();
         });
+        postVisibilityTrigger?.addEventListener('click', toggleVisibilityMenu);
         container.querySelector('#cancel-delete-btn').addEventListener('click', closeDeleteModal);
         container.querySelector('#confirm-delete-btn').addEventListener('click', confirmDelete);
         container.querySelector('#close-comment-top-btn').addEventListener('click', closeCommentModal);
@@ -1546,6 +1610,13 @@
           const button = event.target.closest('[data-emoji-value]');
           if (!button) return;
           insertEmoji(button.dataset.emojiValue);
+        });
+
+        postVisibilityMenu?.addEventListener('click', (event) => {
+          const option = event.target.closest('[data-visibility-option]');
+          if (!option) return;
+          setPostVisibility(option.dataset.visibilityOption);
+          closeVisibilityMenu();
         });
 
         commentInput.addEventListener('keydown', async (event) => {
@@ -1621,6 +1692,7 @@
           if (event.target === commentModal) closeCommentModal();
         });
 
+        setPostVisibility(postVisibility?.value || 'all');
         document.addEventListener('click', onDocumentClick);
         window.addEventListener('presence:updated', loadFriends);
 
@@ -3027,6 +3099,33 @@
               </form>
             </div>
           </div>
+          <div id="block-user-modal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+              <div class="flex justify-between items-center p-6 border-b border-slate-200">
+                <div>
+                  <h2 class="text-lg font-bold text-slate-900">Bloquear usuario</h2>
+                  <p class="text-sm text-slate-500 mt-1">Puedes registrar un motivo opcional para el bloqueo.</p>
+                </div>
+                <button id="close-block-user-modal-btn" type="button" class="p-1 rounded-full hover:bg-slate-100 transition-colors"><span class="material-symbols-outlined">close</span></button>
+              </div>
+              <form id="block-user-form" class="p-6 space-y-5">
+                <input id="block-user-id" type="hidden"/>
+                <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-2">Usuario</p>
+                  <p id="block-user-name" class="text-sm font-semibold text-slate-900"></p>
+                  <p id="block-user-email" class="text-xs text-slate-500 mt-1"></p>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-semibold text-gray-700" for="block-user-reason">Motivo del bloqueo</label>
+                  <textarea id="block-user-reason" class="w-full min-h-[120px] bg-white border border-slate-200 rounded-2xl p-4 text-sm focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none resize-none" placeholder="Opcional. Ej.: Incumplimiento de normas de la comunidad."></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                  <button id="cancel-block-user-btn" type="button" class="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
+                  <button type="submit" class="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors">Bloquear cuenta</button>
+                </div>
+              </form>
+            </div>
+          </div>
         `;
       },
       mount({ container, router, user }) {
@@ -3035,6 +3134,8 @@
         const searchInput = container.querySelector('#admin-user-search');
         const editModal = container.querySelector('#edit-user-modal');
         const editForm = container.querySelector('#edit-user-form');
+        const blockModal = container.querySelector('#block-user-modal');
+        const blockForm = container.querySelector('#block-user-form');
 
         let allUsers = [];
 
@@ -3046,6 +3147,21 @@
         function closeModal() {
           editModal.classList.add('hidden');
           editModal.classList.remove('flex');
+        }
+
+        function openBlockModal(listedUser) {
+          container.querySelector('#block-user-id').value = listedUser.id;
+          container.querySelector('#block-user-name').textContent = displayName(listedUser);
+          container.querySelector('#block-user-email').textContent = listedUser.email || '-';
+          container.querySelector('#block-user-reason').value = '';
+          blockModal.classList.remove('hidden');
+          blockModal.classList.add('flex');
+        }
+
+        function closeBlockModal() {
+          blockModal.classList.add('hidden');
+          blockModal.classList.remove('flex');
+          blockForm.reset();
         }
 
         function renderStats(users) {
@@ -3117,7 +3233,7 @@
                     <button type="button" data-role-user="${listedUser.id}" data-next-role="${isAdmin ? 'user' : 'admin'}" ${isSelf && isAdmin ? 'disabled' : ''} class="flex items-center gap-1.5 px-3 py-1.5 ${isAdmin ? 'bg-[#EEF2FF] text-[#1B2A6B] border border-[#C7D2FE]' : 'bg-[#1B2A6B] text-white border border-[#1B2A6B]'} rounded-lg text-xs font-medium ${isSelf && isAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'} transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span> ${isAdmin ? 'Quitar admin' : 'Hacer admin'}
                     </button>
-                    <button type="button" data-toggle-user="${listedUser.id}" class="flex items-center gap-1.5 px-3 py-1.5 ${active ? 'bg-white text-slate-700 border border-slate-200' : 'bg-[#1B2A6B] text-white'} rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors shadow-sm">
+                    <button type="button" data-toggle-user="${listedUser.id}" data-active="${active ? '1' : '0'}" ${isSelf ? 'disabled' : ''} class="flex items-center gap-1.5 px-3 py-1.5 ${active ? 'bg-white text-slate-700 border border-slate-200' : 'bg-[#1B2A6B] text-white'} rounded-lg text-xs font-medium ${isSelf ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'} transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">power_settings_new</span> ${active ? 'Desactivar' : 'Activar'}
                     </button>
                   </div>
@@ -3130,7 +3246,7 @@
         async function loadUsers() {
           const result = await AuthAPI.listAdminUsers();
           if (!result?.ok) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-400">No se pudieron cargar los usuarios.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400">No se pudieron cargar los usuarios.</td></tr>';
             return;
           }
           allUsers = getList(result);
@@ -3179,6 +3295,13 @@
           }
 
           if (!toggleButton) return;
+          if (toggleButton.dataset.active === '1') {
+            const listedUser = allUsers.find((item) => Number(item.id) === Number(toggleButton.dataset.toggleUser));
+            if (!listedUser) return;
+            openBlockModal(listedUser);
+            return;
+          }
+
           const result = await AuthAPI.toggleUser(toggleButton.dataset.toggleUser);
           if (result?.ok) {
             showToast(result.data?.message || 'Estado actualizado', 'success');
@@ -3191,8 +3314,13 @@
         container.querySelector('#go-admin-posts-btn').addEventListener('click', () => router.navigate('admin-posts'));
         container.querySelector('#close-edit-user-modal-btn').addEventListener('click', closeModal);
         container.querySelector('#cancel-edit-user-btn').addEventListener('click', closeModal);
+        container.querySelector('#close-block-user-modal-btn').addEventListener('click', closeBlockModal);
+        container.querySelector('#cancel-block-user-btn').addEventListener('click', closeBlockModal);
         editModal.addEventListener('click', (event) => {
           if (event.target === editModal) closeModal();
+        });
+        blockModal.addEventListener('click', (event) => {
+          if (event.target === blockModal) closeBlockModal();
         });
 
         editForm.addEventListener('submit', async (event) => {
@@ -3214,6 +3342,22 @@
           }
 
           showToast(result?.data?.error || 'No se pudo guardar el usuario', 'error');
+        });
+
+        blockForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const userId = container.querySelector('#block-user-id').value;
+          const blockedReason = container.querySelector('#block-user-reason').value.trim();
+          const result = await AuthAPI.toggleUser(userId, { blocked_reason: blockedReason || null });
+
+          if (result?.ok) {
+            showToast(result.data?.message || 'Usuario desactivado', 'success');
+            closeBlockModal();
+            loadUsers();
+            return;
+          }
+
+          showToast(result?.data?.error || 'No se pudo desactivar la cuenta', 'error');
         });
 
         loadUsers();
@@ -3258,28 +3402,34 @@
               </div>
             </div>
           </div>
-          <div id="admin-comments-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden max-h-[80vh] flex flex-col">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 border-b border-slate-200 shrink-0">
-                <div>
-                  <h2 class="text-lg font-bold text-slate-900">Comentarios</h2>
-                  <p class="text-sm text-slate-500 mt-1">Consulta y ordena la conversacion de cada publicacion.</p>
-                </div>
-                <div class="flex items-center gap-3">
-                  <label for="admin-comments-sort" class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ordenar</label>
-                  <select id="admin-comments-sort" class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:ring-2 focus:ring-[#1B2A6B] outline-none">
-                    <option value="newest">Mas recientes</option>
-                    <option value="oldest">Mas antiguos</option>
-                  </select>
-                  <button id="close-comments-modal-btn" type="button" class="p-1 rounded-full hover:bg-slate-100 transition-colors"><span class="material-symbols-outlined">close</span></button>
-                </div>
+          <div id="admin-comments-modal" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 hidden px-3 py-4">
+            <div class="post-comments-modal bg-white rounded-[28px] shadow-xl w-full overflow-hidden flex flex-col">
+              <div class="post-comments-topbar">
+                <h3 class="post-comments-topbar-title">Publicacion</h3>
+                <button id="close-comments-modal-btn" type="button" class="post-comments-topbar-close" aria-label="Cerrar modal de publicacion">
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
               </div>
-              <div class="flex-1 overflow-y-auto p-6 space-y-3" id="admin-comments-list">
-                <p class="text-slate-400 text-sm text-center">Cargando comentarios...</p>
-              </div>
-              <div class="p-4 border-t border-slate-200 shrink-0">
-                <div class="flex justify-end">
-                  <button id="close-comments-modal-footer-btn" type="button" class="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">Cerrar</button>
+              <div class="post-comments-body">
+                <div class="post-comments-scroll custom-scrollbar">
+                  <div id="admin-comment-post-preview" class="post-comments-preview"></div>
+                  <div class="post-comments-side">
+                    <div class="post-comments-section-head">
+                      <span class="post-comments-section-title">Comentarios</span>
+                      <select id="admin-comments-sort" class="post-comments-sort">
+                        <option value="newest">Mas recientes</option>
+                        <option value="oldest">Mas antiguos</option>
+                      </select>
+                    </div>
+                    <div id="admin-comments-list" class="post-comments-list">
+                      <p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="post-comments-compose">
+                  <div class="flex justify-end">
+                    <button id="close-comments-modal-footer-btn" type="button" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">Cerrar</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3290,6 +3440,7 @@
         const stats = container.querySelector('#admin-post-stats');
         const tbody = container.querySelector('#admin-posts-tbody');
         const commentsModal = container.querySelector('#admin-comments-modal');
+        const commentPostPreview = container.querySelector('#admin-comment-post-preview');
         const commentsList = container.querySelector('#admin-comments-list');
         const commentsSort = container.querySelector('#admin-comments-sort');
 
@@ -3361,9 +3512,9 @@
                 </td>
                 <td class="py-4 px-5">
                   <div class="flex gap-3 items-start">
-                    ${post.image_url ? `<img alt="Miniatura" class="w-12 h-12 rounded-lg object-cover" src="${safeUrl(post.image_url)}"/>` : ''}
-                    <div>
-                      <p class="text-sm text-slate-700 mb-1.5">${escapeHtml((post.content || '').slice(0, 140) || 'Sin contenido')}</p>
+                      ${post.image_url ? `<img alt="Miniatura" class="w-12 h-12 rounded-lg object-cover" src="${safeUrl(post.image_url)}" onerror="this.style.display='none'"/>` : ''}
+                    <div class="min-w-0">
+                      <p class="content-break text-sm text-slate-700 mb-1.5">${escapeHtml((post.content || '').slice(0, 140) || 'Sin contenido')}</p>
                       ${post.image_url ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] rounded text-[10px] font-medium border border-[#E0E7FF]"><span class="material-symbols-outlined text-[12px]">image</span>Con imagen</span>' : ''}
                     </div>
                   </div>
@@ -3372,7 +3523,7 @@
                 <td class="py-4 px-5">
                   <div class="flex justify-end gap-2">
                     <button type="button" data-view-comments="${post.id}" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-                      <span class="material-symbols-outlined text-[16px]">chat_bubble</span> Comentarios <span class="font-semibold ml-1">${post.comments_count || 0}</span>
+                      <span class="material-symbols-outlined text-[16px]">visibility</span> Ver Publicacion <span class="font-semibold ml-1">${post.comments_count || 0}</span>
                     </button>
                     <button type="button" data-delete-post="${post.id}" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-[#DC2626] hover:bg-slate-50 transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">delete</span> Eliminar
@@ -3401,6 +3552,8 @@
           currentCommentsPostId = Number(postId);
           commentsSort.value = sort;
           openCommentsModal();
+          const selectedPost = allPosts.find((post) => Number(post.id) === currentCommentsPostId);
+          commentPostPreview.innerHTML = renderPostModalPreview(selectedPost, appState.user?.id);
           commentsList.innerHTML = '<p class="text-slate-400 text-sm text-center">Cargando comentarios...</p>';
 
           await ensurePublicUsersLoaded();
@@ -3417,7 +3570,19 @@
             return;
           }
 
-          commentsList.innerHTML = comments.map((comment) => renderCommentCard(comment, { interactive: false })).join('');
+          commentsList.innerHTML = comments.map((comment) => renderCommentCard(comment, {
+            interactive: false,
+            footerActions: `
+              <button
+                type="button"
+                data-delete-admin-comment="${comment.id}"
+                class="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-50"
+              >
+                <span class="material-symbols-outlined text-[15px]">delete</span>
+                Eliminar comentario
+              </button>
+            `,
+          })).join('');
         }
 
         container.querySelector('#go-admin-users-btn').addEventListener('click', () => router.navigate('admin'));
@@ -3450,6 +3615,21 @@
             return;
           }
           showToast(result?.data?.error || 'No se pudo eliminar la publicacion', 'error');
+        });
+
+        commentsList.addEventListener('click', async (event) => {
+          const deleteCommentButton = event.target.closest('[data-delete-admin-comment]');
+          if (!deleteCommentButton || !currentCommentsPostId) return;
+
+          const result = await PostsAPI.adminDeleteComment(deleteCommentButton.dataset.deleteAdminComment);
+          if (result?.ok) {
+            showToast('Comentario eliminado', 'success');
+            await loadPosts();
+            await showComments(currentCommentsPostId, commentsSort.value);
+            return;
+          }
+
+          showToast(result?.data?.error || 'No se pudo eliminar el comentario', 'error');
         });
 
         loadPosts();
