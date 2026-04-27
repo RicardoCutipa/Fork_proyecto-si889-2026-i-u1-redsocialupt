@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\AuthServiceException;
 use App\Models\User;
 use Carbon\Carbon;
 use Firebase\JWT\JWT;
@@ -21,7 +22,7 @@ class AuthService
         $payload = $client->verifyIdToken($idToken);
 
         if (!$payload) {
-            throw new \Exception('Token de Google inválido', 401);
+            throw new AuthServiceException('Token de Google inválido', 401);
         }
 
         $email    = $payload['email'];
@@ -31,7 +32,7 @@ class AuthService
 
         // Validar dominio
         if (substr(strrchr($email, '@'), 1) !== 'virtual.upt.pe') {
-            throw new \Exception('Solo se permiten cuentas @virtual.upt.pe', 403);
+            throw new AuthServiceException('Solo se permiten cuentas @virtual.upt.pe', 403);
         }
 
         $user = User::firstOrCreate(
@@ -69,7 +70,7 @@ class AuthService
         $user = $this->findOrFail($userId);
 
         if (($data['user_type'] ?? 'student') === 'student' && !empty($data['student_code']) && !preg_match('/^\d+$/', (string) $data['student_code'])) {
-            throw new \Exception('El codigo de estudiante solo debe contener numeros', 422);
+            throw new AuthServiceException('El codigo de estudiante solo debe contener numeros', 422);
         }
 
         $user->update([
@@ -193,7 +194,7 @@ class AuthService
         $user = $this->findOrFail($userId);
 
         if ($actorUserId !== null && $user->id === $actorUserId) {
-            throw new \Exception('No puedes desactivar tu propia cuenta', 422);
+            throw new AuthServiceException('No puedes desactivar tu propia cuenta', 422);
         }
 
         $user->is_active = !$user->is_active;
@@ -213,7 +214,7 @@ class AuthService
         $user = $this->findOrFail($userId);
 
         if (($data['user_type'] ?? $user->user_type) === 'student' && !empty($data['student_code']) && !preg_match('/^\d+$/', (string) $data['student_code'])) {
-            throw new \Exception('El codigo de estudiante solo debe contener numeros', 422);
+            throw new AuthServiceException('El codigo de estudiante solo debe contener numeros', 422);
         }
 
         $user->update(array_filter([
@@ -235,17 +236,17 @@ class AuthService
         $user = $this->findOrFail($targetUserId);
 
         if (!in_array($role, ['user', 'admin'], true)) {
-            throw new \Exception('Rol invalido', 422);
+            throw new AuthServiceException('Rol invalido', 422);
         }
 
         if ($user->id === $actorUserId && $role !== 'admin') {
-            throw new \Exception('No puedes quitarte tus propios permisos de administrador', 422);
+            throw new AuthServiceException('No puedes quitarte tus propios permisos de administrador', 422);
         }
 
         if ($user->role === 'admin' && $role !== 'admin') {
             $adminCount = User::where('role', 'admin')->count();
             if ($adminCount <= 1) {
-                throw new \Exception('Debe existir al menos un administrador activo', 422);
+                throw new AuthServiceException('Debe existir al menos un administrador activo', 422);
             }
         }
 
@@ -261,7 +262,7 @@ class AuthService
     {
         $user = User::find($userId);
         if (!$user) {
-            throw new \Exception('Usuario no encontrado', 404);
+            throw new AuthServiceException('Usuario no encontrado', 404);
         }
         return $user;
     }
@@ -331,9 +332,10 @@ class AuthService
     private function ensureUserIsActive(User $user): User
     {
         if (!$user->is_active) {
-            throw new \Exception('ACCOUNT_BLOCKED|' . ($user->blocked_reason ?? ''), 403);
+            throw new AuthServiceException('ACCOUNT_BLOCKED|' . ($user->blocked_reason ?? ''), 403);
         }
 
         return $user;
     }
 }
+
