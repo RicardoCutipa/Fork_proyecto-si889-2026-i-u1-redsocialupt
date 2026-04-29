@@ -83,13 +83,9 @@ Versión *{1.0}*
 
 **Red Social UPT – Plataforma Social Universitaria basada en Microservicios**
 
----
-
 ### 1.2 Duración del Proyecto
 
 El proyecto tiene una duración estimada de **4 meses (16 semanas)**, correspondiente al semestre académico **2026-I**, comprendido entre los meses de **abril y julio de 2026**.
-
----
 
 ### 1.3 Descripción
 
@@ -117,8 +113,6 @@ La solución propuesta permite consolidar un entorno digital propio de la univer
 
 Desarrollar una plataforma web de red social universitaria basada en arquitectura de microservicios que permita a los estudiantes de la Universidad Privada de Tacna interactuar, compartir contenido académico y social, y comunicarse de forma segura mediante el uso exclusivo de cuentas institucionales con dominio `@virtual.upt.pe`, garantizando un entorno digital controlado, escalable y orientado a la comunidad universitaria.
 
----
-
 ### 1.4.2 Objetivos Específicos
 
 **OE1: Diseño de la arquitectura de microservicios**  
@@ -141,219 +135,293 @@ Incorporar herramientas de análisis estático y seguridad como SonarQube, Snyk 
 
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
-2. <span id="_Toc52661347" class="anchor"></span>**Riesgos**
+## 2. Riesgos
 
-    Los principales riesgos que podrían afectar el éxito del proyecto son:
-   
-    | Riesgo                      | Descripción                                  | Impacto | Mitigación               |
-    | --------------------------- | -------------------------------------------- | ------- | ------------------------ |
-    | Falta de tiempo             | Retraso en el desarrollo por carga académica | Alto    | Planificación semanal    |
-    | Fallas en VPS               | Problemas en el servidor                     | Medio   | Backup y pruebas locales |
-    | Problemas en microservicios | Errores en la integración                    | Alto    | Pruebas continuas        |
-    | Fallas de seguridad         | Vulnerabilidades en PHP                      | Alto    | SonarQube y Snyk         |
-    | Problemas en Docker         | Configuración incorrecta                     | Medio   | Documentación y pruebas  |
-    | Falta de coordinación       | Desorganización del equipo                   | Alto    | Reuniones semanales      |
+Los principales riesgos que podrían afectar el éxito del proyecto son:
 
+| Riesgo                      | Descripción                                  | Impacto | Mitigación               |
+|----------------------------|----------------------------------------------|---------|--------------------------|
+| Falta de tiempo            | Retraso en el desarrollo por carga académica | Alto    | Planificación semanal    |
+| Fallas en VPS              | Problemas en el servidor                     | Medio   | Backup y pruebas locales |
+| Problemas en microservicios| Errores en la integración                    | Alto    | Pruebas continuas        |
+| Fallas de seguridad        | Vulnerabilidades en PHP                      | Alto    | SonarQube y Snyk         |
+| Problemas en Docker        | Configuración incorrecta                     | Medio   | Documentación y pruebas  |
+| Falta de coordinación      | Desorganización del equipo                   | Alto    | Reuniones semanales      |
 
-    
-<div style="page-break-after: always; visibility: hidden">\pagebreak</div>
+## 3. Análisis de la Situación Actual
 
-3. <span id="_Toc52661348" class="anchor"></span>**Análisis de la Situación actual**
+### 3.1 Planteamiento del Problema
 
-    3.1. Planteamiento del problema
+Actualmente, los estudiantes de la Universidad Privada de Tacna no cuentan con una plataforma digital institucional que centralice la comunicación académica y social.
 
-    Actualmente los estudiantes de la Universidad Privada de Tacna no cuentan con una plataforma digital institucional que centralice la comunicación               académica    y social.
+La comunicación se realiza mediante redes sociales externas como Facebook, WhatsApp e Instagram, lo que genera problemas como:
 
-    La comunicación se realiza mediante redes sociales externas como Facebook, WhatsApp e Instagram, lo que genera problemas como:
+- Falta de privacidad  
+- Información dispersa  
+- Ausencia de control institucional  
+- Falta de segmentación por carrera  
+- Riesgo de cuentas falsas  
+- Dependencia de plataformas externas  
 
-    - Falta de privacidad
-    - Información dispersa
-    - No hay control institucional
-    - No existe segmentación por carrera
-    - Riesgo de cuentas falsas
-    - Dependencia de plataformas externas
+Esto genera la necesidad de una red social universitaria propia que permita la comunicación segura y organizada dentro de la institución.
 
-    Esto genera la necesidad de una red social universitaria propia que permita la comunicación segura y organizada dentro de la institución.
+### 3.2 Consideraciones de Hardware y Software
 
-    3.2. Consideraciones de hardware y software
+#### Hardware
 
-    Hardware
-    - Computadoras del equipo de desarrollo
-    - VPS Debian
-    - Internet
-    - Servidor virtual
-    - Almacenamiento SSD
-    
-    Software
-    - PHP 8
-    - Lumen Framework
-    - MySQL
-    - Docker
-    - Terraform
-    - GitHub
-    - SonarQube
-    - Snyk
-    - Semgrep
-    - Visual Studio Code
-    - Navegadores web
+- Computadoras del equipo de desarrollo  
+- VPS Debian  
+- Conexión a Internet  
+- Servidor virtual  
+- Almacenamiento SSD  
 
-<div style="page-break-after: always; visibility: hidden">\pagebreak</div>
+#### Software
 
-4. <span id="_Toc52661349" class="anchor"></span>**Estudio de
-    Factibilidad**
+- PHP 8  
+- Lumen Framework  
+- MySQL  
+- Docker  
+- Terraform  
+- GitHub  
+- SonarQube  
+- Snyk  
+- Semgrep  
+- Visual Studio Code  
+- Navegadores web  
+## 4. Estudio de Factibilidad
 
-    Describir los resultados que esperan alcanzar del estudio de factibilidad, las actividades que se realizaron para preparar la evaluación de factibilidad y por quien fue aprobado.
+El estudio de factibilidad permite evaluar la viabilidad del proyecto en términos técnicos y económicos, considerando los recursos disponibles, las tecnologías seleccionadas y los costos asociados al desarrollo e implementación del sistema.
 
-    4.1. <span id="_Toc52661350" class="anchor"></span>Factibilidad Técnica
+### 4.1 Factibilidad Técnica
 
-     El proyecto Red Social UPT se presenta como una iniciativa técnicamente viable para mejorar la comunicación e interacción entre los estudiantes de la           Universidad Privada de Tacna mediante el uso de una plataforma web basada en arquitectura de microservicios.
-    
-    La implementación del sistema implica el desarrollo de tres microservicios principales: autenticación institucional, publicaciones e historias, y perfiles      e interacciones sociales, los cuales estarán conectados mediante API REST y protegidos con tokens JWT. Esto permitirá garantizar la seguridad,                  escalabilidad y mantenimiento del sistema.
-    
-    El desarrollo del sistema web requiere la creación de una interfaz funcional y compatible con diferentes navegadores y dispositivos, lo que permitirá a los     estudiantes acceder desde computadoras o teléfonos móviles sin inconvenientes. Para ello, se realizarán pruebas de compatibilidad y rendimiento que             aseguren el correcto funcionamiento de la plataforma.
-    
-    La implementación del microservicio de autenticación permitirá validar las cuentas institucionales con dominio @virtual.upt.pe, garantizando que solo           estudiantes de la universidad puedan acceder al sistema. Esto ayudará a mantener un entorno seguro y controlado.
-    
-    El microservicio de publicaciones e historias permitirá a los usuarios crear contenido en tiempo real, subir imágenes y generar historias efímeras,             asegurando un control eficiente del almacenamiento y la expiración automática de contenido.
-    
-    El microservicio de perfiles e interacciones permitirá la gestión de perfiles, comentarios, likes y segmentación por facultad y carrera, facilitando la         organización académica y la interacción social.
-    
-    Además, el sistema será desplegado en un VPS con sistema operativo Debian utilizando Docker y Terraform, lo que garantizará una infraestructura                 automatizada y reproducible.
-    
-    El proyecto también integrará herramientas de calidad y seguridad como SonarQube, Snyk o Semgrep y GitHub Actions para asegurar la calidad del código y         evitar vulnerabilidades.
-    
-    Aunque el proyecto presenta desafíos técnicos como la integración de microservicios y el despliegue en la nube, su factibilidad se basa en el uso de            tecnologías modernas, software libre y metodologías adecuadas de desarrollo, lo que permite afirmar que el proyecto es técnicamente viable.
-        
-    4.2. <span id="_Toc52661351" class="anchor"></span>Factibilidad Económica
+El proyecto **Red Social UPT** es técnicamente viable, ya que se basa en tecnologías modernas, de código abierto y ampliamente utilizadas en el desarrollo de sistemas web escalables.
 
-   El propósito del estudio de viabilidad económica, es determinar los beneficios económicos del proyecto o sistema propuesto para la organización, en             contraposición con los costos.
+El sistema se implementa mediante una arquitectura de microservicios, compuesta por tres servicios principales:
 
-   Definir los siguientes costos:
+- Autenticación institucional  
+- Publicaciones e historias  
+- Perfiles e interacciones sociales  
 
-        4.2.1. Costos Generales
+Estos servicios se comunican mediante API REST y utilizan tokens JWT para garantizar la seguridad en la comunicación.
 
-        | Ítem | Descripción          | u.m.   | Costo Unitario | Cantidad  | Costo Total  |
-        | ---- | -------------------- | ------ | -------------- | --------- | ------------ |
-        | 1    | Papel Bond           | Millar | S/ 20.00       | 2         | S/ 40.00     |
-        | 2    | Lapiceros            | Caja   | S/ 10.00       | 1         | S/ 10.00     |
-        | 3    | Folder               | Unidad | S/ 1.00        | 10        | S/ 10.00     |
-        | 4    | Recarga de impresora | Unidad | S/ 35.00       | 1         | S/ 35.00     |
-        |      |                      |        |                | **Total** | **S/ 95.00** |
+La plataforma será accesible desde navegadores web en computadoras y dispositivos móviles, asegurando compatibilidad y usabilidad mediante pruebas de rendimiento y validación en distintos entornos.
 
-        4.2.2. Costos operativos durante el desarrollo 
-        
-        | Ítem | Descripción | Costo Unitario | Meses     | Total      |
-        | ---- | ----------- | -------------- | --------- | ---------- |
-        | 1    | Internet    | S/ 100         | 4         | S/ 400     |
-        | 2    | Luz         | S/ 80          | 4         | S/ 320     |
-        |      |             |                | **Total** | **S/ 720** |
+El microservicio de autenticación valida cuentas institucionales con dominio `@virtual.upt.pe`, restringiendo el acceso únicamente a miembros de la universidad.
 
-        4.2.3. Costos del ambiente
+El sistema permite:
 
-        | Ítem | Descripción | Detalles         | Costo | Cantidad  | Total      |
-        | ---- | ----------- | ---------------- | ----- | --------- | ---------- |
-        | 1    | VPS Debian  | Servidor virtual | S/ 25 | 4         | S/ 100     |
-        | 2    | Dominio web | Plataforma       | S/ 50 | 1         | S/ 50      |
-        | 3    | GitHub      | Repositorio      | S/ 0  | 1         | S/ 0       |
-        |      |             |                  |       | **Total** | **S/ 150** |
+- Publicación de contenido en tiempo real  
+- Gestión de historias efímeras  
+- Interacciones sociales (likes, comentarios)  
+- Organización por facultad y carrera  
 
-        4.2.4. Costos de personal
-   
-        | Rol                          | Unidad | Cantidad | Pago por hora | Horas | Horario       | Total    |
-        | ---------------------------- | ------ | -------- | ------------- | ----- | ------------- | -------- |
-        | Desarrollador Backend        | 1      | 1        | 20            | 60    | 8:00 - 14:00  | 1200     |
-        | Desarrollador Microservicios | 1      | 1        | 20            | 60    | 14:00 - 20:00 | 1200     |
-        | DevOps y Documentación       | 1      | 1        | 20            | 60    | 19:00 - 22:00 | 1200     |
-        |                              |        |          |               |       | **Total**     | **3600** |
+El despliegue se realiza en una VPS con sistema operativo Debian, utilizando Docker para la contenerización y Terraform para la automatización de la infraestructura.
 
-        4.2.5.  Costos totales del desarrollo del sistema
+Además, se integran herramientas de calidad y seguridad como:
 
-            | Resumen de Costos  | Costos Totales |
-            | ------------------ | -------------- |
-            | Costos Generales   | S/ 95          |
-            | Costos de Ambiente | S/ 150         |
-            | Costos de Personal | S/ 3600        |
-            | Costos Operativos  | S/ 720         |
-            | **TOTAL**          | **S/ 4565**    |
+- SonarQube  
+- Snyk / Semgrep  
+- GitHub Actions  
+
+Estas herramientas garantizan código limpio, seguro y mantenible.
+
+A pesar de desafíos como la integración de microservicios y el despliegue en la nube, el uso de tecnologías consolidadas permite afirmar que el proyecto es técnicamente viable.
+
+### 4.2 Factibilidad Económica
+
+El análisis económico evalúa los costos necesarios para el desarrollo e implementación del sistema en relación con los beneficios obtenidos.
+
+#### 4.2.1 Costos Generales
+
+| Ítem | Descripción          | u.m.   | Costo Unitario | Cantidad | Costo Total |
+|------|---------------------|--------|----------------|----------|-------------|
+| 1    | Papel Bond          | Millar | S/ 20.00       | 2        | S/ 40.00    |
+| 2    | Lapiceros           | Caja   | S/ 10.00       | 1        | S/ 10.00    |
+| 3    | Folder              | Unidad | S/ 1.00        | 10       | S/ 10.00    |
+| 4    | Recarga impresora   | Unidad | S/ 35.00       | 1        | S/ 35.00    |
+|      |                     |        |                | **Total**| **S/ 95.00**|
 
 
+#### 4.2.2 Costos Operativos
 
-    4.3. <span id="_Toc52661352" class="anchor"></span>Factibilidad Operativa
+| Ítem | Descripción | Costo Unitario | Meses | Total   |
+|------|-------------|----------------|-------|---------|
+| 1    | Internet    | S/ 100         | 4     | S/ 400  |
+| 2    | Luz         | S/ 80          | 4     | S/ 320  |
+|      |             |                | **Total** | **S/ 720** |
 
-       El proyecto es operativamente viable, ya que el sistema permitirá a los usuarios de la institución educativa controlar la asistencia de manera rápida y         eficiente mediante el reconocimiento por vectores numéricos. La plataforma será fácil de usar, con una interfaz intuitiva que permitirá a docentes y            personal administrativo registrar, consultar y gestionar la asistencia sin complicaciones. Además, el sistema reducirá el trabajo manual, mejorará el           control de la información y optimizará los procesos internos de la institución. También se contará con soporte técnico y capacitación básica para               garantizar el correcto uso y mantenimiento del sistema, asegurando su funcionamiento continuo.
-   
-    4.4. <span id="_Toc52661353" class="anchor"></span>Factibilidad Legal
 
-     El proyecto cumple con la normativa legal vigente en el Perú, especialmente en lo relacionado con la protección de datos personales y el uso de                 tecnologías de información. Se respetará la Ley de Protección de Datos Personales, garantizando la seguridad y confidencialidad de la información de los        estudiantes y docentes. Asimismo, el sistema se desarrollará respetando las normas de uso de software, derechos de autor y regulaciones tecnológicas,           evitando problemas legales durante su implementación.
+#### 4.2.3 Costos de Infraestructura (VPS - Hetzner)
 
-    4.5. <span id="_Toc52661354" class="anchor"></span>Factibilidad Social 
+**Resumen de infraestructura:**
 
-        El proyecto tendrá un impacto social positivo, ya que mejorará el control de asistencia en las instituciones educativas de Tacna, contribuyendo a una         mejor organización académica y administrativa. Los estudiantes, docentes y personal administrativo se beneficiarán al contar con un sistema moderno que         reduce errores y mejora la eficiencia en el registro de asistencia. Además, el uso de tecnología en el entorno educativo promueve la innovación y               fortalece la digitalización de los procesos institucionales.
+- Proveedor: Hetzner Cloud  
+- 1 servidor VPS (cx22: 2 vCPU, 4 GB RAM, 40 GB SSD)  
+- 1 volumen adicional de 20 GB  
+- Firewall configurado (SSH, HTTP, HTTPS)  
+- Uso continuo (24/7 – 730 horas/mes)  
 
-    4.6. <span id="_Toc52661355" class="anchor"></span>Factibilidad Ambiental
+**Costos estimados mensuales:**
 
-       El proyecto no genera un impacto ambiental significativo, ya que se basa principalmente en el uso de tecnología digital. La implementación del sistema          permitirá reducir el uso de papel en el registro de asistencia, contribuyendo al cuidado del medio ambiente. Asimismo, se promoverá el uso responsable          de equipos informáticos y recursos tecnológicos, garantizando una gestión sostenible durante el desarrollo e implementación del sistema.
+| Recurso             | Especificación                  | Costo |
+|--------------------|--------------------------------|-------|
+| VPS cx22           | 2 vCPU, 4 GB RAM, 40 GB SSD    | $4.75 |
+| Volumen 20 GB      | Almacenamiento MySQL           | $0.96 |
+| Firewall           | Incluido                       | $0.00 |
+| IPv4 pública       | Incluida                       | $0.00 |
+| Tráfico            | 20 TB incluidos                | $0.00 |
+| **TOTAL MENSUAL**  |                                | **$5.71** |
 
-<div style="page-break-after: always; visibility: hidden">\pagebreak</div>
+**Costo anual estimado:** ~$68.52 USD  
 
-5. <span id="_Toc52661356" class="anchor"></span>**Análisis Financiero**
+**Notas:**
 
-    El plan financiero se ocupa del análisis de ingresos y gastos asociados a cada proyecto, desde el punto de vista del instante temporal en que se producen.      Su misión fundamental es detectar situaciones financieramente inadecuadas.
-    Se tiene que estimar financieramente el resultado del proyecto.
+- Infraestructura suficiente para ejecutar todos los microservicios mediante Docker  
+- Basado en configuración real con Terraform  
+- Costos pueden aumentar si el sistema escala (más servidores o servicios)  
 
-    5.1. Justificación de la Inversión
 
-        5.1.1. Beneficios del Proyecto
+#### 4.2.4 Costos de Personal
 
-        Beneficios Tangibles
-        - Reducción de tiempo en el control de asistencia.
-        - Disminución de errores en registros manuales.
-        - Ahorro en uso de papel y recursos administrativos.
-        - Mejor control de la información académica.
-        - Optimización del trabajo del personal administrativo.
+| Rol                          | Cantidad | Pago/Hora | Horas | Total    |
+|------------------------------|----------|-----------|-------|----------|
+| Backend                      | 1        | S/ 20     | 60    | S/ 1200  |
+| Microservicios               | 1        | S/ 20     | 60    | S/ 1200  |
+| DevOps y Documentación       | 1        | S/ 20     | 60    | S/ 1200  |
+|                              |          |           |       | **S/ 3600** |
 
-        Beneficios Intangibles
-        - Mejora en la organización institucional.
-        - Mayor confiabilidad en la información.
-        - Modernización tecnológica de la institución.
-        - Mejor toma de decisiones académicas.
-        - Incremento en la eficiencia del sistema educativo.
-        - Mayor seguridad en el control de asistencia.
-        
-        5.1.2. Criterios de Inversión
 
-            5.1.2.1. Relación Beneficio/Costo (B/C)
+#### 4.2.5 Costo Total del Proyecto
 
-            La relación beneficio/costo permite evaluar si los beneficios del proyecto superan a los costos de inversión.
-            Cuando el resultado es mayor a 1, el proyecto es rentable y puede ser aceptado.
-   ![B/C](./media/PASOFT_IMAGE03.png)
-            B/C = 1.72
-            
-            Esto indica que el proyecto es rentable, ya que los beneficios son mayores que los costos.
+| Categoría             | Costo          |
+|----------------------|----------------|
+| Costos Generales     | S/ 95          |
+| Costos Operativos    | S/ 720         |
+| Costos de Personal   | S/ 3600        |
+| Infraestructura VPS  | ~$5.71 USD/mes |
+| **TOTAL**            | **S/ 4415 + costo VPS** |
 
-            5.1.2.2. Valor Actual Neto (VAN)
-            
-            El Valor Actual Neto representa el valor actual de los beneficios que generará el proyecto a lo largo del tiempo.
-            Si el VAN es mayor a cero, el proyecto es viable económicamente.
-   ![VAN](./media/PASOFT_IMAGE01.png)
-            VAN = S/ 4,081.11
-            i = 13%
-            
-            Esto demuestra que el proyecto genera ganancias y es económicamente viable.
-              
-            5.1.2.3 Tasa Interna de Retorno (TIR)*
 
-            La Tasa Interna de Retorno indica la rentabilidad del proyecto en porcentaje anual.
-            Si la TIR es mayor que el costo de oportunidad (COK), el proyecto se acepta.
-   ![TIR](./media/PASOFT_IMAGE02.png)
-            TIR = 43%
-            
-            Esto indica que el proyecto tiene una alta rentabilidad, superando el costo de oportunidad del 13%, por lo que es viable.
-            
-<div style="page-break-after: always; visibility: hidden">\pagebreak</div>
+### 4.3 Factibilidad Operativa
 
-6. <span id="_Toc52661357" class="anchor"></span>**Conclusiones**
+El proyecto es operativamente viable, ya que la plataforma permitirá a los estudiantes de la Universidad Privada de Tacna interactuar, comunicarse y compartir contenido de manera rápida y eficiente dentro de un entorno digital institucional.
 
-El análisis de factibilidad demuestra que el proyecto del sistema de control de asistencia mediante reconocimiento por vectores numéricos es viable técnica, económica, operativa, legal, social y ambientalmente. Los resultados financieros muestran un VAN positivo de S/ 4,081.11, una TIR de 43% y una relación beneficio/costo de 1.72, lo que confirma que el proyecto es rentable y sostenible en el tiempo.
+El sistema contará con una interfaz web intuitiva y fácil de usar, permitiendo a los usuarios:
 
-En conclusión, la implementación del sistema permitirá mejorar la gestión de asistencia en instituciones educativas de Tacna, optimizar recursos, reducir errores administrativos y modernizar los procesos académicos, garantizando beneficios económicos y operativos a largo plazo.
+- Iniciar sesión con su cuenta institucional  
+- Publicar contenido e interactuar en el feed  
+- Gestionar su perfil académico  
+- Comunicarse con otros estudiantes  
+
+Además, el sistema reducirá la dependencia de plataformas externas como redes sociales genéricas, mejorando el control institucional de la información.
+
+Se contempla capacitación básica para los usuarios y documentación del sistema, asegurando su correcto uso y mantenimiento.
+
+### 4.4 Factibilidad Legal
+
+El proyecto cumple con la normativa legal vigente en el Perú, especialmente en lo relacionado con la protección de datos personales.
+
+Se garantizará:
+
+- Protección de datos de los usuarios  
+- Uso seguro de la información académica  
+- Acceso restringido mediante cuentas institucionales  
+
+El sistema respetará la Ley de Protección de Datos Personales y el uso adecuado de tecnologías, evitando vulneraciones legales durante su implementación.
+
+### 4.5 Factibilidad Social
+
+El proyecto tendrá un impacto positivo en la comunidad universitaria, ya que mejora la comunicación y organización entre los estudiantes.
+
+Los beneficios incluyen:
+
+- Mayor integración entre estudiantes  
+- Mejor acceso a información académica  
+- Espacio digital institucional seguro  
+- Fomento de la interacción académica y social  
+
+Además, impulsa la digitalización dentro de la universidad, promoviendo el uso de tecnología en el entorno educativo.
+
+### 4.6 Factibilidad Ambiental
+
+El proyecto no genera un impacto ambiental significativo, ya que está basado en tecnología digital.
+
+Contribuye a:
+
+- Reducción del uso de papel  
+- Disminución de procesos físicos  
+- Uso eficiente de recursos tecnológicos  
+
+Se promueve el uso responsable de la infraestructura digital y equipos informáticos.
+
+## 5. Análisis Financiero
+
+El análisis financiero evalúa la rentabilidad del proyecto considerando los costos de desarrollo frente a los beneficios obtenidos.
+
+### 5.1 Justificación de la Inversión
+
+#### 5.1.1 Beneficios del Proyecto
+
+**Beneficios Tangibles**
+
+- Reducción del uso de herramientas externas  
+- Optimización de la comunicación estudiantil  
+- Centralización de la información  
+- Ahorro en recursos administrativos digitales  
+
+**Beneficios Intangibles**
+
+- Mejora de la organización universitaria  
+- Mayor seguridad en la comunicación  
+- Fortalecimiento de la identidad institucional  
+- Modernización tecnológica de la universidad  
+- Mejora en la experiencia del usuario  
+
+#### 5.1.2 Criterios de Inversión
+
+##### 5.1.2.1 Relación Beneficio/Costo (B/C)
+
+La relación beneficio/costo permite evaluar si los beneficios superan los costos del proyecto.
+
+![B/C](./media/PASOFT_IMAGE03.png)
+
+**B/C = 1.72**
+
+Esto indica que el proyecto es rentable, ya que los beneficios son mayores que los costos.
+
+##### 5.1.2.2 Valor Actual Neto (VAN)
+
+El VAN representa el valor actual de los beneficios futuros del proyecto.
+
+![VAN](./media/PASOFT_IMAGE01.png)
+
+**VAN = S/ 4,081.11**  
+**i = 13%**
+
+El resultado positivo indica que el proyecto es económicamente viable.
+
+##### 5.1.2.3 Tasa Interna de Retorno (TIR)
+
+La TIR mide la rentabilidad del proyecto en porcentaje.
+
+![TIR](./media/PASOFT_IMAGE02.png)
+
+**TIR = 43%**
+
+Este valor supera el costo de oportunidad (13%), indicando alta rentabilidad.
+
+## 6. Conclusiones
+
+El análisis de factibilidad demuestra que el proyecto **Red Social UPT** es viable desde los puntos de vista técnico, económico, operativo, legal, social y ambiental.
+
+Los indicadores financieros reflejan:
+
+- VAN positivo  
+- TIR superior al costo de oportunidad  
+- Relación beneficio/costo mayor a 1  
+
+Esto confirma que el proyecto es rentable y sostenible.
+
+La implementación del sistema permitirá mejorar la comunicación universitaria, centralizar la información, optimizar procesos digitales y ofrecer una plataforma segura y moderna para la comunidad estudiantil.
+
+---
