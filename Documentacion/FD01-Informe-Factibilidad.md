@@ -79,55 +79,65 @@ Versión *{1.0}*
 
 1. <span id="_Toc52661346" class="anchor"></span>**Descripción del Proyecto**
 
-    1.1. Nombre del proyecto
-   Red Social UPT – Plataforma Social Universitaria basada en Microservicios
+### 1.1 Nombre del Proyecto
 
-    1.2. Duración del proyecto
-   El proyecto tendrá una duración estimada de 4 meses (16 semanas), correspondiente al semestre académico 2026-I, desde abril hasta julio de 2026.
+**Red Social UPT – Plataforma Social Universitaria basada en Microservicios**
 
-    1.3. Descripción
+---
 
-   La Red Social UPT es una plataforma digital desarrollada para la comunidad estudiantil de la Universidad Privada de Tacna, que permitirá la comunicación e      interacción académica y social dentro de un entorno institucional seguro.
+### 1.2 Duración del Proyecto
 
-   El proyecto consiste en el desarrollo de una red social web basada en arquitectura de microservicios, que permitirá a los estudiantes registrarse con su        cuenta institucional @virtual.upt.pe, publicar contenido, crear historias, interactuar con otros estudiantes y organizarse por facultad y carrera.
+El proyecto tiene una duración estimada de **4 meses (16 semanas)**, correspondiente al semestre académico **2026-I**, comprendido entre los meses de **abril y julio de 2026**.
 
-   La importancia del proyecto radica en que actualmente los estudiantes utilizan redes sociales externas como Facebook o WhatsApp para coordinar actividades      académicas, lo que genera problemas de privacidad, falta de control institucional y dispersión de la información.
+---
 
-   El sistema se desenvolverá en un entorno universitario digital, utilizando tecnologías modernas como:
-    
-    - PHP/Lumen
-    - MySQL
-    - Docker
-    - Terraform
-    - GitHub Actions
-    - SonarQube
-    - VPS Debian
+### 1.3 Descripción
 
-   El objetivo principal es ofrecer una plataforma segura, escalable y centralizada que mejore la comunicación universitaria.
+La **Red Social UPT** es una plataforma digital orientada a la comunidad estudiantil de la Universidad Privada de Tacna, diseñada para facilitar la comunicación e interacción académica y social dentro de un entorno institucional seguro.
 
-    1.4. Objetivos
+El sistema consiste en el desarrollo de una aplicación web basada en arquitectura de microservicios, que permite a los estudiantes autenticarse mediante su cuenta institucional `@virtual.upt.pe`, crear publicaciones, generar historias, interactuar con otros usuarios y organizarse según su facultad y escuela profesional.
 
-        1.4.1 Objetivo general
-        Desarrollar una plataforma web de red social universitaria basada en arquitectura de microservicios que permita a los estudiantes de la Universidad             Privada de Tacna interactuar, compartir contenido y comunicarse de forma segura mediante cuentas institucionales.
-        
-        1.4.2 Objetivos Específicos
-        OE1: Diseñar la arquitectura de microservicios del sistema
-        Se logrará definir la estructura del sistema, los microservicios de autenticación, publicaciones y perfiles, y su comunicación mediante API REST.
-        
-        OE2: Implementar el sistema de autenticación institucional
-        Se logrará permitir el registro e inicio de sesión mediante cuentas @virtual.upt.pe utilizando JWT.
-        
-        OE3: Desarrollar el módulo de publicaciones e historias
-        Se logrará permitir a los usuarios publicar contenido, historias efímeras e imágenes en el feed.
-        
-        OE4: Implementar el módulo de perfiles e interacciones sociales
-        Se logrará permitir la gestión de perfiles, likes, comentarios y segmentación por facultad y carrera.
-        
-        OE5: Desplegar el sistema en un VPS con Docker y Terraform
-        Se logrará que el sistema funcione en la nube con infraestructura automatizada.
-        
-        OE6: Implementar control de calidad y seguridad del código
-        Se logrará integrar SonarQube, Snyk o Semgrep y GitHub Actions para garantizar la calidad del software.
+Actualmente, los estudiantes recurren a plataformas externas como Facebook o WhatsApp para coordinar actividades académicas, lo cual genera limitaciones en términos de privacidad, control institucional y organización de la información. Esta propuesta plantea una solución centralizada que responde directamente a dichas problemáticas.
+
+El sistema se implementa utilizando tecnologías modernas orientadas a escalabilidad, despliegue en la nube y buenas prácticas de desarrollo:
+
+- PHP / Lumen  
+- MySQL  
+- Docker  
+- Terraform  
+- GitHub Actions  
+- SonarQube  
+- VPS con sistema operativo Debian  
+
+La solución propuesta permite consolidar un entorno digital propio de la universidad, garantizando seguridad en el acceso, organización de la información académica y una experiencia de usuario alineada al contexto universitario.
+
+ ## 1.4 Objetivos
+
+### 1.4.1 Objetivo General
+
+Desarrollar una plataforma web de red social universitaria basada en arquitectura de microservicios que permita a los estudiantes de la Universidad Privada de Tacna interactuar, compartir contenido académico y social, y comunicarse de forma segura mediante el uso exclusivo de cuentas institucionales con dominio `@virtual.upt.pe`, garantizando un entorno digital controlado, escalable y orientado a la comunidad universitaria.
+
+---
+
+### 1.4.2 Objetivos Específicos
+
+**OE1: Diseño de la arquitectura de microservicios**  
+Definir la estructura del sistema mediante la separación en microservicios independientes (autenticación, publicaciones e interacciones sociales), estableciendo su comunicación a través de APIs REST y asegurando escalabilidad, modularidad y mantenibilidad del sistema.
+
+**OE2: Implementación del sistema de autenticación institucional**  
+Habilitar el registro e inicio de sesión exclusivo mediante cuentas con dominio `@virtual.upt.pe`, integrando Google OAuth y generación de tokens JWT para garantizar autenticación segura y validación de identidad institucional.
+
+**OE3: Desarrollo del módulo de publicaciones e historias**  
+Permitir a los usuarios crear publicaciones con texto e imágenes, así como historias efímeras con expiración automática, asegurando su correcta visualización en el feed en tiempo real.
+
+**OE4: Implementación del módulo de perfiles e interacciones sociales**  
+Desarrollar funcionalidades que permitan la gestión de perfiles de usuario, así como la interacción mediante likes, comentarios y segmentación por facultad y carrera, fortaleciendo la comunicación dentro de la comunidad universitaria.
+
+**OE5: Despliegue del sistema en infraestructura en la nube**  
+Implementar el sistema en una VPS con sistema operativo Debian utilizando contenedores Docker y orquestación con Docker Compose, gestionando la infraestructura mediante Terraform para garantizar reproducibilidad y automatización.
+
+**OE6: Integración de control de calidad y seguridad del software**  
+Incorporar herramientas de análisis estático y seguridad como SonarQube, Snyk o Semgrep dentro de un pipeline de CI/CD con GitHub Actions, asegurando código limpio, seguro y alineado a buenas prácticas de desarrollo.
 
 <div style="page-break-after: always; visibility: hidden">\pagebreak</div>
 
