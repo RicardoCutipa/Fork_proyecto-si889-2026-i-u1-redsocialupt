@@ -1,4 +1,5 @@
 <img src="./media/rfb3igdh.png">
+
 style="width:1.0875in;height:1.46194in" />
 
 > **UNIVERSIDAD** **PRIVADA** **DE** **TACNA**
@@ -437,7 +438,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 10
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./0a01vxxo.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/0a01vxxo.png"
 > style="width:3.73194in;height:5.88167in" />
 >
 > 3.1.1. Diagramas de Casos de uso
@@ -458,9 +459,9 @@ style="width:1.0875in;height:1.46194in" />
 > 11
 >
 > Logo de Mi Empresa Logo de mi Cliente<img src="./boe3quen.png"
-> style="width:5.54583in;height:1.94083in" /><img src="./iloddbmx.png"
-> style="width:4.89583in;height:1.9375in" /><img src="./1jj0i2lu.png"
-> style="width:4.47917in;height:1.98958in" /><img src="./l2s2rwjx.png"
+> style="width:5.54583in;height:1.94083in" /><img src="./media/iloddbmx.png"
+> style="width:4.89583in;height:1.9375in" /><img src="./media/1jj0i2lu.png"
+> style="width:4.47917in;height:1.98958in" /><img src="./media/l2s2rwjx.png"
 > style="width:4.53125in;height:1.38542in" />
 >
 > **Diagrama:** **RF-02** **Creación** **de** **Publicaciones**
@@ -480,9 +481,9 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 12
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./dye025kr.png"
-> style="width:5.16667in;height:2.01042in" /><img src="./j0xekieo.png"
-> style="width:4.5625in;height:1.8125in" /><img src="./31enrbmu.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/dye025kr.png"
+> style="width:5.16667in;height:2.01042in" /><img src="./media/j0xekieo.png"
+> style="width:4.5625in;height:1.8125in" /><img src="./media/31enrbmu.png"
 > style="width:5.38542in;height:1.92708in" />
 >
 > **Diagrama:** **RF-05** **Comentarios** **en** **Publicaciones**
@@ -507,9 +508,9 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 13
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./ttdcdbxh.png"
-> style="width:4.47917in;height:1.85417in" /><img src="./zmdfyiaq.png"
-> style="width:5.29167in;height:1.375in" /><img src="./hnp41ie5.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/ttdcdbxh.png"
+> style="width:4.47917in;height:1.85417in" /><img src="./media/zmdfyiaq.png"
+> style="width:5.29167in;height:1.375in" /><img src="./media/hnp41ie5.png"
 > style="width:5.90555in;height:2.08681in" />
 >
 > **Diagrama:** **RF-09** **Panel** **de** **Administración**
@@ -535,7 +536,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 14
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./tjgszzno.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/tjgszzno.png"
 > style="width:6.30181in;height:6.14028in" />
 >
 > **RF-02:** **Creación** **de** **Publicaciones** **con** **Control**
@@ -543,7 +544,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 15
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./sv3lvw2o.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/sv3lvw2o.png"
 > style="width:6.39167in;height:5.92194in" />
 >
 > Se representa el flujo mediante el cual el usuario crea una
@@ -554,7 +555,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 16
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./aqnhgn21.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/aqnhgn21.png"
 > style="width:6.35417in;height:7.2993in" />
 >
 > **RF-03:** **Feed** **Cronológico** **con** **Filtrado** **por**
@@ -567,7 +568,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 17
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./111jorl3.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/111jorl3.png"
 > style="width:6.43139in;height:6.48055in" />
 >
 > **RF-04:** **Sistema** **de** **Likes** **en** **Publicaciones**
@@ -587,13 +588,13 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 18
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./0a3ah1xy.png"
-> style="width:6.0618in;height:4.82222in" /><img src="./tdhlwtpf.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/0a3ah1xy.png"
+> style="width:6.0618in;height:4.82222in" /><img src="./media/tdhlwtpf.png"
 > style="width:6.12194in;height:4.40208in" />
 >
 > 19
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./hdxloyf3.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/hdxloyf3.png"
 > style="width:6.25056in;height:5.875in" />
 >
 > **RF-06:** **Gestión** **de** **Perfil** **de** **Usuario**
@@ -606,17 +607,17 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 20
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./ylowq5vq.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/ylowq5vq.png"
 > style="width:6.34583in;height:5.70403in" />
 >
 > 21
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./nxm3gkbk.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media//nxm3gkbk.png"
 > style="width:5.90555in;height:4.64236in" />
 >
 > 22
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./trdslb1h.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/trdslb1h.png"
 > style="width:6.23819in;height:5.00139in" />
 >
 > **RF-07:** **Directorio** **de** **Compañeros** **con** **Sistema**
@@ -634,7 +635,7 @@ style="width:1.0875in;height:1.46194in" />
 > <img src="./v2hqqbm2.png"
 > style="width:6.04444in;height:10.20333in" />24
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./jhauquur.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/jhauquur.png"
 > style="width:6.33167in;height:8.01736in" />
 >
 > **RF-08:** **Chat** **Privado** **entre** **Compañeros**
@@ -645,7 +646,7 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 25
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./lmq2d314.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/lmq2d314.png"
 > style="width:6.30514in;height:5.35764in" />
 >
 > **RF-09:** **Panel** **de** **Administración**
@@ -657,25 +658,25 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 26
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./tml0s0hv.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/tml0s0hv.png"
 > style="width:5.90555in;height:9.1625in" />
 >
 > 27
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./pvsrxc42.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/pvsrxc42.png"
 > style="width:6.25625in;height:8.38972in" />
 >
 > 28
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./shlv50t5.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/shlv50t5.png"
 > style="width:6.3618in;height:7.04403in" />
 >
 > 3.2.3. Diagrama de Colaboración (vista de diseño)
 >
 > 29
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./kpf1sa1j.png"
-> style="width:6.30819in;height:1.92569in" /><img src="./3ihtkhsp.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/kpf1sa1j.png"
+> style="width:6.30819in;height:1.92569in" /><img src="./media/3ihtkhsp.png"
 > style="width:5.90555in;height:2.72222in" />
 >
 > 3.2.4. Diagrama de Objetos
@@ -684,15 +685,15 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 30
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./wwanfmk5.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/wwanfmk5.png"
 > style="width:6.50764in;height:8.93708in" />
 >
 > 3.2.6. Diagrama de Base de datos (relacional o no relacional)
 >
 > 31
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./kqupmcgd.png"
-> style="width:5.90555in;height:2.07847in" /><img src="./avswiaam.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/kqupmcgd.png"
+> style="width:5.90555in;height:2.07847in" /><img src="./media/avswiaam.png"
 > style="width:6.51361in;height:1.75556in" />
 >
 > 3.3.Vista de Implementación (vista de desarrollo)
@@ -705,14 +706,14 @@ style="width:1.0875in;height:1.46194in" />
 >
 > 32
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./yzvgbudg.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/yzvgbudg.png"
 > style="width:4.24861in;height:9.13514in" />
 >
 > 3.4.1. Diagrama de Procesos del sistema (diagrama de actividad)
 >
 > 33
 >
-> Logo de Mi Empresa Logo de mi Cliente<img src="./ifu2eqsj.png"
+> Logo de Mi Empresa Logo de mi Cliente<img src="./media/ifu2eqsj.png"
 > style="width:6.31319in;height:4.96875in" />
 >
 > 3.5.Vista de Despliegue (vista física)
