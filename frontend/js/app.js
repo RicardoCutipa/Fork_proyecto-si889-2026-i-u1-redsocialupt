@@ -878,11 +878,16 @@
     const chatPanel = container.querySelector('#chat-panel');
     const messagesSummary = container.querySelector('#messages-summary');
     const messagesCount = container.querySelector('#messages-count');
+    const CHAT_POLL_INTERVAL_MS = 1000;
 
     let friends = [];
     let conversations = [];
     let activeChat = params.user ? Number(params.user) : null;
     let activeUser = null;
+    let currentMessages = [];
+    let activeConversationToken = 0;
+    let chatPollTimer = null;
+    let chatPollInFlight = false;
 
     function updateUrlForChat(userId) {
       window.history.replaceState(
@@ -985,12 +990,46 @@
       }
     }
 
-    function renderMessages(messages) {
+    function hasConversationChanged(nextMessages) {
+      if (nextMessages.length !== currentMessages.length) {
+        return true;
+      }
+
+      for (let index = 0; index < nextMessages.length; index += 1) {
+        const current = currentMessages[index];
+        const next = nextMessages[index];
+        if (Number(current?.id) !== Number(next?.id)) {
+          return true;
+        }
+        if (String(current?.content || '') !== String(next?.content || '')) {
+          return true;
+        }
+        if (String(current?.image_url || '') !== String(next?.image_url || '')) {
+          return true;
+        }
+        if (String(current?.created_at || '') !== String(next?.created_at || '')) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function shouldAutoScroll(area) {
+      if (!area) return false;
+      const distanceFromBottom = area.scrollHeight - area.scrollTop - area.clientHeight;
+      return distanceFromBottom <= 80;
+    }
+
+    function renderMessages(messages, options = {}) {
       const area = chatPanel.querySelector('#messages-area');
       if (!area) return;
+      const preserveScroll = options.preserveScroll === true;
+      const autoScroll = !preserveScroll || shouldAutoScroll(area);
 
       if (!messages.length) {
         area.innerHTML = '<p class="text-center text-slate-400 text-sm">Todavia no hay mensajes. Escribe el primero.</p>';
+        currentMessages = [];
         return;
       }
 
@@ -1028,17 +1067,22 @@
         `;
       }).join('');
 
-      area.scrollTop = area.scrollHeight;
+      currentMessages = messages;
+      if (autoScroll) {
+        area.scrollTop = area.scrollHeight;
+      }
     }
 
     async function loadConversation(userId, otherUser = findConversationUser(userId)) {
       const numericUserId = Number(userId);
       if (!numericUserId) return;
+      const conversationToken = ++activeConversationToken;
 
       const friendProfile = otherUser ? resolveProfileData(otherUser) : findConversationUser(numericUserId);
       if (!friendProfile?.id) {
         activeChat = null;
         activeUser = null;
+        currentMessages = [];
         updateUrlForChat(null);
         renderInbox();
         renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
@@ -1048,6 +1092,7 @@
 
       activeChat = numericUserId;
       activeUser = friendProfile;
+      currentMessages = [];
       updateUrlForChat(numericUserId);
       renderInbox();
 
@@ -1106,6 +1151,7 @@
           loadConversation(activeChat, friendProfile),
           loadInbox(false),
         ]);
+        startChatPolling();
       }
       sendButton.addEventListener('click', sendMessage);
       input.addEventListener('keydown', (event) => {
@@ -1125,10 +1171,14 @@
       });
 
       const result = await ChatAPI.getConversation(numericUserId);
+      if (conversationToken !== activeConversationToken) {
+        return;
+      }
       if (!result?.ok) {
         if (result?.status === 403) {
           activeChat = null;
           activeUser = null;
+          currentMessages = [];
           updateUrlForChat(null);
           renderInbox();
           renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
@@ -1138,7 +1188,8 @@
         return;
       }
 
-      renderMessages(getList(result));
+      renderMessages(getList(result), { preserveScroll: false });
+      startChatPolling();
     }
 
     async function openChatByUserId(userId) {
@@ -1150,6 +1201,8 @@
         showToast('Solo puedes chatear con tus amigos', 'error');
         activeChat = null;
         activeUser = null;
+        currentMessages = [];
+        stopChatPolling();
         updateUrlForChat(null);
         renderInbox();
         renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
@@ -1157,6 +1210,64 @@
       }
 
       await loadConversation(numericUserId, otherUser);
+    }
+
+    async function refreshActiveConversation() {
+      if (!activeChat || !activeUser) {
+        return;
+      }
+
+      const area = chatPanel.querySelector('#messages-area');
+      if (!area) {
+        return;
+      }
+
+      const result = await ChatAPI.getConversation(activeChat);
+      if (!result?.ok) {
+        if (result?.status === 403) {
+          activeChat = null;
+          activeUser = null;
+          currentMessages = [];
+          updateUrlForChat(null);
+          renderInbox();
+          renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
+        }
+        return;
+      }
+
+      const nextMessages = getList(result);
+      if (hasConversationChanged(nextMessages)) {
+        renderMessages(nextMessages, { preserveScroll: true });
+        await loadInbox(false);
+      }
+    }
+
+    function stopChatPolling() {
+      if (chatPollTimer) {
+        window.clearInterval(chatPollTimer);
+        chatPollTimer = null;
+      }
+      chatPollInFlight = false;
+    }
+
+    function startChatPolling() {
+      stopChatPolling();
+      chatPollTimer = window.setInterval(async () => {
+        if (chatPollInFlight || !activeChat || !activeUser) {
+          return;
+        }
+
+        if (document.hidden) {
+          return;
+        }
+
+        chatPollInFlight = true;
+        try {
+          await refreshActiveConversation();
+        } finally {
+          chatPollInFlight = false;
+        }
+      }, CHAT_POLL_INTERVAL_MS);
     }
 
     async function loadInbox(shouldRestoreActiveChat = true) {
@@ -1184,6 +1295,8 @@
       if (!friends.length) {
         activeChat = null;
         activeUser = null;
+        currentMessages = [];
+        stopChatPolling();
         updateUrlForChat(null);
         renderEmptyChatPanel('Aun no tienes amigos aceptados para conversar.');
         return;
@@ -1197,15 +1310,19 @@
         const selectedFriend = findConversationUser(activeChat);
         if (selectedFriend) {
           await loadConversation(activeChat, selectedFriend);
+          startChatPolling();
           return;
         }
 
         activeChat = null;
         activeUser = null;
+        currentMessages = [];
+        stopChatPolling();
         updateUrlForChat(null);
         showToast('Ese chat solo esta disponible para amigos aceptados', 'error');
       }
 
+      stopChatPolling();
       renderEmptyChatPanel('Selecciona un amigo para empezar a conversar.');
     }
 
@@ -1217,9 +1334,24 @@
         await loadInbox(Boolean(activeChat || activeUser));
       }
 
-      async function handlePresenceUpdated() {
-        await loadInbox(Boolean(activeChat || activeUser));
+    async function handlePresenceUpdated() {
+      await loadInbox(Boolean(activeChat || activeUser));
+    }
+
+    function handleMessagesVisibilityChange() {
+      if (document.hidden) {
+        return;
       }
+
+      if (!activeChat || !activeUser || chatPollInFlight) {
+        return;
+      }
+
+      chatPollInFlight = true;
+      refreshActiveConversation().finally(() => {
+        chatPollInFlight = false;
+      });
+    }
 
     inboxList.addEventListener('click', (event) => {
       const button = event.target.closest('[data-open-chat]');
@@ -1230,13 +1362,16 @@
       window.addEventListener('friendship:changed', handleFriendshipChanged);
       window.addEventListener('blocks:changed', handleBlocksChanged);
       window.addEventListener('presence:updated', handlePresenceUpdated);
+      document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
       loadInbox(Boolean(activeChat));
 
       return () => {
         clearSelectedImage();
+        stopChatPolling();
         window.removeEventListener('friendship:changed', handleFriendshipChanged);
         window.removeEventListener('blocks:changed', handleBlocksChanged);
         window.removeEventListener('presence:updated', handlePresenceUpdated);
+        document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
       };
   }
 
