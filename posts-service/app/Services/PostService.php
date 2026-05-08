@@ -7,15 +7,19 @@ use App\Models\Post;
 
 class PostService
 {
+    private ModerationService $moderationService;
     private SocialBlockService $socialBlockService;
 
     public function __construct()
     {
+        $this->moderationService = new ModerationService();
         $this->socialBlockService = new SocialBlockService();
     }
 
     public function create(int $userId, array $data): Post
     {
+        $this->moderationService->ensureClean($data['content'] ?? null, 'post');
+
         return Post::create([
             'user_id' => $userId,
             'group_id' => $data['group_id'] ?? null,

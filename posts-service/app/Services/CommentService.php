@@ -9,16 +9,20 @@ use App\Models\Post;
 class CommentService
 {
     private CommentLikeService $commentReactionService;
+    private ModerationService $moderationService;
     private SocialBlockService $socialBlockService;
 
     public function __construct()
     {
         $this->commentReactionService = new CommentLikeService();
+        $this->moderationService = new ModerationService();
         $this->socialBlockService = new SocialBlockService();
     }
 
     public function store(int $userId, int $postId, string $content, array $meta = [], string $jwt = ''): Comment
     {
+        $this->moderationService->ensureClean($content, 'comment');
+
         $post = Post::find($postId);
         if (!$post) {
             throw new PostsServiceException('Publicacion no encontrada', 404);

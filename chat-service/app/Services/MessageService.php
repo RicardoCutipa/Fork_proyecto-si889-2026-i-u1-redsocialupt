@@ -8,10 +8,12 @@ use App\Models\Message;
 class MessageService
 {
     private ?array $friendIdsCache = null;
+    private ModerationService $moderationService;
     private SocialBlockService $socialBlockService;
 
     public function __construct()
     {
+        $this->moderationService = new ModerationService();
         $this->socialBlockService = new SocialBlockService();
     }
 
@@ -20,6 +22,8 @@ class MessageService
      */
     public function send(int $senderId, int $receiverId, ?string $content, ?string $imageUrl, string $jwt): Message
     {
+        $this->moderationService->ensureClean($content, 'message');
+
         if ($senderId === $receiverId) {
             throw new MessageServiceException('No puedes enviarte un mensaje a ti mismo', 422);
         }
