@@ -19,7 +19,6 @@
   let presencePingInFlight = false;
   let globalIncomingCallPollTimer = null;
   let globalIncomingCallPollInFlight = false;
-  let lastRoutedIncomingCallId = 0;
 
   if (!appState.user) {
     logout();
@@ -908,6 +907,7 @@
     let chatPollTimer = null;
     let chatPollInFlight = false;
     let callInboxTimer = null;
+    let callInboxPollInFlight = false;
     let callSessionTimer = null;
     let callSignalTimer = null;
     let callMeterFrame = null;
@@ -1790,14 +1790,31 @@
     function startIncomingCallPolling() {
       if (callInboxTimer) return;
       callInboxTimer = window.setInterval(async () => {
-        if (document.hidden || callState.session) return;
-        const result = await ChatAPI.getPendingCalls();
-        if (!result?.ok) return;
-        const pending = getList(result);
-        if (!pending.length) return;
-
-        presentIncomingCall(pending[0]);
+        try {
+          await pollPendingCallsOnce();
+        } catch (error) {
+          console.warn('Error de llamadas pendientes:', error);
+        }
       }, CALL_POLL_INTERVAL_MS);
+    }
+
+    async function pollPendingCallsOnce() {
+      if (document.hidden || callState.session || callInboxPollInFlight) {
+        return false;
+      }
+
+      callInboxPollInFlight = true;
+      try {
+        const result = await ChatAPI.getPendingCalls();
+        if (!result?.ok) return false;
+
+        const pending = getList(result);
+        if (!pending.length) return false;
+
+        return presentIncomingCall(pending[0]);
+      } finally {
+        callInboxPollInFlight = false;
+      }
     }
 
     function handleCallRouteChange() {
@@ -1964,10 +1981,12 @@
       callState.videoSender = null;
       resetCallNegotiationState();
       releaseCallRuntime();
-      lastRoutedIncomingCallId = 0;
 
       if (ownsCallLifecycle) {
         startIncomingCallPolling();
+        window.setTimeout(() => {
+          pollPendingCallsOnce().catch((error) => console.warn('Error de recovery de llamada:', error));
+        }, 150);
       } else {
         stopCallTimers();
         window.removeEventListener('hashchange', handleCallRouteChange);
@@ -2683,6 +2702,7 @@
         isActive: () => Boolean(callState.session),
         startOutgoingCall: (targetUser, mode) => startOutgoingCallForUser(targetUser, mode),
         consumeIncomingCall: (incoming) => presentIncomingCall(incoming),
+        pollPendingCallsOnce: () => pollPendingCallsOnce(),
       };
     }
     window.addEventListener('friendship:changed', handleFriendshipChanged);
@@ -7543,31 +7563,7 @@
 
       globalIncomingCallPollInFlight = true;
       try {
-        const result = await ChatAPI.getPendingCalls();
-        if (!result?.ok) {
-          return;
-        }
-
-        const pending = getList(result);
-        const incoming = pending[0];
-        const incomingId = Number(incoming?.id || 0);
-        const callerId = Number(incoming?.caller_id || 0);
-
-        if (!incomingId || !callerId) {
-          if (!pending.length) {
-            lastRoutedIncomingCallId = 0;
-          }
-          return;
-        }
-
-        if (incomingId === lastRoutedIncomingCallId) {
-          return;
-        }
-
-        const consumed = window.__uptCallManager?.consumeIncomingCall?.(incoming);
-        if (consumed) {
-          lastRoutedIncomingCallId = incomingId;
-        }
+        await window.__uptCallManager?.pollPendingCallsOnce?.();
       } finally {
         globalIncomingCallPollInFlight = false;
       }
@@ -7586,6 +7582,7 @@
 
   if (window.setupLayoutData) window.setupLayoutData(appState.user);
   bootstrapGlobalCallManager();
+  startGlobalIncomingCallWatcher();
   AppRouter.render();
 })().catch((error) => {
   console.error('App bootstrap error:', error);
