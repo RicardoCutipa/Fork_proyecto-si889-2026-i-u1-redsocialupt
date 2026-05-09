@@ -1847,21 +1847,21 @@
         const otherUser = conversation.other_user || {};
         const isActive = Number(otherUser.id) === Number(activeChat);
         return `
-          <button type="button" class="w-full flex items-start gap-3 p-3 mx-2 my-1 ${isActive ? 'bg-slate-100 ring-1 ring-slate-200' : 'hover:bg-slate-50'} rounded-xl cursor-pointer transition-colors text-left" data-open-chat="${otherUser.id}" data-conversation-user-id="${otherUser.id}">
+          <button type="button" class="w-full flex items-start gap-3 p-3 mx-2 my-1 ${isActive ? 'bg-slate-100 ring-1 ring-slate-200' : 'hover:bg-slate-50'} rounded-xl cursor-pointer transition-colors text-left" data-open-chat="${otherUser.id}">
             ${renderAvatar(otherUser, { sizeClass: 'w-12 h-12', textClass: 'text-white font-bold', showOnline: true })}
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-3 mb-1">
                 <div class="min-w-0">
                   <h3 class="font-bold text-sm text-slate-900 truncate">${escapeHtml(displayName(otherUser))}</h3>
-                  <p class="text-xs text-slate-500 truncate" data-conversation-meta>${escapeHtml(careerLabel(otherUser) || otherUser.faculty || 'Amigo UPT')}</p>
+                  <p class="text-xs text-slate-500 truncate">${escapeHtml(careerLabel(otherUser) || otherUser.faculty || 'Amigo UPT')}</p>
                 </div>
                 ${conversation.unread_count > 0 ? `
-                  <span class="min-w-[22px] h-6 px-2 inline-flex items-center justify-center rounded-full bg-[#1B2A6B] text-white text-[11px] font-bold" data-conversation-unread>
+                  <span class="min-w-[22px] h-6 px-2 inline-flex items-center justify-center rounded-full bg-[#1B2A6B] text-white text-[11px] font-bold">
                     ${conversation.unread_count}
                   </span>
                 ` : ''}
               </div>
-              <p class="text-sm text-slate-500 truncate" data-conversation-preview>${escapeHtml(getMessagePreview(conversation.last_message))}</p>
+              <p class="text-sm text-slate-500 truncate">${escapeHtml(getMessagePreview(conversation.last_message))}</p>
             </div>
           </button>
         `;
@@ -2062,38 +2062,27 @@
       const liveUser = publicUsersState.map.get(activeChatId);
       const nextUser = resolveProfileData(liveUser || activeUser);
 
-      conversations = conversations.map((entry) => {
-        if (Number(entry?.other_user?.id) !== activeChatId) {
-          return entry;
-        }
+      conversations = conversations
+        .map((entry) => {
+          if (Number(entry?.other_user?.id) !== activeChatId) {
+            return entry;
+          }
 
-        return {
-          ...entry,
-          other_user: nextUser,
-          last_message: lastMessage,
-          unread_count: 0,
-        };
-      });
+          return {
+            ...entry,
+            other_user: nextUser,
+            last_message: lastMessage,
+            unread_count: 0,
+          };
+        })
+        .sort((left, right) => {
+          const leftDate = new Date(left?.last_message?.created_at || 0).getTime();
+          const rightDate = new Date(right?.last_message?.created_at || 0).getTime();
+          return rightDate - leftDate;
+        });
 
       activeUser = nextUser;
-      const conversationButton = inboxList.querySelector(`[data-conversation-user-id="${activeChatId}"]`);
-      if (conversationButton) {
-        const metaLabel = conversationButton.querySelector('[data-conversation-meta]');
-        const previewLabel = conversationButton.querySelector('[data-conversation-preview]');
-        const unreadBadge = conversationButton.querySelector('[data-conversation-unread]');
-        if (metaLabel) {
-          metaLabel.textContent = careerLabel(nextUser) || nextUser.faculty || 'Amigo UPT';
-        }
-        if (previewLabel) {
-          previewLabel.textContent = getMessagePreview(lastMessage);
-        }
-        if (unreadBadge) {
-          unreadBadge.textContent = '0';
-          unreadBadge.classList.add('hidden');
-        }
-      } else {
-        renderInbox();
-      }
+      renderInbox();
       refreshActiveChatPresenceLabel();
     }
 
@@ -2379,6 +2368,7 @@
       }
 
     async function handlePresenceUpdated() {
+      renderInbox();
       refreshActiveChatPresenceLabel();
     }
 
