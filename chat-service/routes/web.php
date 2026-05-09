@@ -15,6 +15,16 @@ $router->group(['prefix' => 'api/chat', 'middleware' => 'jwt'], function () use 
     $router->get('/messages/{userId}', 'MessageController@conversation');
     $router->get('/inbox', 'MessageController@inbox');
 
+    $router->post('/calls', 'CallController@start');
+    $router->get('/calls/pending', 'CallController@pending');
+    $router->get('/calls/{id}', 'CallController@show');
+    $router->put('/calls/{id}/accept', 'CallController@accept');
+    $router->put('/calls/{id}/reject', 'CallController@reject');
+    $router->put('/calls/{id}/end', 'CallController@end');
+    $router->put('/calls/{id}/mode', 'CallController@updateMode');
+    $router->post('/calls/{id}/signal', 'CallController@signal');
+    $router->get('/calls/{id}/signals', 'CallController@signals');
+
     $router->post('/messages/{id}/report', 'MessageReportController@report');
     $router->get('/admin/reports', 'MessageReportController@list');
     $router->get('/admin/reports/{id}', 'MessageReportController@show');
