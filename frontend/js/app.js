@@ -916,6 +916,7 @@
       isMuted: false,
       minimized: false,
       outgoingOfferSent: false,
+      isFinalizing: false,
       audioContext: null,
       audioAnalyser: null,
       audioMeterData: null,
@@ -1019,6 +1020,7 @@
         </div>
         <div id="call-video-stage" class="px-5 pt-4">
           <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[240px] md:min-h-[280px] flex items-center justify-center">
+            <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
             <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline></video>
             <div id="call-remote-placeholder" class="absolute inset-0 bg-[linear-gradient(160deg,#21264a_0%,#2f3d8b_60%,#1b2248_100%)] flex flex-col items-center justify-center gap-4">
               <div class="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-black/20 flex items-center justify-center">
@@ -1201,6 +1203,7 @@
       stopRingTone();
 
       const root = ensureCallWindow();
+      root.querySelector('#call-remote-audio').srcObject = null;
       root.querySelector('#call-remote-video').srcObject = null;
       root.querySelector('#call-local-video').srcObject = null;
     }
@@ -1250,15 +1253,32 @@
       }
 
       const peer = new RTCPeerConnection({ iceServers: CALL_ICE_SERVERS });
-      callState.remoteStream = new MediaStream();
-
       const root = ensureCallWindow();
-      root.querySelector('#call-remote-video').srcObject = callState.remoteStream;
 
       peer.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-          callState.remoteStream.addTrack(track);
-        });
+        const incomingStream = event.streams?.[0] || null;
+        if (incomingStream) {
+          callState.remoteStream = incomingStream;
+        } else {
+          if (!callState.remoteStream) {
+            callState.remoteStream = new MediaStream();
+          }
+          const alreadyExists = callState.remoteStream.getTracks().some((item) => item.id === event.track.id);
+          if (!alreadyExists) {
+            callState.remoteStream.addTrack(event.track);
+          }
+        }
+
+        root.querySelector('#call-remote-audio').srcObject = callState.remoteStream;
+        root.querySelector('#call-remote-video').srcObject = callState.remoteStream;
+
+        event.track.onunmute = () => {
+          root.querySelector('#call-remote-audio').play().catch(() => {});
+          root.querySelector('#call-remote-video').play().catch(() => {});
+          updateCallWindow();
+        };
+        event.track.onmute = () => updateCallWindow();
+        event.track.onended = () => updateCallWindow();
         updateCallWindow();
       };
 
@@ -1301,7 +1321,7 @@
         await peer.setLocalDescription(answer);
         await ChatAPI.sendCallSignal(callState.session.id, 'answer', answer.toJSON());
       } else if (signal.signal_type === 'answer' && payload) {
-        if (!peer.currentRemoteDescription) {
+        if (peer.signalingState !== 'stable' || !peer.currentRemoteDescription || peer.currentRemoteDescription?.sdp !== payload.sdp) {
           await peer.setRemoteDescription(new RTCSessionDescription(payload));
         }
       } else if (signal.signal_type === 'ice-candidate' && payload) {
@@ -1464,13 +1484,17 @@
     }
 
     async function endActiveCall() {
-      if (!callState.session) return;
+      if (!callState.session || callState.isFinalizing) return;
+      callState.isFinalizing = true;
       const durationSeconds = callState.startedAt ? Math.max(0, Math.floor((Date.now() - callState.startedAt) / 1000)) : 0;
       await ChatAPI.endCall(callState.session.id, durationSeconds);
       await finalizeCall('Llamada finalizada');
     }
 
     async function finalizeCall(toastMessage = '') {
+      if (!callState.session && !callState.isFinalizing) {
+        return;
+      }
       cleanupPeerConnection();
       stopCallTimers();
 
@@ -1489,6 +1513,7 @@
       callState.drag = null;
       callState.minimized = false;
       callState.outgoingOfferSent = false;
+      callState.isFinalizing = false;
 
       startIncomingCallPolling();
 
@@ -2098,7 +2123,7 @@
       }
 
     async function handlePresenceUpdated() {
-      await loadInbox(Boolean(activeChat || activeUser));
+      await loadInbox(false);
     }
 
     function handleMessagesVisibilityChange() {
