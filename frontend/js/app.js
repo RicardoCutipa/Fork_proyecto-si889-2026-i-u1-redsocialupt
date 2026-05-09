@@ -925,10 +925,12 @@
       drag: null,
       localVideoEnabled: false,
       isMuted: false,
+      remoteVolume: 1,
       minimized: false,
       outgoingOfferSent: false,
       isFinalizing: false,
       awaitingAnswer: false,
+      cameraBusy: false,
       audioContext: null,
       audioAnalyser: null,
       audioMeterData: null,
@@ -1033,7 +1035,7 @@
         <div id="call-video-stage" class="px-5 pt-4">
           <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[240px] md:min-h-[280px] flex items-center justify-center">
             <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
-            <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline></video>
+            <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline muted></video>
             <div id="call-remote-placeholder" class="absolute inset-0 bg-[linear-gradient(160deg,#21264a_0%,#2f3d8b_60%,#1b2248_100%)] flex flex-col items-center justify-center gap-4">
               <div class="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-black/20 flex items-center justify-center">
                 <div id="call-remote-avatar" class="w-full h-full flex items-center justify-center bg-emerald-900/70 text-emerald-300 text-5xl">
@@ -1061,6 +1063,10 @@
                 <span data-audio-meter-bar class="w-1.5 h-4 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
               </div>
             </div>
+            <div class="flex items-center gap-2 rounded-full bg-[#2c2c2c] px-3 h-12">
+              <span class="material-symbols-outlined text-[18px] text-white/70">volume_down</span>
+              <input id="call-remote-volume" type="range" min="0" max="1" step="0.05" value="1" class="w-20 accent-emerald-400" aria-label="Volumen de llamada"/>
+            </div>
           </div>
           <div class="flex items-center gap-2">
             <button type="button" id="call-accept-btn" class="hidden px-4 h-12 rounded-full bg-emerald-500 hover:bg-emerald-600 transition-colors font-semibold">Aceptar</button>
@@ -1072,6 +1078,28 @@
         </div>
       `;
       document.body.appendChild(root);
+      root.querySelectorAll('button, input[type="range"]').forEach((element) => {
+        element.style.touchAction = 'manipulation';
+      });
+
+      const bindTouchClick = (element, handler) => {
+        if (!element) return;
+        let lastTouchTime = 0;
+
+        element.addEventListener('touchend', (event) => {
+          lastTouchTime = Date.now();
+          event.preventDefault();
+          handler(event);
+        }, { passive: false });
+
+        element.addEventListener('click', (event) => {
+          if (Date.now() - lastTouchTime < 500) {
+            event.preventDefault();
+            return;
+          }
+          handler(event);
+        });
+      };
 
       const handle = root.querySelector('[data-call-drag-handle="true"]');
       handle.addEventListener('mousedown', (event) => {
@@ -1103,21 +1131,51 @@
         root.querySelector('#call-video-stage').classList.toggle('hidden', callState.minimized);
       });
 
-      root.querySelector('#call-toggle-mic-btn').addEventListener('click', toggleMicrophone);
-      root.querySelector('#call-toggle-video-btn').addEventListener('click', toggleCamera);
-      root.querySelector('#call-hangup-btn').addEventListener('click', endActiveCall);
-      root.querySelector('#call-accept-btn').addEventListener('click', acceptIncomingCall);
-      root.querySelector('#call-reject-btn').addEventListener('click', rejectIncomingCall);
+      bindTouchClick(root.querySelector('#call-toggle-mic-btn'), toggleMicrophone);
+      bindTouchClick(root.querySelector('#call-toggle-video-btn'), toggleCamera);
+      bindTouchClick(root.querySelector('#call-hangup-btn'), endActiveCall);
+      bindTouchClick(root.querySelector('#call-accept-btn'), acceptIncomingCall);
+      bindTouchClick(root.querySelector('#call-reject-btn'), rejectIncomingCall);
+      root.querySelector('#call-remote-volume').addEventListener('input', (event) => {
+        const nextVolume = Number(event.target.value);
+        callState.remoteVolume = Number.isFinite(nextVolume) ? Math.min(1, Math.max(0, nextVolume)) : 1;
+        syncRemoteMediaVolume();
+      });
       window.addEventListener('resize', () => clampCallWindow(root));
 
       return root;
+    }
+
+    function syncRemoteMediaVolume() {
+      const root = ensureCallWindow();
+      const remoteAudio = root.querySelector('#call-remote-audio');
+      const remoteVideo = root.querySelector('#call-remote-video');
+      const volumeInput = root.querySelector('#call-remote-volume');
+
+      if (volumeInput) {
+        volumeInput.value = String(callState.remoteVolume);
+      }
+      if (remoteAudio) {
+        remoteAudio.volume = callState.remoteVolume;
+      }
+      if (remoteVideo) {
+        remoteVideo.muted = true;
+        remoteVideo.volume = 0;
+      }
+    }
+
+    function hasLiveRemoteVideo() {
+      return Boolean(
+        callState.remoteStream
+        && callState.remoteStream.getVideoTracks().some((track) => track.readyState === 'live')
+      );
     }
 
     function updateCallWindow() {
       const root = ensureCallWindow();
       const session = callState.session;
       const otherUser = callState.otherUser || {};
-      const hasRemoteVideo = Boolean(callState.remoteStream && callState.remoteStream.getVideoTracks().length);
+      const hasRemoteVideo = hasLiveRemoteVideo();
       const showVideoStage = callState.initialMode === 'video' || callState.localVideoEnabled || hasRemoteVideo;
 
       root.classList.toggle('hidden', !session);
@@ -1156,6 +1214,7 @@
       } else {
         stopRingTone();
       }
+      syncRemoteMediaVolume();
       clampCallWindow(root);
     }
 
@@ -1166,7 +1225,7 @@
           : (callState.initialMode === 'video' ? 'Videollamada entrante' : 'Llamada entrante');
       }
       if (status === 'accepted') {
-        return callState.localVideoEnabled || Boolean(callState.remoteStream && callState.remoteStream.getVideoTracks().length)
+        return callState.localVideoEnabled || hasLiveRemoteVideo()
           ? 'En videollamada'
           : 'En llamada';
       }
@@ -1205,6 +1264,7 @@
       callState.localStream = null;
       callState.localVideoEnabled = false;
       callState.isMuted = false;
+      callState.cameraBusy = false;
       if (callState.audioContext) {
         callState.audioContext.close().catch(() => {});
       }
@@ -1218,6 +1278,7 @@
       root.querySelector('#call-remote-audio').srcObject = null;
       root.querySelector('#call-remote-video').srcObject = null;
       root.querySelector('#call-local-video').srcObject = null;
+      syncRemoteMediaVolume();
     }
 
     async function ensureLocalStream(mode = 'audio') {
@@ -1266,23 +1327,29 @@
 
       const peer = new RTCPeerConnection({ iceServers: CALL_ICE_SERVERS });
       const root = ensureCallWindow();
+      if (!callState.remoteStream) {
+        callState.remoteStream = new MediaStream();
+      }
 
       peer.ontrack = (event) => {
         const incomingStream = event.streams?.[0] || null;
         if (incomingStream) {
-          callState.remoteStream = incomingStream;
-        } else {
-          if (!callState.remoteStream) {
-            callState.remoteStream = new MediaStream();
-          }
-          const alreadyExists = callState.remoteStream.getTracks().some((item) => item.id === event.track.id);
-          if (!alreadyExists) {
-            callState.remoteStream.addTrack(event.track);
-          }
+          incomingStream.getTracks().forEach((track) => {
+            const alreadyExists = callState.remoteStream.getTracks().some((item) => item.id === track.id);
+            if (!alreadyExists) {
+              callState.remoteStream.addTrack(track);
+            }
+          });
+        }
+
+        const trackAlreadyExists = callState.remoteStream.getTracks().some((item) => item.id === event.track.id);
+        if (!trackAlreadyExists) {
+          callState.remoteStream.addTrack(event.track);
         }
 
         root.querySelector('#call-remote-audio').srcObject = callState.remoteStream;
         root.querySelector('#call-remote-video').srcObject = callState.remoteStream;
+        syncRemoteMediaVolume();
 
         event.track.onunmute = () => {
           root.querySelector('#call-remote-audio').play().catch(() => {});
@@ -1290,7 +1357,12 @@
           updateCallWindow();
         };
         event.track.onmute = () => updateCallWindow();
-        event.track.onended = () => updateCallWindow();
+        event.track.onended = () => {
+          try {
+            callState.remoteStream.removeTrack(event.track);
+          } catch (error) {}
+          updateCallWindow();
+        };
         updateCallWindow();
       };
 
@@ -1520,9 +1592,37 @@
     async function endActiveCall() {
       if (!callState.session || callState.isFinalizing) return;
       callState.isFinalizing = true;
+      const sessionId = callState.session.id;
       const durationSeconds = callState.startedAt ? Math.max(0, Math.floor((Date.now() - callState.startedAt) / 1000)) : 0;
-      await ChatAPI.endCall(callState.session.id, durationSeconds);
+      ChatAPI.endCall(sessionId, durationSeconds).catch((error) => {
+        console.warn('No se pudo cerrar la llamada en segundo plano:', error);
+      });
       await finalizeCall('Llamada finalizada');
+    }
+
+    function endCallOnPageLeave() {
+      if (!callState.session || callState.isFinalizing) {
+        return;
+      }
+
+      const token = getToken();
+      if (!token) {
+        return;
+      }
+
+      callState.isFinalizing = true;
+      const sessionId = callState.session.id;
+      const durationSeconds = callState.startedAt ? Math.max(0, Math.floor((Date.now() - callState.startedAt) / 1000)) : 0;
+
+      fetch(`${API.chat}/calls/${sessionId}/end`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ duration_seconds: durationSeconds }),
+        keepalive: true,
+      }).catch(() => {});
     }
 
     async function finalizeCall(toastMessage = '') {
@@ -1572,50 +1672,55 @@
     }
 
     async function toggleCamera() {
-      if (!callState.session || callState.session.status !== 'accepted') return;
+      if (!callState.session || callState.session.status !== 'accepted' || callState.cameraBusy) return;
+      callState.cameraBusy = true;
       const root = ensureCallWindow();
       const localVideo = root.querySelector('#call-local-video');
 
-      if (!callState.localVideoEnabled) {
-        const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        const videoTrack = media.getVideoTracks()[0];
-        callState.localVideoEnabled = true;
+      try {
+        if (!callState.localVideoEnabled) {
+          const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          const videoTrack = media.getVideoTracks()[0];
+          callState.localVideoEnabled = true;
 
-        if (!callState.localStream) {
-          await ensureLocalStream('audio');
-        }
-
-        callState.localStream.addTrack(videoTrack);
-        localVideo.srcObject = callState.localStream;
-
-        if (callState.peerConnection) {
-          const sender = callState.peerConnection.getSenders().find((item) => item.track && item.track.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(videoTrack);
-          } else {
-            callState.peerConnection.addTrack(videoTrack, callState.localStream);
+          if (!callState.localStream) {
+            await ensureLocalStream('audio');
           }
-        }
 
-        await renegotiateCall();
-      } else {
-        callState.localVideoEnabled = false;
-        if (callState.localStream) {
-          callState.localStream.getVideoTracks().forEach((track) => {
-            const sender = callState.peerConnection?.getSenders().find((item) => item.track === track);
-            if (sender?.replaceTrack) {
-              sender.replaceTrack(null).catch(() => {});
+          callState.localStream.addTrack(videoTrack);
+          localVideo.srcObject = callState.localStream;
+
+          if (callState.peerConnection) {
+            const sender = callState.peerConnection.getSenders().find((item) => item.track && item.track.kind === 'video');
+            if (sender) {
+              await sender.replaceTrack(videoTrack);
+            } else {
+              callState.peerConnection.addTrack(videoTrack, callState.localStream);
             }
-            track.stop();
-            callState.localStream.removeTrack(track);
-          });
+          }
+
+          await renegotiateCall();
+        } else {
+          callState.localVideoEnabled = false;
+          if (callState.localStream) {
+            callState.localStream.getVideoTracks().forEach((track) => {
+              const sender = callState.peerConnection?.getSenders().find((item) => item.track === track);
+              if (sender?.replaceTrack) {
+                sender.replaceTrack(null).catch(() => {});
+              }
+              track.stop();
+              callState.localStream.removeTrack(track);
+            });
+          }
+
+          localVideo.srcObject = callState.localStream;
+          await renegotiateCall();
         }
 
-        localVideo.srcObject = callState.localStream;
-        await renegotiateCall();
+        updateCallWindow();
+      } finally {
+        callState.cameraBusy = false;
       }
-
-      updateCallWindow();
     }
 
     function updateUrlForChat(userId) {
@@ -2225,6 +2330,10 @@
       });
     }
 
+    function handleCallPageLeave() {
+      endCallOnPageLeave();
+    }
+
     inboxList.addEventListener('click', (event) => {
       const button = event.target.closest('[data-open-chat]');
       if (!button) return;
@@ -2235,6 +2344,8 @@
       window.addEventListener('blocks:changed', handleBlocksChanged);
       window.addEventListener('presence:updated', handlePresenceUpdated);
       document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
+      window.addEventListener('pagehide', handleCallPageLeave);
+      window.addEventListener('beforeunload', handleCallPageLeave);
       ensureCallWindow();
       startIncomingCallPolling();
       loadInbox(Boolean(activeChat));
@@ -2248,6 +2359,8 @@
         window.removeEventListener('blocks:changed', handleBlocksChanged);
         window.removeEventListener('presence:updated', handlePresenceUpdated);
         document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
+        window.removeEventListener('pagehide', handleCallPageLeave);
+        window.removeEventListener('beforeunload', handleCallPageLeave);
       };
   }
 
