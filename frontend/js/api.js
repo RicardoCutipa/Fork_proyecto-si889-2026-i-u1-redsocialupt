@@ -398,6 +398,27 @@ const ChatAPI = {
     method: 'PUT',
     body: JSON.stringify(payload),
   }),
+  startCall: ({ receiverId, mode = 'audio' }) => apiFetch(`${API.chat}/calls`, {
+    method: 'POST',
+    body: JSON.stringify({ receiver_id: receiverId, mode }),
+  }),
+  getPendingCalls: () => apiFetch(`${API.chat}/calls/pending`),
+  getCall: (callId) => apiFetch(`${API.chat}/calls/${callId}`),
+  acceptCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/accept`, { method: 'PUT' }),
+  rejectCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/reject`, { method: 'PUT' }),
+  endCall: (callId, durationSeconds = 0) => apiFetch(`${API.chat}/calls/${callId}/end`, {
+    method: 'PUT',
+    body: JSON.stringify({ duration_seconds: durationSeconds }),
+  }),
+  updateCallMode: (callId, mode) => apiFetch(`${API.chat}/calls/${callId}/mode`, {
+    method: 'PUT',
+    body: JSON.stringify({ mode }),
+  }),
+  sendCallSignal: (callId, signalType, payload = null) => apiFetch(`${API.chat}/calls/${callId}/signal`, {
+    method: 'POST',
+    body: JSON.stringify({ signal_type: signalType, payload }),
+  }),
+  getCallSignals: (callId, after = 0) => apiFetch(`${API.chat}/calls/${callId}/signals?after=${after}`),
 };
 
 /* ── Auth actions ─────────────────────────────────────────────── */
