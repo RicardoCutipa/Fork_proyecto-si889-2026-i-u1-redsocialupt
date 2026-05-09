@@ -884,6 +884,15 @@
     const CALL_ICE_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:uptconnect.duckdns.org:3478' },
+      {
+        urls: [
+          'turn:uptconnect.duckdns.org:3478?transport=udp',
+          'turn:uptconnect.duckdns.org:3478?transport=tcp',
+        ],
+        username: 'uptturn',
+        credential: 'UptTurn2026!media',
+      },
     ];
 
     let friends = [];
