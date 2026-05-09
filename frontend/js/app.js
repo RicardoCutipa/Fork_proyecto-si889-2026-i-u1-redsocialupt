@@ -909,6 +909,7 @@
     let callMeterFrame = null;
     let callSessionPollInFlight = false;
     let callSignalPollInFlight = false;
+    const callRuntimeId = `call-runtime-${Math.random().toString(36).slice(2)}`;
 
     const callState = {
       session: null,
@@ -944,6 +945,31 @@
       audioMeterData: null,
       ringAudio: null,
     };
+
+    function getGlobalCallRuntime() {
+      return window.__uptGlobalCallRuntime || null;
+    }
+
+    function hasForeignActiveCallRuntime() {
+      const runtime = getGlobalCallRuntime();
+      return Boolean(runtime && runtime.id !== callRuntimeId && runtime.isActive?.());
+    }
+
+    function claimCallRuntime() {
+      const runtime = getGlobalCallRuntime();
+      if (!runtime || runtime.id === callRuntimeId || !runtime.isActive?.()) {
+        window.__uptGlobalCallRuntime = {
+          id: callRuntimeId,
+          isActive: () => Boolean(callState.session),
+        };
+      }
+    }
+
+    function releaseCallRuntime() {
+      if (window.__uptGlobalCallRuntime?.id === callRuntimeId) {
+        delete window.__uptGlobalCallRuntime;
+      }
+    }
 
     function clampCallWindow(root = ensureCallWindow()) {
       if (!root || root.classList.contains('hidden')) return;
@@ -1086,6 +1112,10 @@
           </div>
         `;
         document.body.appendChild(root);
+      }
+
+      if (hasForeignActiveCallRuntime()) {
+        return root;
       }
 
       if (typeof root.__callCleanup === 'function') {
@@ -1285,10 +1315,13 @@
 
       root.classList.toggle('hidden', !session);
       if (!session) {
+        releaseCallRuntime();
         stopCallTimers();
         stopRingTone();
         return;
       }
+
+      claimCallRuntime();
 
       root.classList.toggle('w-[390px]', showVideoStage);
       root.querySelector('#call-window-name').textContent = displayName(otherUser);
@@ -1391,6 +1424,9 @@
       syncMediaElementStream(root.querySelector('#call-remote-video'), null);
       syncMediaElementStream(root.querySelector('#call-local-video'), null);
       syncRemoteMediaVolume();
+      if (!callState.session) {
+        releaseCallRuntime();
+      }
     }
 
     async function ensureLocalStream(mode = 'audio') {
@@ -1862,6 +1898,7 @@
       callState.isFinalizing = false;
       callState.videoSender = null;
       resetCallNegotiationState();
+      releaseCallRuntime();
 
       startIncomingCallPolling();
 
