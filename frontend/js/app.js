@@ -926,6 +926,7 @@
       localVideoEnabled: false,
       isMuted: false,
       remoteVolume: 1,
+      adjustingVolume: false,
       minimized: false,
       outgoingOfferSent: false,
       isFinalizing: false,
@@ -933,7 +934,10 @@
       cameraBusy: false,
       makingOffer: false,
       ignoreOffer: false,
+      pendingIceCandidates: [],
+      audioSender: null,
       videoSender: null,
+      videoTransceiver: null,
       audioContext: null,
       audioAnalyser: null,
       audioMeterData: null,
@@ -964,6 +968,7 @@
       if (!callState.ringAudio) {
         callState.ringAudio = new Audio('/sonidos/phone-ringing.mp3');
         callState.ringAudio.loop = true;
+        callState.ringAudio.preload = 'auto';
       }
 
       try {
@@ -1015,102 +1020,97 @@
 
     function ensureCallWindow() {
       let root = document.getElementById('floating-call-window');
-      if (root) return root;
-
-      root = document.createElement('div');
-      root.id = 'floating-call-window';
-      root.className = 'hidden fixed z-[70] flex max-h-[calc(100vh-1rem)] w-[360px] max-w-[calc(100vw-1rem)] flex-col rounded-[28px] bg-[#1f1f1f] text-white shadow-2xl border border-white/10 overflow-hidden';
-      root.style.top = '96px';
-      root.style.right = '24px';
-      root.innerHTML = `
-        <div class="cursor-move px-5 pt-4 pb-3 bg-[#232323] flex items-center gap-3 select-none" data-call-drag-handle="true">
-          <div class="w-12 h-12 rounded-full bg-emerald-900/60 flex items-center justify-center text-emerald-400 shrink-0" id="call-avatar-badge">
-            <span class="material-symbols-outlined text-[28px]">person</span>
+      if (!root) {
+        root = document.createElement('div');
+        root.id = 'floating-call-window';
+        root.className = 'hidden fixed z-[70] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] sm:w-[360px] sm:max-w-[calc(100vw-1rem)] flex-col rounded-[28px] bg-[#1f1f1f] text-white shadow-2xl border border-white/10 overflow-hidden';
+        root.style.top = '96px';
+        root.style.right = '24px';
+        root.innerHTML = `
+          <div class="cursor-move px-5 pt-4 pb-3 bg-[#232323] flex items-center gap-3 select-none" data-call-drag-handle="true">
+            <div class="w-12 h-12 rounded-full bg-emerald-900/60 flex items-center justify-center text-emerald-400 shrink-0" id="call-avatar-badge">
+              <span class="material-symbols-outlined text-[28px]">person</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 id="call-window-name" class="font-bold text-lg truncate">Llamada</h3>
+              <p id="call-window-status" class="text-white/70 text-sm">Esperando...</p>
+            </div>
+            <button type="button" id="call-minimize-btn" class="w-10 h-10 rounded-full bg-white/8 hover:bg-white/12 transition-colors flex items-center justify-center">
+              <span class="material-symbols-outlined text-[20px]">remove</span>
+            </button>
           </div>
-          <div class="min-w-0 flex-1">
-            <h3 id="call-window-name" class="font-bold text-lg truncate">Llamada</h3>
-            <p id="call-window-status" class="text-white/70 text-sm">Esperando...</p>
+          <div id="call-video-stage" class="px-4 sm:px-5 pt-3 sm:pt-4 shrink min-h-0">
+            <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[170px] sm:min-h-[230px] md:min-h-[280px] flex items-center justify-center">
+              <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
+              <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline muted></video>
+              <div id="call-remote-placeholder" class="absolute inset-0 bg-[linear-gradient(160deg,#21264a_0%,#2f3d8b_60%,#1b2248_100%)] flex flex-col items-center justify-center gap-4">
+                <div class="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-black/20 flex items-center justify-center">
+                  <div id="call-remote-avatar" class="w-full h-full flex items-center justify-center bg-emerald-900/70 text-emerald-300 text-5xl">
+                    <span class="material-symbols-outlined text-[44px]">person</span>
+                  </div>
+                </div>
+                <span id="call-video-placeholder-label" class="text-white/70 text-sm">Camara apagada</span>
+              </div>
+              <video id="call-local-video" class="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 w-24 h-16 sm:w-28 sm:h-20 rounded-2xl object-cover bg-black/40 border border-white/20 hidden" autoplay playsinline muted></video>
+            </div>
           </div>
-          <button type="button" id="call-minimize-btn" class="w-10 h-10 rounded-full bg-white/8 hover:bg-white/12 transition-colors flex items-center justify-center">
-            <span class="material-symbols-outlined text-[20px]">remove</span>
-          </button>
-        </div>
-        <div id="call-video-stage" class="px-4 sm:px-5 pt-3 sm:pt-4 shrink min-h-0">
-          <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[170px] sm:min-h-[230px] md:min-h-[280px] flex items-center justify-center">
-            <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
-            <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline muted></video>
-            <div id="call-remote-placeholder" class="absolute inset-0 bg-[linear-gradient(160deg,#21264a_0%,#2f3d8b_60%,#1b2248_100%)] flex flex-col items-center justify-center gap-4">
-              <div class="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-black/20 flex items-center justify-center">
-                <div id="call-remote-avatar" class="w-full h-full flex items-center justify-center bg-emerald-900/70 text-emerald-300 text-5xl">
-                  <span class="material-symbols-outlined text-[44px]">person</span>
+          <div id="call-actions-row" class="px-3 sm:px-4 py-3 sm:py-4 mt-auto flex flex-col gap-2 sm:gap-3">
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <button type="button" id="call-toggle-video-btn" class="w-12 h-12 shrink-0 rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors flex items-center justify-center">
+                <span class="material-symbols-outlined text-[22px]">videocam_off</span>
+              </button>
+              <div class="flex items-center gap-2 rounded-full bg-[#2c2c2c] px-3 h-12 shrink-0">
+                <button type="button" id="call-toggle-mic-btn" class="w-8 h-8 shrink-0 rounded-full hover:bg-[#363636] transition-colors flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[22px]">mic</span>
+                </button>
+                <div class="flex items-end gap-1 h-6" aria-label="Medidor de sonido">
+                  <span data-audio-meter-bar class="w-1.5 h-3 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
+                  <span data-audio-meter-bar class="w-1.5 h-4 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
+                  <span data-audio-meter-bar class="w-1.5 h-5 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
+                  <span data-audio-meter-bar class="w-1.5 h-4 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
                 </div>
               </div>
-              <span id="call-video-placeholder-label" class="text-white/70 text-sm">Camara apagada</span>
-            </div>
-            <video id="call-local-video" class="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 w-24 h-16 sm:w-28 sm:h-20 rounded-2xl object-cover bg-black/40 border border-white/20 hidden" autoplay playsinline muted></video>
-          </div>
-        </div>
-        <div id="call-actions-row" class="px-4 py-3 sm:py-4 mt-auto flex flex-col gap-2 sm:gap-3">
-          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button type="button" id="call-toggle-video-btn" class="w-12 h-12 shrink-0 rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors flex items-center justify-center">
-              <span class="material-symbols-outlined text-[22px]">videocam_off</span>
-            </button>
-            <div class="flex items-center gap-2 rounded-full bg-[#2c2c2c] px-3 h-12 shrink-0">
-              <button type="button" id="call-toggle-mic-btn" class="w-8 h-8 shrink-0 rounded-full hover:bg-[#363636] transition-colors flex items-center justify-center">
-                <span class="material-symbols-outlined text-[22px]">mic</span>
-              </button>
-              <div class="flex items-end gap-1 h-6" aria-label="Medidor de sonido">
-                <span data-audio-meter-bar class="w-1.5 h-3 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
-                <span data-audio-meter-bar class="w-1.5 h-4 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
-                <span data-audio-meter-bar class="w-1.5 h-5 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
-                <span data-audio-meter-bar class="w-1.5 h-4 rounded-full bg-emerald-400 origin-bottom transition-transform duration-75 opacity-35"></span>
+              <div class="flex items-center gap-2 rounded-full bg-[#2c2c2c] px-3 h-12 min-w-0 w-full sm:w-[170px]">
+                <span class="material-symbols-outlined text-[18px] text-white/70">volume_down</span>
+                <input id="call-remote-volume" type="range" min="0" max="1" step="0.05" value="1" class="flex-1 min-w-0 accent-emerald-400" aria-label="Volumen de llamada"/>
               </div>
             </div>
-            <div class="flex items-center gap-2 rounded-full bg-[#2c2c2c] px-3 h-12 min-w-0 w-full sm:w-[170px]">
-              <span class="material-symbols-outlined text-[18px] text-white/70">volume_down</span>
-              <input id="call-remote-volume" type="range" min="0" max="1" step="0.05" value="1" class="flex-1 min-w-0 accent-emerald-400" aria-label="Volumen de llamada"/>
+            <div class="grid grid-cols-3 gap-2 w-full shrink-0">
+              <button type="button" id="call-accept-btn" class="hidden px-2 sm:px-4 h-11 sm:h-12 rounded-full bg-emerald-500 hover:bg-emerald-600 transition-colors text-sm font-semibold shrink-0">Aceptar</button>
+              <button type="button" id="call-reject-btn" class="hidden px-2 sm:px-4 h-11 sm:h-12 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm font-semibold shrink-0">Rechazar</button>
+              <button type="button" id="call-hangup-btn" class="col-start-3 w-full h-11 sm:h-12 shrink-0 rounded-full bg-[#ff0b53] hover:bg-[#e00549] transition-colors flex items-center justify-center">
+                <span class="material-symbols-outlined text-[22px]">call_end</span>
+              </button>
             </div>
           </div>
-          <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full shrink-0">
-            <button type="button" id="call-accept-btn" class="hidden px-3 sm:px-4 h-11 sm:h-12 rounded-full bg-emerald-500 hover:bg-emerald-600 transition-colors text-sm font-semibold shrink-0">Aceptar</button>
-            <button type="button" id="call-reject-btn" class="hidden px-3 sm:px-4 h-11 sm:h-12 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm font-semibold shrink-0">Rechazar</button>
-            <button type="button" id="call-hangup-btn" class="w-12 sm:w-14 h-11 sm:h-12 shrink-0 rounded-full bg-[#ff0b53] hover:bg-[#e00549] transition-colors flex items-center justify-center">
-              <span class="material-symbols-outlined text-[22px]">call_end</span>
-            </button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(root);
+        `;
+        document.body.appendChild(root);
+      }
+
+      if (typeof root.__callCleanup === 'function') {
+        root.__callCleanup();
+      }
+
       root.querySelectorAll('button, input[type="range"]').forEach((element) => {
         element.style.touchAction = 'manipulation';
       });
 
-      const bindTouchClick = (element, handler) => {
-        if (!element) return;
-        let lastTouchTime = 0;
-        const invoke = (event) => {
+      const bindControlClick = (element, handler) => {
+        if (!element) return () => {};
+        const listener = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
           Promise.resolve(handler(event)).catch((error) => {
             console.warn('Error en accion de llamada:', error);
           });
         };
-
-        element.addEventListener('touchend', (event) => {
-          lastTouchTime = Date.now();
-          event.preventDefault();
-          invoke(event);
-        }, { passive: false });
-
-        element.addEventListener('click', (event) => {
-          if (Date.now() - lastTouchTime < 500) {
-            event.preventDefault();
-            return;
-          }
-          invoke(event);
-        });
+        element.addEventListener('click', listener);
+        return () => element.removeEventListener('click', listener);
       };
 
+      const cleanups = [];
       const handle = root.querySelector('[data-call-drag-handle="true"]');
-      handle.addEventListener('mousedown', (event) => {
+      const onMouseDown = (event) => {
         if (event.target.closest('button')) return;
         const rect = root.getBoundingClientRect();
         callState.drag = {
@@ -1118,38 +1118,79 @@
           offsetY: event.clientY - rect.top,
         };
         document.body.classList.add('select-none');
-      });
-
-      document.addEventListener('mousemove', (event) => {
+      };
+      const onMouseMove = (event) => {
         if (!callState.drag) return;
         const nextLeft = Math.min(Math.max(8, event.clientX - callState.drag.offsetX), window.innerWidth - root.offsetWidth - 8);
         const nextTop = Math.min(Math.max(8, event.clientY - callState.drag.offsetY), window.innerHeight - root.offsetHeight - 8);
         root.style.left = `${nextLeft}px`;
         root.style.top = `${nextTop}px`;
         root.style.right = 'auto';
-      });
-
-      document.addEventListener('mouseup', () => {
+      };
+      const onMouseUp = () => {
         callState.drag = null;
         document.body.classList.remove('select-none');
-      });
+      };
+      handle.addEventListener('mousedown', onMouseDown);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      cleanups.push(() => handle.removeEventListener('mousedown', onMouseDown));
+      cleanups.push(() => document.removeEventListener('mousemove', onMouseMove));
+      cleanups.push(() => document.removeEventListener('mouseup', onMouseUp));
 
-      root.querySelector('#call-minimize-btn').addEventListener('click', () => {
+      const minimizeButton = root.querySelector('#call-minimize-btn');
+      const onMinimize = () => {
         callState.minimized = !callState.minimized;
         root.querySelector('#call-video-stage').classList.toggle('hidden', callState.minimized);
-      });
+      };
+      minimizeButton.addEventListener('click', onMinimize);
+      cleanups.push(() => minimizeButton.removeEventListener('click', onMinimize));
 
-      bindTouchClick(root.querySelector('#call-toggle-mic-btn'), toggleMicrophone);
-      bindTouchClick(root.querySelector('#call-toggle-video-btn'), toggleCamera);
-      bindTouchClick(root.querySelector('#call-hangup-btn'), endActiveCall);
-      bindTouchClick(root.querySelector('#call-accept-btn'), acceptIncomingCall);
-      bindTouchClick(root.querySelector('#call-reject-btn'), rejectIncomingCall);
-      root.querySelector('#call-remote-volume').addEventListener('input', (event) => {
+      cleanups.push(bindControlClick(root.querySelector('#call-toggle-mic-btn'), toggleMicrophone));
+      cleanups.push(bindControlClick(root.querySelector('#call-toggle-video-btn'), toggleCamera));
+      cleanups.push(bindControlClick(root.querySelector('#call-hangup-btn'), endActiveCall));
+      cleanups.push(bindControlClick(root.querySelector('#call-accept-btn'), acceptIncomingCall));
+      cleanups.push(bindControlClick(root.querySelector('#call-reject-btn'), rejectIncomingCall));
+
+      const volumeInput = root.querySelector('#call-remote-volume');
+      const onVolumePointerDown = () => {
+        callState.adjustingVolume = true;
+      };
+      const onVolumePointerUp = () => {
+        callState.adjustingVolume = false;
+      };
+      const onVolumePointerCancel = () => {
+        callState.adjustingVolume = false;
+      };
+      const onVolumeChange = () => {
+        callState.adjustingVolume = false;
+      };
+      const onVolumeInput = (event) => {
         const nextVolume = Number(event.target.value);
         callState.remoteVolume = Number.isFinite(nextVolume) ? Math.min(1, Math.max(0, nextVolume)) : 1;
         syncRemoteMediaVolume();
-      });
-      window.addEventListener('resize', () => clampCallWindow(root));
+      };
+      volumeInput.addEventListener('pointerdown', onVolumePointerDown);
+      volumeInput.addEventListener('pointerup', onVolumePointerUp);
+      volumeInput.addEventListener('pointercancel', onVolumePointerCancel);
+      volumeInput.addEventListener('change', onVolumeChange);
+      volumeInput.addEventListener('input', onVolumeInput);
+      cleanups.push(() => volumeInput.removeEventListener('pointerdown', onVolumePointerDown));
+      cleanups.push(() => volumeInput.removeEventListener('pointerup', onVolumePointerUp));
+      cleanups.push(() => volumeInput.removeEventListener('pointercancel', onVolumePointerCancel));
+      cleanups.push(() => volumeInput.removeEventListener('change', onVolumeChange));
+      cleanups.push(() => volumeInput.removeEventListener('input', onVolumeInput));
+
+      const onResize = () => clampCallWindow(root);
+      window.addEventListener('resize', onResize);
+      cleanups.push(() => window.removeEventListener('resize', onResize));
+
+      root.__callCleanup = () => {
+        cleanups.forEach((cleanup) => {
+          try { cleanup(); } catch (error) {}
+        });
+        root.__callCleanup = null;
+      };
 
       return root;
     }
@@ -1160,7 +1201,7 @@
       const remoteVideo = root.querySelector('#call-remote-video');
       const volumeInput = root.querySelector('#call-remote-volume');
 
-      if (volumeInput) {
+      if (volumeInput && !callState.adjustingVolume) {
         volumeInput.value = String(callState.remoteVolume);
       }
       if (remoteAudio) {
@@ -1181,6 +1222,43 @@
 
     function isPolitePeer() {
       return Number(callState.session?.receiver_id) === Number(user.id);
+    }
+
+    async function flushPendingIceCandidates() {
+      const peer = callState.peerConnection;
+      if (!peer?.remoteDescription) {
+        return;
+      }
+
+      const pending = callState.pendingIceCandidates.splice(0);
+      for (const candidate of pending) {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.warn('No se pudo agregar ICE candidate en cola:', error);
+        }
+      }
+    }
+
+    function getLocalAudioTrack() {
+      return callState.localStream?.getAudioTracks()?.[0] || null;
+    }
+
+    function getLocalVideoTrack() {
+      return callState.localStream?.getVideoTracks()?.[0] || null;
+    }
+
+    async function tryPlayRemoteMedia() {
+      const root = ensureCallWindow();
+      const remoteAudio = root.querySelector('#call-remote-audio');
+      const remoteVideo = root.querySelector('#call-remote-video');
+
+      if (remoteAudio?.srcObject) {
+        remoteAudio.play().catch(() => {});
+      }
+      if (remoteVideo?.srcObject) {
+        remoteVideo.play().catch(() => {});
+      }
     }
 
     function updateCallWindow() {
@@ -1279,7 +1357,10 @@
       callState.cameraBusy = false;
       callState.makingOffer = false;
       callState.ignoreOffer = false;
+      callState.pendingIceCandidates = [];
+      callState.audioSender = null;
       callState.videoSender = null;
+      callState.videoTransceiver = null;
       if (callState.audioContext) {
         callState.audioContext.close().catch(() => {});
       }
@@ -1298,25 +1379,31 @@
 
     async function ensureLocalStream(mode = 'audio') {
       const needsVideo = mode === 'video';
-      const hasExistingVideo = Boolean(callState.localStream?.getVideoTracks().length);
+      if (!callState.localStream) {
+        callState.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: needsVideo,
+        });
+      } else {
+        if (!getLocalAudioTrack()) {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          audioStream.getAudioTracks().forEach((track) => callState.localStream.addTrack(track));
+        }
 
-      if (callState.localStream && (!needsVideo || hasExistingVideo)) {
-        return callState.localStream;
+        if (needsVideo && !getLocalVideoTrack()) {
+          const videoStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+          videoStream.getVideoTracks().forEach((track) => callState.localStream.addTrack(track));
+        }
       }
 
-      const constraints = {
-        audio: true,
-        video: needsVideo,
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      callState.localStream = stream;
-      callState.localVideoEnabled = needsVideo && stream.getVideoTracks().length > 0;
+      callState.localVideoEnabled = Boolean(getLocalVideoTrack());
 
-      if (!callState.audioContext) {
+      if (!callState.audioContext && getLocalAudioTrack()) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (AudioContextClass) {
           callState.audioContext = new AudioContextClass();
-          const source = callState.audioContext.createMediaStreamSource(stream);
+          const analyserStream = new MediaStream([getLocalAudioTrack()]);
+          const source = callState.audioContext.createMediaStreamSource(analyserStream);
           callState.audioAnalyser = callState.audioContext.createAnalyser();
           callState.audioAnalyser.fftSize = 64;
           callState.audioMeterData = new Uint8Array(callState.audioAnalyser.frequencyBinCount);
@@ -1330,9 +1417,9 @@
 
       const root = ensureCallWindow();
       const localVideo = root.querySelector('#call-local-video');
-      localVideo.srcObject = stream;
+      localVideo.srcObject = callState.localStream;
 
-      return stream;
+      return callState.localStream;
     }
 
     function createPeerConnection() {
@@ -1365,10 +1452,10 @@
         root.querySelector('#call-remote-audio').srcObject = callState.remoteStream;
         root.querySelector('#call-remote-video').srcObject = callState.remoteStream;
         syncRemoteMediaVolume();
+        tryPlayRemoteMedia();
 
         event.track.onunmute = () => {
-          root.querySelector('#call-remote-audio').play().catch(() => {});
-          root.querySelector('#call-remote-video').play().catch(() => {});
+          tryPlayRemoteMedia();
           updateCallWindow();
         };
         event.track.onmute = () => updateCallWindow();
@@ -1394,12 +1481,18 @@
 
       if (callState.localStream) {
         callState.localStream.getTracks().forEach((track) => {
-          const sender = peer.addTrack(track, callState.localStream);
-          if (track.kind === 'video') {
-            callState.videoSender = sender;
+          if (track.kind === 'audio') {
+            callState.audioSender = peer.addTrack(track, callState.localStream);
           }
         });
       }
+
+      const localVideoTrack = getLocalVideoTrack();
+      callState.videoTransceiver = peer.addTransceiver(localVideoTrack || 'video', {
+        direction: localVideoTrack ? 'sendrecv' : 'recvonly',
+        streams: callState.localStream ? [callState.localStream] : [],
+      });
+      callState.videoSender = callState.videoTransceiver.sender;
 
       callState.peerConnection = peer;
       return peer;
@@ -1439,17 +1532,31 @@
           await peer.setRemoteDescription(new RTCSessionDescription(payload));
         }
 
+        await flushPendingIceCandidates();
+
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await ChatAPI.sendCallSignal(callState.session.id, 'answer', serializeSessionDescription(peer.localDescription || answer));
         callState.awaitingAnswer = false;
       } else if (signal.signal_type === 'answer' && payload) {
-        if (!callState.ignoreOffer && (!peer.currentRemoteDescription || peer.currentRemoteDescription?.sdp !== payload.sdp)) {
-          await peer.setRemoteDescription(new RTCSessionDescription(payload));
+        try {
+          const sameAnswer = peer.currentRemoteDescription?.type === 'answer'
+            && peer.currentRemoteDescription?.sdp === payload.sdp;
+
+          if (!callState.ignoreOffer && !sameAnswer && peer.signalingState === 'have-local-offer') {
+            await peer.setRemoteDescription(new RTCSessionDescription(payload));
+            await flushPendingIceCandidates();
+          }
+        } finally {
+          callState.awaitingAnswer = false;
+          callState.ignoreOffer = false;
         }
-        callState.awaitingAnswer = false;
-        callState.ignoreOffer = false;
       } else if (signal.signal_type === 'ice-candidate' && payload) {
+        if (!peer.remoteDescription) {
+          callState.pendingIceCandidates.push(payload);
+          return;
+        }
+
         try {
           await peer.addIceCandidate(new RTCIceCandidate(payload));
         } catch (error) {
@@ -1497,6 +1604,7 @@
         }
       }
 
+      tryPlayRemoteMedia();
       updateCallWindow();
     }
 
@@ -1618,6 +1726,7 @@
       callState.initialMode = callState.mode;
       callState.minimized = false;
       resetCallNegotiationState();
+      tryPlayRemoteMedia();
       updateCallWindow();
       startActiveCallPolling();
     }
@@ -1640,6 +1749,7 @@
       callState.startedAt = Date.now();
       resetCallNegotiationState();
       await beginWebRtcIfNeeded();
+      tryPlayRemoteMedia();
       startActiveCallPolling();
     }
 
@@ -1695,6 +1805,13 @@
       const root = ensureCallWindow();
       root.classList.add('hidden');
       root.querySelector('#call-video-stage').classList.remove('hidden');
+      root.querySelector('#call-window-status').textContent = 'Esperando...';
+      root.querySelector('#call-toggle-mic-btn .material-symbols-outlined').textContent = 'mic';
+      root.querySelector('#call-toggle-video-btn .material-symbols-outlined').textContent = 'videocam_off';
+      root.querySelector('#call-local-video').classList.add('hidden');
+      root.querySelector('#call-remote-video').classList.add('hidden');
+      root.querySelector('#call-remote-placeholder').classList.remove('hidden');
+      root.querySelector('#call-video-placeholder-label').textContent = 'Camara apagada';
 
       callState.session = null;
       callState.otherUser = null;
@@ -1718,7 +1835,7 @@
     }
 
     async function toggleMicrophone() {
-      if (!callState.localStream) return;
+      if (!callState.localStream || !getLocalAudioTrack()) return;
       callState.isMuted = !callState.isMuted;
       callState.localStream.getAudioTracks().forEach((track) => {
         track.enabled = !callState.isMuted;
@@ -1736,40 +1853,42 @@
       callState.cameraBusy = true;
       const root = ensureCallWindow();
       const localVideo = root.querySelector('#call-local-video');
+      const peer = createPeerConnection();
 
       try {
         if (!callState.localVideoEnabled) {
           const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
           const videoTrack = media.getVideoTracks()[0];
-          callState.localVideoEnabled = true;
 
           if (!callState.localStream) {
             await ensureLocalStream('audio');
           }
 
+          callState.localVideoEnabled = true;
           callState.localStream.addTrack(videoTrack);
           localVideo.srcObject = callState.localStream;
-
-          const peer = createPeerConnection();
-          if (callState.videoSender?.replaceTrack) {
-            await callState.videoSender.replaceTrack(videoTrack);
-          } else {
-            callState.videoSender = peer.addTrack(videoTrack, callState.localStream);
+          if (!callState.videoTransceiver) {
+            callState.videoTransceiver = peer.addTransceiver('video', { direction: 'recvonly' });
+            callState.videoSender = callState.videoTransceiver.sender;
           }
+          callState.videoTransceiver.direction = 'sendrecv';
+          await callState.videoSender.replaceTrack(videoTrack);
 
           await renegotiateCall();
         } else {
           callState.localVideoEnabled = false;
           if (callState.localStream) {
             callState.localStream.getVideoTracks().forEach((track) => {
-              if (callState.videoSender?.replaceTrack) {
-                callState.videoSender.replaceTrack(null).catch(() => {});
-              }
               track.stop();
               callState.localStream.removeTrack(track);
             });
           }
-
+          if (callState.videoTransceiver) {
+            callState.videoTransceiver.direction = 'recvonly';
+          }
+          if (callState.videoSender?.replaceTrack) {
+            await callState.videoSender.replaceTrack(null);
+          }
           localVideo.srcObject = callState.localStream;
           await renegotiateCall();
         }
@@ -2408,7 +2527,6 @@
       loadInbox(Boolean(activeChat));
 
       return () => {
-        clearSelectedImage();
         stopChatPolling();
         stopCallTimers();
         cleanupPeerConnection();
