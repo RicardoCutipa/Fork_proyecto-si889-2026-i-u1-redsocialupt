@@ -907,6 +907,8 @@
     let callSessionTimer = null;
     let callSignalTimer = null;
     let callMeterFrame = null;
+    let callSessionPollInFlight = false;
+    let callSignalPollInFlight = false;
 
     const callState = {
       session: null,
@@ -926,6 +928,7 @@
       minimized: false,
       outgoingOfferSent: false,
       isFinalizing: false,
+      awaitingAnswer: false,
       audioContext: null,
       audioAnalyser: null,
       audioMeterData: null,
@@ -1313,11 +1316,12 @@
     }
 
     async function renegotiateCall() {
-      if (!callState.session || callState.session.status !== 'accepted') return;
+      if (!callState.session || callState.session.status !== 'accepted' || callState.awaitingAnswer) return;
       const peer = createPeerConnection();
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      await ChatAPI.sendCallSignal(callState.session.id, 'offer', offer.toJSON());
+      await ChatAPI.sendCallSignal(callState.session.id, 'offer', serializeSessionDescription(peer.localDescription || offer));
+      callState.awaitingAnswer = true;
     }
 
     async function applyRemoteSignal(signal) {
@@ -1328,20 +1332,30 @@
         await peer.setRemoteDescription(new RTCSessionDescription(payload));
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
-        await ChatAPI.sendCallSignal(callState.session.id, 'answer', answer.toJSON());
+        await ChatAPI.sendCallSignal(callState.session.id, 'answer', serializeSessionDescription(peer.localDescription || answer));
       } else if (signal.signal_type === 'answer' && payload) {
         if (peer.signalingState !== 'stable' || !peer.currentRemoteDescription || peer.currentRemoteDescription?.sdp !== payload.sdp) {
           await peer.setRemoteDescription(new RTCSessionDescription(payload));
         }
+        callState.awaitingAnswer = false;
       } else if (signal.signal_type === 'ice-candidate' && payload) {
         try {
           await peer.addIceCandidate(new RTCIceCandidate(payload));
         } catch (error) {
           console.warn('No se pudo agregar ICE candidate:', error);
         }
-      } else if (signal.signal_type === 'mode-change' && payload?.mode) {
-        updateCallWindow();
       }
+    }
+
+    function serializeSessionDescription(description) {
+      if (!description) {
+        return null;
+      }
+
+      return {
+        type: description.type,
+        sdp: description.sdp,
+      };
     }
 
     async function beginWebRtcIfNeeded() {
@@ -1352,47 +1366,58 @@
       if (Number(callState.session.caller_id) === Number(user.id) && !callState.outgoingOfferSent) {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
-        await ChatAPI.sendCallSignal(callState.session.id, 'offer', offer.toJSON());
+        await ChatAPI.sendCallSignal(callState.session.id, 'offer', serializeSessionDescription(peer.localDescription || offer));
         callState.outgoingOfferSent = true;
+        callState.awaitingAnswer = true;
       }
 
       updateCallWindow();
     }
 
     async function pollCallSignals() {
-      if (!callState.session || callState.session.status !== 'accepted') return;
-      const result = await ChatAPI.getCallSignals(callState.session.id, callState.lastSignalId);
-      if (!result?.ok) return;
+      if (!callState.session || callState.session.status !== 'accepted' || callSignalPollInFlight) return;
+      callSignalPollInFlight = true;
+      try {
+        const result = await ChatAPI.getCallSignals(callState.session.id, callState.lastSignalId);
+        if (!result?.ok) return;
 
-      const signals = getList(result);
-      for (const signal of signals) {
-        callState.lastSignalId = Math.max(callState.lastSignalId, Number(signal.id || 0));
-        await applyRemoteSignal(signal);
+        const signals = getList(result);
+        for (const signal of signals) {
+          callState.lastSignalId = Math.max(callState.lastSignalId, Number(signal.id || 0));
+          await applyRemoteSignal(signal);
+        }
+      } finally {
+        callSignalPollInFlight = false;
       }
     }
 
     async function pollActiveCallState() {
-      if (!callState.session) return;
-      const result = await ChatAPI.getCall(callState.session.id);
-      if (!result?.ok) return;
+      if (!callState.session || callSessionPollInFlight) return;
+      callSessionPollInFlight = true;
+      try {
+        const result = await ChatAPI.getCall(callState.session.id);
+        if (!result?.ok) return;
 
-      const nextSession = result.data || null;
-      if (!nextSession) return;
+        const nextSession = result.data || null;
+        if (!nextSession) return;
 
-      callState.session = nextSession;
-      if (nextSession.status === 'ringing') {
-        callState.initialMode = nextSession.mode || callState.initialMode;
-      }
-      updateCallWindow();
-
-      if (nextSession.status === 'accepted') {
-        if (!callState.startedAt) {
-          callState.startedAt = Date.now();
+        callState.session = nextSession;
+        if (nextSession.status === 'ringing') {
+          callState.initialMode = nextSession.mode || callState.initialMode;
         }
-        await beginWebRtcIfNeeded();
-      } else if (['rejected', 'ended'].includes(nextSession.status)) {
-        const message = nextSession.status === 'rejected' ? 'La llamada fue rechazada' : 'La llamada termino';
-        await finalizeCall(message);
+        updateCallWindow();
+
+        if (nextSession.status === 'accepted') {
+          if (!callState.startedAt) {
+            callState.startedAt = Date.now();
+          }
+          await beginWebRtcIfNeeded();
+        } else if (['rejected', 'ended'].includes(nextSession.status)) {
+          const message = nextSession.status === 'rejected' ? 'La llamada fue rechazada' : 'La llamada termino';
+          await finalizeCall(message);
+        }
+      } finally {
+        callSessionPollInFlight = false;
       }
     }
 
@@ -1523,6 +1548,7 @@
       callState.minimized = false;
       callState.outgoingOfferSent = false;
       callState.isFinalizing = false;
+      callState.awaitingAnswer = false;
 
       startIncomingCallPolling();
 
@@ -1571,8 +1597,6 @@
           }
         }
 
-        await ChatAPI.updateCallMode(callState.session.id, 'video');
-        await ChatAPI.sendCallSignal(callState.session.id, 'mode-change', { mode: 'video' });
         await renegotiateCall();
       } else {
         callState.localVideoEnabled = false;
@@ -1588,8 +1612,6 @@
         }
 
         localVideo.srcObject = callState.localStream;
-        await ChatAPI.updateCallMode(callState.session.id, 'audio');
-        await ChatAPI.sendCallSignal(callState.session.id, 'mode-change', { mode: 'audio' });
         await renegotiateCall();
       }
 
@@ -1850,6 +1872,58 @@
       area.scrollTop = area.scrollHeight;
     }
 
+    function refreshActiveChatPresenceLabel() {
+      if (!activeUser?.id) {
+        return;
+      }
+
+      const liveUser = publicUsersState.map.get(Number(activeUser.id));
+      if (liveUser) {
+        activeUser = resolveProfileData(liveUser);
+      }
+
+      const headerPresence = chatPanel.querySelector('p.text-sm.text-slate-500.truncate');
+      if (!headerPresence) {
+        return;
+      }
+
+      headerPresence.textContent = `${careerLabel(activeUser) || 'Amigo UPT'} · ${presenceLabel(activeUser)}`;
+    }
+
+    function updateConversationPreview(messages) {
+      if (!activeChat || !activeUser) {
+        return;
+      }
+
+      const lastMessage = messages[messages.length - 1] || null;
+      const activeChatId = Number(activeChat);
+      const liveUser = publicUsersState.map.get(activeChatId);
+      const nextUser = resolveProfileData(liveUser || activeUser);
+
+      conversations = conversations
+        .map((entry) => {
+          if (Number(entry?.other_user?.id) !== activeChatId) {
+            return entry;
+          }
+
+          return {
+            ...entry,
+            other_user: nextUser,
+            last_message: lastMessage,
+            unread_count: 0,
+          };
+        })
+        .sort((left, right) => {
+          const leftDate = new Date(left?.last_message?.created_at || 0).getTime();
+          const rightDate = new Date(right?.last_message?.created_at || 0).getTime();
+          return rightDate - leftDate;
+        });
+
+      activeUser = nextUser;
+      renderInbox();
+      refreshActiveChatPresenceLabel();
+    }
+
     async function loadConversation(userId, otherUser = findConversationUser(userId)) {
       const numericUserId = Number(userId);
       if (!numericUserId) return;
@@ -2035,7 +2109,7 @@
         } else {
           renderMessages(nextMessages, { preserveScroll: true });
         }
-        await loadInbox(false);
+        updateConversationPreview(nextMessages);
       }
     }
 
@@ -2132,7 +2206,8 @@
       }
 
     async function handlePresenceUpdated() {
-      await loadInbox(false);
+      renderInbox();
+      refreshActiveChatPresenceLabel();
     }
 
     function handleMessagesVisibilityChange() {
