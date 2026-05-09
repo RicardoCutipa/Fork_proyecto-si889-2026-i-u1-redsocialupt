@@ -14,8 +14,12 @@
   };
   const PRESENCE_PING_INTERVAL_MS = 60000;
   const PRESENCE_ONLINE_WINDOW_MS = 2 * 60 * 1000;
+  const GLOBAL_INCOMING_CALL_POLL_INTERVAL_MS = 1000;
   let presencePingTimer = null;
   let presencePingInFlight = false;
+  let globalIncomingCallPollTimer = null;
+  let globalIncomingCallPollInFlight = false;
+  let lastRoutedIncomingCallId = 0;
 
   if (!appState.user) {
     logout();
@@ -873,7 +877,7 @@
     };
   };
 
-  function initMessagesView({ container, user, params }) {
+  function initMessagesView({ container, user, params, callManagerOnly = false }) {
     const inboxList = container.querySelector('#inbox-list');
     const chatPanel = container.querySelector('#chat-panel');
     const messagesSummary = container.querySelector('#messages-summary');
@@ -948,6 +952,10 @@
 
     function getGlobalCallRuntime() {
       return window.__uptGlobalCallRuntime || null;
+    }
+
+    function hasForeignCallManager() {
+      return Boolean(window.__uptCallManager && window.__uptCallManager.id !== callRuntimeId);
     }
 
     function hasForeignActiveCallRuntime() {
@@ -1114,7 +1122,7 @@
         document.body.appendChild(root);
       }
 
-      if (hasForeignActiveCallRuntime()) {
+      if (hasForeignCallManager()) {
         return root;
       }
 
@@ -1388,6 +1396,16 @@
     }
 
     function cleanupPeerConnection() {
+      if (
+        hasForeignCallManager()
+        && !callState.session
+        && !callState.peerConnection
+        && !callState.localStream
+        && !callState.remoteStream
+      ) {
+        return;
+      }
+
       if (callState.peerConnection) {
         try { callState.peerConnection.ontrack = null; } catch (error) {}
         try { callState.peerConnection.onicecandidate = null; } catch (error) {}
@@ -1759,6 +1777,25 @@
       }, CALL_POLL_INTERVAL_MS);
     }
 
+    function handleCallRouteChange() {
+      if (!callState.session) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        if (!callState.session) {
+          return;
+        }
+
+        const root = ensureCallWindow();
+        syncMediaElementStream(root.querySelector('#call-remote-audio'), callState.remoteStream);
+        syncMediaElementStream(root.querySelector('#call-remote-video'), callState.remoteStream);
+        syncMediaElementStream(root.querySelector('#call-local-video'), callState.localStream);
+        tryPlayRemoteMedia();
+        updateCallWindow();
+      }, 80);
+    }
+
     function startActiveCallPolling() {
       if (!callState.session) return;
 
@@ -1801,6 +1838,11 @@
       tryPlayRemoteMedia();
       updateCallWindow();
       startActiveCallPolling();
+    }
+
+    async function startOutgoingCallForUser(targetUser, mode) {
+      activeUser = resolveProfileData(targetUser);
+      await openOutgoingCall(mode);
     }
 
     async function acceptIncomingCall() {
@@ -1900,7 +1942,14 @@
       resetCallNegotiationState();
       releaseCallRuntime();
 
-      startIncomingCallPolling();
+      if (ownsCallLifecycle) {
+        startIncomingCallPolling();
+      } else {
+        stopCallTimers();
+        window.removeEventListener('hashchange', handleCallRouteChange);
+        window.removeEventListener('pagehide', handleCallPageLeave);
+        window.removeEventListener('beforeunload', handleCallPageLeave);
+      }
 
       if (toastMessage) {
         showToast(toastMessage, 'success');
@@ -2385,9 +2434,17 @@
         await reportContent('mensaje', Number(button.dataset.messageId));
       });
       startAudioCallButton?.addEventListener('click', async () => {
+        if (window.__uptCallManager?.startOutgoingCall) {
+          await window.__uptCallManager.startOutgoingCall(friendProfile, 'audio');
+          return;
+        }
         await openOutgoingCall('audio');
       });
       startVideoCallButton?.addEventListener('click', async () => {
+        if (window.__uptCallManager?.startOutgoingCall) {
+          await window.__uptCallManager.startOutgoingCall(friendProfile, 'video');
+          return;
+        }
         await openOutgoingCall('video');
       });
 
@@ -2583,37 +2640,53 @@
       endCallOnPageLeave();
     }
 
+    function detachCallRouteLifecycle() {
+      window.removeEventListener('hashchange', handleCallRouteChange);
+      window.removeEventListener('pagehide', handleCallPageLeave);
+      window.removeEventListener('beforeunload', handleCallPageLeave);
+    }
+
     inboxList.addEventListener('click', (event) => {
       const button = event.target.closest('[data-open-chat]');
       if (!button) return;
       openChatByUserId(button.dataset.openChat);
     });
 
+    const ownsCallLifecycle = callManagerOnly || !hasForeignCallManager();
+    if (ownsCallLifecycle) {
+      window.__uptCallManager = {
+        id: callRuntimeId,
+        isActive: () => Boolean(callState.session),
+        startOutgoingCall: (targetUser, mode) => startOutgoingCallForUser(targetUser, mode),
+      };
+    }
     window.addEventListener('friendship:changed', handleFriendshipChanged);
-      window.addEventListener('blocks:changed', handleBlocksChanged);
-      window.addEventListener('presence:updated', handlePresenceUpdated);
-      document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
+    window.addEventListener('blocks:changed', handleBlocksChanged);
+    window.addEventListener('presence:updated', handlePresenceUpdated);
+    document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
+    if (ownsCallLifecycle) {
+      window.addEventListener('hashchange', handleCallRouteChange);
       window.addEventListener('pagehide', handleCallPageLeave);
       window.addEventListener('beforeunload', handleCallPageLeave);
       ensureCallWindow();
       startIncomingCallPolling();
-      loadInbox(Boolean(activeChat));
+    }
+    loadInbox(Boolean(activeChat));
 
-      return () => {
-        stopChatPolling();
-        if (!callState.session) {
-          stopCallTimers();
-          cleanupPeerConnection();
-        }
-        window.removeEventListener('friendship:changed', handleFriendshipChanged);
-        window.removeEventListener('blocks:changed', handleBlocksChanged);
-        window.removeEventListener('presence:updated', handlePresenceUpdated);
-        document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
-        if (!callState.session) {
-          window.removeEventListener('pagehide', handleCallPageLeave);
-          window.removeEventListener('beforeunload', handleCallPageLeave);
-        }
-      };
+    return () => {
+      stopChatPolling();
+      if (!callState.session) {
+        stopCallTimers();
+        cleanupPeerConnection();
+      }
+      window.removeEventListener('friendship:changed', handleFriendshipChanged);
+      window.removeEventListener('blocks:changed', handleBlocksChanged);
+      window.removeEventListener('presence:updated', handlePresenceUpdated);
+      document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
+      if (ownsCallLifecycle && !callState.session) {
+        detachCallRouteLifecycle();
+      }
+    };
   }
 
   const views = {
@@ -7405,6 +7478,79 @@
     },
   };
 
+  function bootstrapGlobalCallManager() {
+    if (window.__uptCallManager?.id) {
+      return;
+    }
+
+    const host = document.createElement('div');
+    host.id = 'global-call-runtime-host';
+    host.style.display = 'none';
+    host.setAttribute('aria-hidden', 'true');
+    host.innerHTML = views.messages.render();
+    document.body.appendChild(host);
+
+    const cleanup = initMessagesView({
+      container: host,
+      user: appState.user,
+      params: {},
+      callManagerOnly: true,
+    });
+
+    if (typeof cleanup === 'function') {
+      window.__uptCallManagerCleanup = cleanup;
+    }
+  }
+
+  function startGlobalIncomingCallWatcher() {
+    if (globalIncomingCallPollTimer) {
+      return;
+    }
+
+    globalIncomingCallPollTimer = window.setInterval(async () => {
+      if (document.hidden || globalIncomingCallPollInFlight) {
+        return;
+      }
+
+      if (window.__uptGlobalCallRuntime?.isActive?.()) {
+        return;
+      }
+
+      if (window.AppRouter?.currentRoute?.route === 'messages') {
+        return;
+      }
+
+      globalIncomingCallPollInFlight = true;
+      try {
+        const result = await ChatAPI.getPendingCalls();
+        if (!result?.ok) {
+          return;
+        }
+
+        const pending = getList(result);
+        const incoming = pending[0];
+        const incomingId = Number(incoming?.id || 0);
+        const callerId = Number(incoming?.caller_id || 0);
+
+        if (!incomingId || !callerId) {
+          if (!pending.length) {
+            lastRoutedIncomingCallId = 0;
+          }
+          return;
+        }
+
+        if (incomingId === lastRoutedIncomingCallId) {
+          return;
+        }
+
+        lastRoutedIncomingCallId = incomingId;
+        AppRouter.navigate('messages', { user: callerId });
+      } finally {
+        globalIncomingCallPollInFlight = false;
+      }
+    }, GLOBAL_INCOMING_CALL_POLL_INTERVAL_MS);
+  }
+
   window.AppRouter = AppRouter;
 
   window.addEventListener('hashchange', () => {
@@ -7416,6 +7562,7 @@
   }
 
   if (window.setupLayoutData) window.setupLayoutData(appState.user);
+  bootstrapGlobalCallManager();
   AppRouter.render();
 })().catch((error) => {
   console.error('App bootstrap error:', error);
