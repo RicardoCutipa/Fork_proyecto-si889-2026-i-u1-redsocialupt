@@ -1752,6 +1752,41 @@
       }
     }
 
+    function presentIncomingCall(incoming) {
+      if (!incoming || callState.session) {
+        return false;
+      }
+
+      const callerId = Number(incoming.caller_id || 0);
+      if (!callerId) {
+        return false;
+      }
+
+      const caller =
+        findConversationUser(callerId)
+        || publicUsersState.map.get(callerId)
+        || {
+          id: callerId,
+          full_name: `Usuario #${callerId}`,
+          name: `Usuario #${callerId}`,
+          faculty: '',
+          career: '',
+          school: '',
+          avatar_url: null,
+        };
+
+      callState.session = incoming;
+      callState.otherUser = resolveProfileData(caller);
+      callState.mode = incoming.mode || 'audio';
+      callState.initialMode = incoming.mode || 'audio';
+      callState.status = incoming.status || 'ringing';
+      callState.minimized = false;
+      resetCallNegotiationState();
+      updateCallWindow();
+      startActiveCallPolling();
+      return true;
+    }
+
     function startIncomingCallPolling() {
       if (callInboxTimer) return;
       callInboxTimer = window.setInterval(async () => {
@@ -1761,19 +1796,7 @@
         const pending = getList(result);
         if (!pending.length) return;
 
-        const incoming = pending[0];
-        const caller = findConversationUser(incoming.caller_id) || publicUsersState.map.get(Number(incoming.caller_id)) || null;
-        if (!caller) return;
-
-        callState.session = incoming;
-        callState.otherUser = resolveProfileData(caller);
-        callState.mode = incoming.mode || 'audio';
-        callState.initialMode = incoming.mode || 'audio';
-        callState.status = incoming.status || 'ringing';
-        callState.minimized = false;
-        resetCallNegotiationState();
-        updateCallWindow();
-        startActiveCallPolling();
+        presentIncomingCall(pending[0]);
       }, CALL_POLL_INTERVAL_MS);
     }
 
@@ -1941,6 +1964,7 @@
       callState.videoSender = null;
       resetCallNegotiationState();
       releaseCallRuntime();
+      lastRoutedIncomingCallId = 0;
 
       if (ownsCallLifecycle) {
         startIncomingCallPolling();
@@ -2658,6 +2682,7 @@
         id: callRuntimeId,
         isActive: () => Boolean(callState.session),
         startOutgoingCall: (targetUser, mode) => startOutgoingCallForUser(targetUser, mode),
+        consumeIncomingCall: (incoming) => presentIncomingCall(incoming),
       };
     }
     window.addEventListener('friendship:changed', handleFriendshipChanged);
@@ -7516,10 +7541,6 @@
         return;
       }
 
-      if (window.AppRouter?.currentRoute?.route === 'messages') {
-        return;
-      }
-
       globalIncomingCallPollInFlight = true;
       try {
         const result = await ChatAPI.getPendingCalls();
@@ -7543,8 +7564,10 @@
           return;
         }
 
-        lastRoutedIncomingCallId = incomingId;
-        AppRouter.navigate('messages', { user: callerId });
+        const consumed = window.__uptCallManager?.consumeIncomingCall?.(incoming);
+        if (consumed) {
+          lastRoutedIncomingCallId = incomingId;
+        }
       } finally {
         globalIncomingCallPollInFlight = false;
       }
