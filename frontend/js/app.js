@@ -909,6 +909,7 @@
     let callMeterFrame = null;
     let callSessionPollInFlight = false;
     let callSignalPollInFlight = false;
+    const activeCallGuard = () => Boolean(callState.session);
 
     const callState = {
       session: null,
@@ -935,6 +936,7 @@
       makingOffer: false,
       ignoreOffer: false,
       pendingIceCandidates: [],
+      initialVideoSyncDone: false,
       audioSender: null,
       videoSender: null,
       videoTransceiver: null,
@@ -1240,6 +1242,20 @@
       }
     }
 
+    function syncMediaElementStream(element, stream) {
+      if (!element) {
+        return;
+      }
+
+      if (element.srcObject !== stream) {
+        element.srcObject = stream;
+      }
+
+      if (stream && typeof element.play === 'function') {
+        element.play().catch(() => {});
+      }
+    }
+
     function getLocalAudioTrack() {
       return callState.localStream?.getAudioTracks()?.[0] || null;
     }
@@ -1358,6 +1374,7 @@
       callState.makingOffer = false;
       callState.ignoreOffer = false;
       callState.pendingIceCandidates = [];
+      callState.initialVideoSyncDone = false;
       callState.audioSender = null;
       callState.videoSender = null;
       callState.videoTransceiver = null;
@@ -1371,9 +1388,9 @@
       stopRingTone();
 
       const root = ensureCallWindow();
-      root.querySelector('#call-remote-audio').srcObject = null;
-      root.querySelector('#call-remote-video').srcObject = null;
-      root.querySelector('#call-local-video').srcObject = null;
+      syncMediaElementStream(root.querySelector('#call-remote-audio'), null);
+      syncMediaElementStream(root.querySelector('#call-remote-video'), null);
+      syncMediaElementStream(root.querySelector('#call-local-video'), null);
       syncRemoteMediaVolume();
     }
 
@@ -1417,7 +1434,7 @@
 
       const root = ensureCallWindow();
       const localVideo = root.querySelector('#call-local-video');
-      localVideo.srcObject = callState.localStream;
+      syncMediaElementStream(localVideo, callState.localStream);
 
       return callState.localStream;
     }
@@ -1449,8 +1466,8 @@
           callState.remoteStream.addTrack(event.track);
         }
 
-        root.querySelector('#call-remote-audio').srcObject = callState.remoteStream;
-        root.querySelector('#call-remote-video').srcObject = callState.remoteStream;
+        syncMediaElementStream(root.querySelector('#call-remote-audio'), callState.remoteStream);
+        syncMediaElementStream(root.querySelector('#call-remote-video'), callState.remoteStream);
         syncRemoteMediaVolume();
         tryPlayRemoteMedia();
 
@@ -1538,6 +1555,18 @@
         await peer.setLocalDescription(answer);
         await ChatAPI.sendCallSignal(callState.session.id, 'answer', serializeSessionDescription(peer.localDescription || answer));
         callState.awaitingAnswer = false;
+
+        if (
+          Number(callState.session?.receiver_id) === Number(user.id)
+          && callState.initialMode === 'video'
+          && callState.localVideoEnabled
+          && !callState.initialVideoSyncDone
+        ) {
+          callState.initialVideoSyncDone = true;
+          window.setTimeout(() => {
+            renegotiateCall().catch((error) => console.warn('No se pudo sincronizar el video inicial:', error));
+          }, 150);
+        }
       } else if (signal.signal_type === 'answer' && payload) {
         try {
           const sameAnswer = peer.currentRemoteDescription?.type === 'answer'
@@ -1588,7 +1617,15 @@
 
     async function beginWebRtcIfNeeded() {
       if (!callState.session || callState.session.status !== 'accepted') return;
-      await ensureLocalStream(callState.localVideoEnabled ? 'video' : 'audio');
+      const needsVideo = callState.localVideoEnabled;
+      const needsLocalStream =
+        !callState.localStream
+        || !getLocalAudioTrack()
+        || (needsVideo && !getLocalVideoTrack());
+
+      if (needsLocalStream) {
+        await ensureLocalStream(needsVideo ? 'video' : 'audio');
+      }
       const peer = createPeerConnection();
 
       if (Number(callState.session.caller_id) === Number(user.id) && !callState.outgoingOfferSent) {
@@ -1866,7 +1903,7 @@
 
           callState.localVideoEnabled = true;
           callState.localStream.addTrack(videoTrack);
-          localVideo.srcObject = callState.localStream;
+          syncMediaElementStream(localVideo, callState.localStream);
           if (!callState.videoTransceiver) {
             callState.videoTransceiver = peer.addTransceiver('video', { direction: 'recvonly' });
             callState.videoSender = callState.videoTransceiver.sender;
@@ -1889,7 +1926,7 @@
           if (callState.videoSender?.replaceTrack) {
             await callState.videoSender.replaceTrack(null);
           }
-          localVideo.srcObject = callState.localStream;
+          syncMediaElementStream(localVideo, callState.localStream);
           await renegotiateCall();
         }
 
@@ -2516,26 +2553,34 @@
       openChatByUserId(button.dataset.openChat);
     });
 
-      window.addEventListener('friendship:changed', handleFriendshipChanged);
-      window.addEventListener('blocks:changed', handleBlocksChanged);
-      window.addEventListener('presence:updated', handlePresenceUpdated);
-      document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
-      window.addEventListener('pagehide', handleCallPageLeave);
-      window.addEventListener('beforeunload', handleCallPageLeave);
-      ensureCallWindow();
-      startIncomingCallPolling();
-      loadInbox(Boolean(activeChat));
+    window.addEventListener('friendship:changed', handleFriendshipChanged);
+    window.addEventListener('blocks:changed', handleBlocksChanged);
+    window.addEventListener('presence:updated', handlePresenceUpdated);
+    document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
+    window.addEventListener('pagehide', handleCallPageLeave);
+    window.addEventListener('beforeunload', handleCallPageLeave);
+    window.__uptHasActiveCall = activeCallGuard;
+    ensureCallWindow();
+    startIncomingCallPolling();
+    loadInbox(Boolean(activeChat));
 
       return () => {
         stopChatPolling();
-        stopCallTimers();
-        cleanupPeerConnection();
+        if (!callState.session) {
+          stopCallTimers();
+          cleanupPeerConnection();
+        }
         window.removeEventListener('friendship:changed', handleFriendshipChanged);
         window.removeEventListener('blocks:changed', handleBlocksChanged);
         window.removeEventListener('presence:updated', handlePresenceUpdated);
         document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
-        window.removeEventListener('pagehide', handleCallPageLeave);
-        window.removeEventListener('beforeunload', handleCallPageLeave);
+        if (!callState.session) {
+          window.removeEventListener('pagehide', handleCallPageLeave);
+          window.removeEventListener('beforeunload', handleCallPageLeave);
+        }
+        if (window.__uptHasActiveCall === activeCallGuard && !callState.session) {
+          delete window.__uptHasActiveCall;
+        }
       };
   }
 
@@ -7280,6 +7325,11 @@
   const AppRouter = {
     currentRoute: null,
     navigate(route, params = {}, options = {}) {
+      if (this.currentRoute?.route === 'messages' && route !== 'messages' && window.__uptHasActiveCall?.()) {
+        showToast('Termina la llamada para salir de Mensajes', 'error');
+        return;
+      }
+
       const targetHash = buildHash(route, params);
       const targetUrl = `${window.location.pathname}${targetHash}`;
 
@@ -7293,6 +7343,14 @@
     },
     async render() {
       const parsed = parseRoute();
+
+      if (this.currentRoute?.route === 'messages' && parsed.route !== 'messages' && window.__uptHasActiveCall?.()) {
+        showToast('Termina la llamada para salir de Mensajes', 'error');
+        const lockedHash = buildHash('messages', this.currentRoute.params || {});
+        window.history.replaceState(null, '', `${window.location.pathname}${lockedHash}`);
+        return;
+      }
+
       const view = views[parsed.route] || views.feed;
 
       if (view.adminOnly && appState.user.role !== 'admin') {
