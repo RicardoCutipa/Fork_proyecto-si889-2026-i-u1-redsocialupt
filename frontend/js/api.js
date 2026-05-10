@@ -257,6 +257,35 @@ const PostsAPI = {
       body: JSON.stringify({ content, visibility }),
     });
   },
+  createLivestream: ({ liveTitle, content = '', visibility = 'all', liveSource = 'camera', streamKey, playbackUrl }) => apiFetch(`/api/livestreams`, {
+    method: 'POST',
+    body: JSON.stringify({
+      live_title: liveTitle,
+      content,
+      visibility,
+      live_source: liveSource,
+      stream_key: streamKey,
+      playback_url: playbackUrl,
+    }),
+  }),
+  getActiveLivestreams: () => apiFetch(`/api/livestreams/active`, {
+    headers: {
+      ...authHeaders(),
+      'X-Friend-Ids': JSON.stringify((window.__friendIdsCache || [])),
+      'X-User-Faculty': getUser()?.faculty || '',
+    },
+  }),
+  getLivestream: (id) => apiFetch(`/api/livestreams/${id}`),
+  endLivestream: (id, durationSeconds = 0) => apiFetch(`/api/livestreams/${id}/end`, {
+    method: 'PUT',
+    body: JSON.stringify({ duration_seconds: durationSeconds }),
+  }),
+  livestreamHeartbeat: (id) => apiFetch(`/api/livestreams/${id}/heartbeat`, { method: 'POST' }),
+  reactLivestream: (id, reactionType) => apiFetch(`/api/livestreams/${id}/reaction`, {
+    method: 'POST',
+    body: JSON.stringify({ reaction_type: reactionType }),
+  }),
+  getLivestreamEvents: (id, after = 0) => apiFetch(`/api/livestreams/${id}/events?after=${after}`),
 
   deletePost: (id) => apiFetch(`${API.posts}/${id}`, { method: 'DELETE' }),
   adminDeletePost: (id) => apiFetch(`${API.posts}/${id}/admin`, { method: 'DELETE' }),

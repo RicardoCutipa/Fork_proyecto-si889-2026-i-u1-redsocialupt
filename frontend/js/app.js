@@ -49,7 +49,10 @@
       }
 
       if (window.AppRouter?.currentRoute) {
-        window.AppRouter.render();
+        const currentRouteName = String(window.AppRouter.currentRoute?.route || '');
+        if (currentRouteName !== 'live') {
+          window.AppRouter.render();
+        }
       }
     }).catch((error) => {
       console.error('No se pudo hidratar la sesion desde /auth/me:', error);
@@ -509,7 +512,161 @@
     document.title = title ? `${title} - UPT Connect` : 'UPT Connect';
   }
 
+  function getLivestreamEngineHost() {
+    return window.location.hostname || 'localhost';
+  }
+
+  function buildLivestreamHlsUrl(streamKey) {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const host = getLivestreamEngineHost();
+    return `${protocol}//${host}:3333/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+  }
+
+  function normalizeLivestreamPlaybackUrl(streamKey, playbackUrl) {
+    const fallbackUrl = buildLivestreamHlsUrl(streamKey);
+    if (!playbackUrl) {
+      return fallbackUrl;
+    }
+
+    try {
+      const normalizedUrl = new URL(playbackUrl, window.location.origin);
+      if (normalizedUrl.protocol === 'ws:' || normalizedUrl.protocol === 'wss:' || !normalizedUrl.pathname.endsWith('.m3u8')) {
+        return fallbackUrl;
+      }
+      return normalizedUrl.toString();
+    } catch (error) {
+      return /\.m3u8(\?|$)/i.test(playbackUrl) ? playbackUrl : fallbackUrl;
+    }
+  }
+
+  function buildLivestreamPublishUrl(streamKey) {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const host = getLivestreamEngineHost();
+    return `${protocol}//${host}:3333/app/${encodeURIComponent(streamKey)}?direction=whip&transport=tcp`;
+  }
+
+  function buildLivestreamStreamKey(userId) {
+    return `upt-live-${userId}-${Date.now().toString(36)}`;
+  }
+
+  function isDesktopClient() {
+    return window.matchMedia('(min-width: 768px)').matches;
+  }
+
+  function loadExternalScript(src, globalName) {
+    if (globalName && window[globalName]) {
+      return Promise.resolve(window[globalName]);
+    }
+
+    const existing = document.querySelector(`script[data-external-src="${src}"]`);
+    if (existing) {
+      return new Promise((resolve, reject) => {
+        if (globalName && window[globalName]) {
+          resolve(window[globalName]);
+          return;
+        }
+
+        existing.addEventListener('load', () => resolve(globalName ? window[globalName] : true), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`No se pudo cargar ${src}`)), { once: true });
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.externalSrc = src;
+      script.onload = () => resolve(globalName ? window[globalName] : true);
+      script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  function loadExternalStyle(href) {
+    if (document.querySelector(`link[data-external-style="${href}"]`)) {
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.externalStyle = href;
+    document.head.appendChild(link);
+  }
+
+  async function ensureLivestreamLibraries() {
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/hls.js@latest', 'Hls');
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/ovenlivekit@latest/dist/OvenLiveKit.min.js', 'OvenLiveKit');
+  }
+
+  function renderLivestreamCard(post, currentUserId, options = {}) {
+    const author = resolveProfileData({
+      id: post.user_id,
+      user_name: post.user_name,
+      user_faculty: post.user_faculty,
+      user_school: post.user_school,
+      user_avatar: post.user_avatar,
+    });
+    const isLive = post.live_status === 'live';
+    const canDelete = options.canDelete ?? Number(post.user_id) === Number(currentUserId);
+    const badgeTone = isLive ? 'bg-[#ff0b53] text-white' : 'bg-slate-200 text-slate-700';
+
+    return `
+      <article class="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm overflow-hidden">
+        <div class="flex items-start justify-between gap-3 mb-4">
+          <button type="button" class="flex items-center gap-3 text-left" data-action="open-profile" data-user-id="${post.user_id}">
+            ${renderAvatar(author, { sizeClass: 'w-11 h-11', textClass: 'text-white font-bold', showOnline: true })}
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-bold text-sm text-slate-900">${escapeHtml(displayName(author))}</span>
+                <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded-full" style="background:${userColor(author)}">${escapeHtml(author.faculty || 'UPT')}</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(timeAgo(post.created_at))}</p>
+            </div>
+          </button>
+          ${canDelete ? `
+            <button type="button" data-action="delete-post" data-post-id="${post.id}" class="text-slate-400 hover:bg-slate-50 p-1 rounded-full shrink-0">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          ` : ''}
+        </div>
+        <button type="button" data-action="open-livestream" data-live-id="${post.id}" class="block w-full text-left">
+          <div class="rounded-[28px] overflow-hidden relative min-h-[280px] bg-[radial-gradient(circle_at_top_left,_#6d28d9,_#0f172a_55%,_#020617)]">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,132,0,0.26),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(236,72,153,0.20),_transparent_26%)]"></div>
+            <div class="absolute top-4 left-4 right-4 flex items-center justify-between gap-3 z-10">
+              <div class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full text-xs font-black tracking-[0.18em] ${badgeTone}">${isLive ? 'LIVE' : 'FINALIZADO'}</span>
+                <span class="px-3 py-1 rounded-full bg-black/45 text-white text-xs font-semibold flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[14px]">visibility</span>
+                  ${Number(post.viewer_count || 0)} 
+                </span>
+              </div>
+              <span class="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-semibold">${escapeHtml(post.live_source === 'screen' ? 'Pantalla' : 'Camara')}</span>
+            </div>
+            <div class="relative z-10 h-full min-h-[280px] flex flex-col justify-end p-5 text-white">
+              <h3 class="text-xl md:text-2xl font-black leading-tight max-w-[80%]">${escapeHtml(post.live_title || 'Directo UPT')}</h3>
+              <p class="text-sm text-white/80 mt-2 max-w-[80%]">${escapeHtml((post.content || '').slice(0, 140) || 'Transmision en vivo de la comunidad UPT')}</p>
+              <div class="mt-5 flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 bg-white/12 text-xs font-semibold">
+                  <span class="material-symbols-outlined text-[14px]">favorite</span>
+                  ${escapeHtml(reactionCountSummary(post.reactions_count)) || `${post.reactions_total || 0} reacciones`}
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 bg-white/12 text-xs font-semibold">
+                  <span class="material-symbols-outlined text-[14px]">chat</span>
+                  ${Number(post.comments_count || 0)} comentarios
+                </span>
+              </div>
+            </div>
+          </div>
+        </button>
+      </article>
+    `;
+  }
+
   function renderPostCard(post, currentUserId, options = {}) {
+    if ((post.post_type || 'standard') === 'livestream') {
+      return renderLivestreamCard(post, currentUserId, options);
+    }
     const canDelete = options.canDelete ?? Number(post.user_id) === Number(currentUserId);
     const interactive = options.interactive !== false;
     const clickable = options.clickable !== false;
@@ -2759,6 +2916,9 @@
                     <button id="pick-image-btn" type="button" class="feed-composer-tool">
                       <span class="material-symbols-outlined text-[19px]">image</span>
                     </button>
+                    <button id="open-live-modal-btn" type="button" class="feed-composer-tool" title="Iniciar directo">
+                      <span class="material-symbols-outlined text-[19px]">broadcast_on_personal</span>
+                    </button>
                     <div class="relative feed-composer-emoji-anchor">
                       <button id="toggle-emoji-btn" type="button" class="feed-composer-tool">
                         <span class="material-symbols-outlined text-[19px]">mood</span>
@@ -2865,6 +3025,65 @@
               </div>
             </div>
           </div>
+          <div id="livestream-modal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center z-50 px-4 py-6">
+            <div class="w-full max-w-2xl bg-[#0f172a] text-white rounded-[32px] border border-white/10 shadow-2xl overflow-hidden">
+              <div class="px-6 py-5 border-b border-white/10 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-xl font-black">Iniciar directo</h3>
+                  <p class="text-sm text-white/65 mt-1">Crearas una publicacion en vivo con comentarios y reacciones en tiempo real.</p>
+                </div>
+                <button id="close-live-modal-btn" type="button" class="w-10 h-10 rounded-full bg-white/8 hover:bg-white/14 flex items-center justify-center">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div class="p-6 space-y-5">
+                <label class="block">
+                  <span class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Titulo</span>
+                  <input id="live-title-input" type="text" maxlength="180" class="mt-2 w-full rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none focus:border-[#ff0b53] placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Ponle un titulo a tu directo"/>
+                </label>
+                <label class="block">
+                  <span class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Descripcion</span>
+                  <textarea id="live-description-input" rows="4" class="mt-2 w-full rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none resize-none focus:border-[#ff0b53] placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Describe lo que vas a transmitir."></textarea>
+                </label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
+                    <p class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Fuente</p>
+                    <div class="mt-3 grid gap-2" id="live-source-options">
+                      <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <input type="radio" name="live-source" value="camera" checked/>
+                        <span class="text-sm font-semibold">Camara + microfono</span>
+                      </label>
+                      <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3" id="live-screen-option">
+                        <input type="radio" name="live-source" value="screen"/>
+                        <span class="text-sm font-semibold">Compartir pantalla + audio del sistema/microfono</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
+                    <p class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Visibilidad</p>
+                    <div class="mt-3 grid gap-2">
+                      <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <input type="radio" name="live-visibility" value="all" checked/>
+                        <span class="text-sm font-semibold">Toda la comunidad UPT</span>
+                      </label>
+                      <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <input type="radio" name="live-visibility" value="friends"/>
+                        <span class="text-sm font-semibold">Solo amigos</span>
+                      </label>
+                      <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <input type="radio" name="live-visibility" value="faculty"/>
+                        <span class="text-sm font-semibold">Solo mi facultad</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="px-6 py-5 border-t border-white/10 flex items-center justify-end gap-3">
+                <button id="cancel-live-modal-btn" type="button" class="px-5 py-3 rounded-full bg-white/10 hover:bg-white/14 text-sm font-semibold">Cancelar</button>
+                <button id="confirm-live-create-btn" type="button" class="px-5 py-3 rounded-full bg-[#ff0b53] hover:bg-[#e00549] text-sm font-black tracking-[0.12em]">EMPEZAR</button>
+              </div>
+            </div>
+          </div>
         `;
       },
       mount({ container, user, router }) {
@@ -2891,11 +3110,17 @@
         const emojiGrid = container.querySelector('#emoji-grid');
         const deleteModal = container.querySelector('#delete-modal');
         const commentModal = container.querySelector('#comment-modal');
+        const livestreamModal = container.querySelector('#livestream-modal');
         const commentPostPreview = container.querySelector('#comment-post-preview');
         const commentList = container.querySelector('#comment-list');
         const commentSort = container.querySelector('#comment-sort');
         const commentInput = container.querySelector('#comment-input');
         const publishButton = container.querySelector('#btn-publish');
+        const openLiveModalButton = container.querySelector('#open-live-modal-btn');
+        const liveTitleInput = container.querySelector('#live-title-input');
+        const liveDescriptionInput = container.querySelector('#live-description-input');
+        const confirmLiveCreateButton = container.querySelector('#confirm-live-create-btn');
+        const liveScreenOption = container.querySelector('#live-screen-option');
         const visibilityLabels = {
           all: 'Toda la comunidad UPT',
           friends: 'Solo amigos',
@@ -2980,6 +3205,25 @@
         function closeDeleteModal() {
           pendingDeleteId = null;
           deleteModal.classList.add('hidden');
+        }
+
+        function openLivestreamModal() {
+          livestreamModal.classList.remove('hidden');
+          livestreamModal.classList.add('flex');
+          liveTitleInput.value = '';
+          liveDescriptionInput.value = postContent.value.trim();
+          if (!isDesktopClient() && liveScreenOption) {
+            liveScreenOption.classList.add('hidden');
+            const cameraOption = livestreamModal.querySelector('input[name="live-source"][value="camera"]');
+            if (cameraOption) cameraOption.checked = true;
+          } else if (liveScreenOption) {
+            liveScreenOption.classList.remove('hidden');
+          }
+        }
+
+        function closeLivestreamModal() {
+          livestreamModal.classList.add('hidden');
+          livestreamModal.classList.remove('flex');
         }
 
         async function loadComments(postId = pendingCommentId, sort = currentCommentSort) {
@@ -3090,6 +3334,46 @@
           showToast(result?.data?.error || 'Error al publicar', 'error');
         }
 
+        async function createLivestream() {
+          const liveTitle = liveTitleInput.value.trim();
+          const content = liveDescriptionInput.value.trim();
+          const visibility = livestreamModal.querySelector('input[name="live-visibility"]:checked')?.value || 'all';
+          const liveSource = livestreamModal.querySelector('input[name="live-source"]:checked')?.value || 'camera';
+
+          if (!liveTitle) {
+            showToast('Ponle un titulo al directo', 'error');
+            return;
+          }
+
+          confirmLiveCreateButton.disabled = true;
+          confirmLiveCreateButton.textContent = 'CREANDO...';
+
+          const streamKey = buildLivestreamStreamKey(user.id);
+          const playbackUrl = buildLivestreamHlsUrl(streamKey);
+
+          const result = await PostsAPI.createLivestream({
+            liveTitle,
+            content,
+            visibility,
+            liveSource,
+            streamKey,
+            playbackUrl,
+          });
+
+          confirmLiveCreateButton.disabled = false;
+          confirmLiveCreateButton.textContent = 'EMPEZAR';
+
+          if (!result?.ok) {
+            showToast(result?.data?.error || 'No se pudo crear el directo', 'error');
+            return;
+          }
+
+          postContent.value = '';
+          closeLivestreamModal();
+          showToast('Directo creado', 'success');
+          router.navigate('live', { id: result.data.id, host: '1' });
+        }
+
         async function confirmComment() {
           const content = commentInput.value.trim();
           if (!pendingCommentId || !content) return;
@@ -3150,6 +3434,10 @@
         container.querySelector('#confirm-delete-btn').addEventListener('click', confirmDelete);
         container.querySelector('#close-comment-top-btn').addEventListener('click', closeCommentModal);
         container.querySelector('#confirm-comment-btn').addEventListener('click', confirmComment);
+        openLiveModalButton?.addEventListener('click', openLivestreamModal);
+        container.querySelector('#close-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
+        container.querySelector('#cancel-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
+        confirmLiveCreateButton?.addEventListener('click', createLivestream);
         commentSort.addEventListener('change', () => {
           if (!pendingCommentId) return;
           loadComments(pendingCommentId, commentSort.value);
@@ -3214,6 +3502,10 @@
             }
             if (actionTarget.dataset.action === 'comment-post') {
               openCommentModal(postId);
+              return;
+            }
+            if (actionTarget.dataset.action === 'open-livestream') {
+              router.navigate('live', { id: actionTarget.dataset.liveId });
               return;
             }
             if (actionTarget.dataset.action === 'report-post') {
@@ -3294,6 +3586,806 @@
           };
         },
       },
+    live: {
+      title: 'Directo',
+      activeNav: 'feed',
+      render() {
+        return `
+          <section class="w-full">
+            <div id="live-shell" class="rounded-[32px] border border-slate-200 bg-[#0b1120] text-white shadow-[0_24px_90px_rgba(15,23,42,0.24)] overflow-hidden min-h-[72vh] lg:h-[calc(100vh-7rem)] lg:max-h-[860px]">
+              <div class="flex flex-col lg:flex-row min-h-[72vh] lg:h-full">
+                <div class="relative flex-1 min-w-0 bg-[#050816] p-3 sm:p-5">
+                  <div class="relative rounded-[28px] overflow-hidden bg-[radial-gradient(circle_at_top_left,_#6d28d9,_#020617_58%,_#000_100%)] aspect-video min-h-[260px] sm:min-h-[340px]">
+                    <div id="live-viewer-player" class="absolute inset-0 hidden"></div>
+                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-cover hidden" playsinline autoplay muted></video>
+                    <div class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-[1]"></div>
+                    <div id="live-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                      <div class="w-20 h-20 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-[36px]">sensors</span>
+                      </div>
+                      <h3 id="live-fallback-title" class="text-2xl font-black">Preparando directo</h3>
+                      <p id="live-fallback-copy" class="text-white/70 text-sm mt-3 max-w-md">Conecta la fuente del directo para comenzar a transmitir.</p>
+                    </div>
+                    <div class="absolute top-4 left-4 right-4 flex items-center justify-between gap-3 z-10">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <div id="live-status-chip" class="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5">
+                          <div id="live-status-dot" class="w-2.5 h-2.5 rounded-full bg-[#ff0b53] animate-pulse"></div>
+                          <span id="live-status-badge" class="text-xs font-black tracking-[0.18em]">LIVE</span>
+                        </div>
+                        <div class="rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+                          <span class="material-symbols-outlined text-[14px]">visibility</span>
+                          <span id="live-viewer-count">0</span>
+                        </div>
+                      </div>
+                      <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em]">FINALIZAR</button>
+                    </div>
+                    <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-4 w-16 overflow-hidden"></div>
+                    <div class="absolute left-4 right-4 bottom-4 flex items-end justify-between gap-4 z-10 pointer-events-none">
+                      <div class="min-w-0 pointer-events-none">
+                        <h2 id="live-title" class="text-2xl md:text-3xl font-black leading-tight break-words">Cargando directo...</h2>
+                        <p id="live-meta" class="text-white/75 text-sm mt-2"></p>
+                      </div>
+                      <div id="live-host-tools" class="hidden items-center gap-2 pointer-events-auto">
+                        <button id="live-toggle-mic-btn" type="button" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center text-white" title="Silenciar microfono">
+                          <span class="material-symbols-outlined">mic</span>
+                        </button>
+                        <button id="live-toggle-system-audio-btn" type="button" class="hidden w-11 h-11 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center text-white" title="Silenciar audio del sistema">
+                          <span class="material-symbols-outlined">volume_up</span>
+                        </button>
+                        <button id="live-switch-source-btn" type="button" class="rounded-full bg-white/10 hover:bg-white/15 px-4 py-2 text-xs font-semibold">Cambiar fuente</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-4 flex items-center gap-2 overflow-x-auto pb-1">
+                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_gusta">❤</button>
+                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_encanta">😍</button>
+                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_divierte">😂</button>
+                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_sorprende">😮</button>
+                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_enoja">😡</button>
+                    
+                  </div>
+                </div>
+                <aside class="w-full lg:w-[340px] xl:w-[360px] shrink-0 min-w-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-[#0f172a] flex flex-col min-h-[360px] lg:h-full overflow-hidden">
+                  <div class="px-5 py-4 border-b border-white/10">
+                    <p class="text-xs uppercase tracking-[0.24em] text-white/45 font-black">Chat en vivo</p>
+                    <h3 class="font-black text-xl mt-1">Comentarios</h3>
+                  </div>
+                  <div id="live-comments" class="custom-scrollbar flex-1 h-0 min-h-[220px] max-h-[42vh] lg:max-h-none overflow-y-auto px-5 py-4 space-y-4">
+                    <p class="text-sm text-white/55">Cargando comentarios...</p>
+                  </div>
+                  <div class="px-5 py-4 border-t border-white/10">
+                    <div class="flex items-end gap-3">
+                      <textarea id="live-comment-input" rows="1" class="flex-1 min-h-[48px] max-h-28 rounded-[22px] bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none resize-none placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Escribe algo..."></textarea>
+                      <button id="live-comment-send-btn" type="button" class="w-12 h-12 rounded-full bg-[#ff0b53] hover:bg-[#e00549] flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined">send</span>
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </section>
+        `;
+      },
+      mount({ container, user, params, router }) {
+        const liveId = Number(params.id || 0);
+        const isHostRoute = String(params.host || '') === '1';
+        const viewerPlayerRoot = container.querySelector('#live-viewer-player');
+        const hostPreviewVideo = container.querySelector('#live-host-preview');
+        const liveVideoFallback = container.querySelector('#live-video-fallback');
+        const liveFallbackTitle = container.querySelector('#live-fallback-title');
+        const liveFallbackCopy = container.querySelector('#live-fallback-copy');
+        const liveTitle = container.querySelector('#live-title');
+        const liveMeta = container.querySelector('#live-meta');
+        const liveViewerCount = container.querySelector('#live-viewer-count');
+        const liveStatusChip = container.querySelector('#live-status-chip');
+        const liveStatusDot = container.querySelector('#live-status-dot');
+        const liveStatusBadge = container.querySelector('#live-status-badge');
+        const liveComments = container.querySelector('#live-comments');
+        const liveCommentInput = container.querySelector('#live-comment-input');
+        const liveCommentSendButton = container.querySelector('#live-comment-send-btn');
+        const floatingReactions = container.querySelector('#live-floating-reactions');
+        const hostEndButton = container.querySelector('#live-host-end-btn');
+        const hostTools = container.querySelector('#live-host-tools');
+        const toggleMicButton = container.querySelector('#live-toggle-mic-btn');
+        const toggleSystemAudioButton = container.querySelector('#live-toggle-system-audio-btn');
+        const switchSourceButton = container.querySelector('#live-switch-source-btn');
+        let liveData = null;
+        let activeReaction = 'me_gusta';
+        let commentsTimer = null;
+        let heartbeatTimer = null;
+        let liveStateTimer = null;
+        let lastEventId = 0;
+        let sourceBusy = false;
+        let startedAt = Date.now();
+        let ovenLivekit = null;
+        let viewerVideo = null;
+        let viewerHls = null;
+        let hostMediaBundle = null;
+        let hostMicMuted = false;
+        let hostSystemMuted = false;
+        let endedByHost = false;
+        let hostPublishing = false;
+        let hostPublishedSource = null;
+        let viewerPlayerSourceUrl = null;
+        let viewerPlayerCreatedAt = 0;
+        let viewerPlayerLastRetryAt = 0;
+        let commentsInitialized = false;
+
+        function cleanupMediaBundle(bundle) {
+          if (!bundle) {
+            return;
+          }
+
+          const tracks = [];
+          [bundle.previewStream, bundle.publishedStream, bundle.micStream].forEach((stream) => {
+            if (stream?.getTracks) {
+              tracks.push(...stream.getTracks());
+            }
+          });
+
+          const seen = new Set();
+          tracks.forEach((track) => {
+            if (!track || seen.has(track.id)) {
+              return;
+            }
+            seen.add(track.id);
+            try {
+              track.stop();
+            } catch (error) {
+              console.warn('No se pudo detener un track del directo:', error);
+            }
+          });
+
+          if (bundle.audioContext) {
+            bundle.audioContext.close().catch(() => {});
+          }
+        }
+
+        function stopHostStreams() {
+          cleanupMediaBundle(hostMediaBundle);
+          hostMediaBundle = null;
+          hostPreviewVideo.srcObject = null;
+        }
+
+        function destroyPlayer() {
+          if (viewerHls && typeof viewerHls.destroy === 'function') {
+            viewerHls.destroy();
+          }
+          viewerHls = null;
+          if (viewerVideo) {
+            viewerVideo.pause();
+            viewerVideo.removeAttribute('src');
+            viewerVideo.load();
+          }
+          viewerVideo = null;
+          viewerPlayerSourceUrl = null;
+          viewerPlayerCreatedAt = 0;
+          viewerPlayerRoot.innerHTML = '';
+        }
+
+        function showFallback(title, copy) {
+          viewerPlayerRoot.classList.add('hidden');
+          hostPreviewVideo.classList.add('hidden');
+          liveVideoFallback.classList.remove('hidden');
+          liveFallbackTitle.textContent = title;
+          liveFallbackCopy.textContent = copy;
+        }
+
+        function showHostPreview() {
+          viewerPlayerRoot.classList.add('hidden');
+          hostPreviewVideo.classList.remove('hidden');
+          liveVideoFallback.classList.add('hidden');
+        }
+
+        function showViewerPlayer() {
+          hostPreviewVideo.classList.add('hidden');
+          viewerPlayerRoot.classList.remove('hidden');
+          liveVideoFallback.classList.add('hidden');
+        }
+
+        function shouldStickCommentsToBottom() {
+          if (!commentsInitialized) {
+            return true;
+          }
+
+          return (liveComments.scrollHeight - liveComments.scrollTop - liveComments.clientHeight) < 72;
+        }
+
+        const commentMarkup = (comment) => {
+          const author = resolveProfileData({
+            id: comment.user_id,
+            user_name: comment.user_name,
+            user_faculty: comment.user_faculty,
+            user_avatar: comment.user_avatar,
+          });
+
+          return `
+            <article class="flex gap-3">
+              ${renderAvatar(author, { sizeClass: 'w-10 h-10', textClass: 'text-white font-bold text-sm' })}
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-sm">${escapeHtml(displayName(author))}</span>
+                  <span class="text-[11px] text-white/45">${escapeHtml(timeAgo(comment.created_at))}</span>
+                </div>
+                <p class="text-sm text-white/85 mt-1 whitespace-pre-wrap break-words">${escapeHtml(comment.content || '')}</p>
+              </div>
+            </article>
+          `;
+        };
+
+        function addFloatingReaction(type) {
+          const emojiMap = {
+            me_gusta: '❤',
+            me_encanta: '😍',
+            me_divierte: '😂',
+            me_sorprende: '😮',
+            me_enoja: '😡',
+          };
+          const bubble = document.createElement('div');
+          bubble.textContent = emojiMap[type] || '❤';
+          bubble.className = 'absolute right-0 text-3xl drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]';
+          bubble.style.bottom = `${16 + Math.random() * 120}px`;
+          bubble.style.transform = `translateX(0)`;
+          bubble.style.transition = 'transform 3.2s ease-out, opacity 3.2s ease-out';
+          floatingReactions.appendChild(bubble);
+          requestAnimationFrame(() => {
+            bubble.style.transform = `translate(-12px, -${240 + Math.random() * 140}px) scale(${0.82 + Math.random() * 0.45})`;
+            bubble.style.opacity = '0';
+          });
+          window.setTimeout(() => bubble.remove(), 3400);
+        }
+
+        function refreshReactionButtons() {
+          container.querySelectorAll('[data-live-set-reaction]').forEach((button) => {
+            const isActive = button.dataset.liveSetReaction === activeReaction;
+            button.classList.toggle('bg-[#ff0b53]', isActive);
+            button.classList.toggle('border-[#ff4d82]', isActive);
+            button.classList.toggle('shadow-[0_0_0_4px_rgba(255,11,83,0.15)]', isActive);
+          });
+        }
+
+        function setAudioTrackEnabled(tracks, enabled) {
+          (tracks || []).forEach((track) => {
+            try {
+              track.enabled = enabled;
+            } catch (error) {
+              console.warn('No se pudo cambiar el estado de un track de audio:', error);
+            }
+          });
+        }
+
+        function applyHostAudioState(bundle = hostMediaBundle) {
+          if (!bundle) {
+            return;
+          }
+
+          if (bundle.micGainNode) {
+            bundle.micGainNode.gain.value = hostMicMuted ? 0 : 1;
+          } else {
+            setAudioTrackEnabled(bundle.micAudioTracks, !hostMicMuted);
+          }
+
+          if (bundle.systemGainNode) {
+            bundle.systemGainNode.gain.value = hostSystemMuted ? 0 : 1;
+          } else {
+            setAudioTrackEnabled(bundle.systemAudioTracks, !hostSystemMuted);
+          }
+        }
+
+        function refreshHostAudioButtons() {
+          if (!toggleMicButton || !toggleSystemAudioButton) {
+            return;
+          }
+
+          const micIcon = toggleMicButton.querySelector('.material-symbols-outlined');
+          if (micIcon) {
+            micIcon.textContent = hostMicMuted ? 'mic_off' : 'mic';
+          }
+          toggleMicButton.classList.toggle('bg-[#ff0b53]', hostMicMuted);
+          toggleMicButton.classList.toggle('hover:bg-[#e00549]', hostMicMuted);
+          toggleMicButton.title = hostMicMuted ? 'Activar microfono' : 'Silenciar microfono';
+
+          const isScreenSource = liveData?.live_source === 'screen' && isDesktopClient();
+          toggleSystemAudioButton.classList.toggle('hidden', !isScreenSource);
+          toggleSystemAudioButton.classList.toggle('flex', isScreenSource);
+
+          const systemIcon = toggleSystemAudioButton.querySelector('.material-symbols-outlined');
+          if (systemIcon) {
+            systemIcon.textContent = hostSystemMuted ? 'volume_off' : 'volume_up';
+          }
+          toggleSystemAudioButton.classList.toggle('bg-[#ff0b53]', hostSystemMuted);
+          toggleSystemAudioButton.classList.toggle('hover:bg-[#e00549]', hostSystemMuted);
+          toggleSystemAudioButton.title = hostSystemMuted ? 'Activar audio del sistema' : 'Silenciar audio del sistema';
+        }
+
+        function isHostOwner() {
+          return isHostRoute && Number(liveData?.user_id || 0) === Number(user.id);
+        }
+
+        function refreshLiveStatusBadge() {
+          const isLive = liveData?.live_status === 'live';
+          liveStatusBadge.textContent = isLive ? 'LIVE' : 'FINALIZADO';
+          liveStatusChip.classList.toggle('bg-black/45', isLive);
+          liveStatusChip.classList.toggle('bg-slate-700/85', !isLive);
+          liveStatusDot.classList.toggle('bg-[#ff0b53]', isLive);
+          liveStatusDot.classList.toggle('animate-pulse', isLive);
+          liveStatusDot.classList.toggle('bg-slate-300', !isLive);
+        }
+
+        function viewerPlaybackLooksStalled() {
+          if (!viewerVideo || !viewerPlayerSourceUrl) {
+            return false;
+          }
+
+          if ((Date.now() - viewerPlayerCreatedAt) < 6000 || (Date.now() - viewerPlayerLastRetryAt) < 6000) {
+            return false;
+          }
+
+          return viewerVideo.readyState < 2 || (viewerVideo.currentTime === 0 && viewerVideo.paused);
+        }
+
+        function syncViewerToLiveEdge(force = false) {
+          if (!viewerHls || !viewerVideo) {
+            return;
+          }
+
+          const syncPosition = viewerHls.liveSyncPosition;
+          if (!Number.isFinite(syncPosition) || syncPosition <= 0) {
+            return;
+          }
+
+          const currentTime = Number(viewerVideo.currentTime || 0);
+          const drift = syncPosition - currentTime;
+
+          if (force || currentTime <= 0 || drift > 1.15 || drift < -0.8) {
+            try {
+              viewerVideo.currentTime = syncPosition;
+            } catch (error) {
+              console.warn('No se pudo saltar al borde en vivo del directo:', error);
+            }
+          }
+
+          if (drift > 0.35) {
+            viewerVideo.playbackRate = Math.min(1.08, 1 + drift / 8);
+            return;
+          }
+
+          viewerVideo.playbackRate = 1;
+        }
+
+        async function ensureViewerManifest(url) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+            const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+              method: 'GET',
+              cache: 'no-store',
+              signal: controller.signal,
+            });
+            window.clearTimeout(timeoutId);
+            if (!response.ok) {
+              return false;
+            }
+            const manifest = await response.text();
+            return manifest.includes('#EXTM3U');
+          } catch (error) {
+            return false;
+          }
+        }
+
+        function createViewerVideo() {
+          const video = document.createElement('video');
+          video.className = 'w-full h-full object-cover bg-black';
+          video.autoplay = true;
+          video.controls = true;
+          video.playsInline = true;
+          video.setAttribute('playsinline', '');
+          viewerPlayerRoot.innerHTML = '';
+          viewerPlayerRoot.appendChild(video);
+          viewerVideo = video;
+          return video;
+        }
+
+        async function ensureViewerPlayer(forceRestart = false) {
+          if (!liveData?.stream_key) {
+            showFallback('Preparando directo', 'La transmision todavia esta preparando su senal en vivo.');
+            return;
+          }
+
+          await ensureLivestreamLibraries();
+          const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url);
+          if (!forceRestart && viewerVideo && viewerPlayerSourceUrl === sourceUrl) {
+            showViewerPlayer();
+            await viewerVideo.play().catch(() => {});
+            return;
+          }
+
+          const manifestReady = await ensureViewerManifest(sourceUrl);
+          if (!manifestReady) {
+            showFallback('Esperando directo', 'El stream todavia se esta preparando para los espectadores.');
+            return;
+          }
+
+          showViewerPlayer();
+          destroyPlayer();
+          const video = createViewerVideo();
+          const readyAt = Date.now();
+
+          if (window.Hls && window.Hls.isSupported()) {
+            viewerHls = new window.Hls({
+              lowLatencyMode: true,
+              liveDurationInfinity: true,
+              backBufferLength: 30,
+              maxBufferLength: 10,
+              liveSyncDurationCount: 1,
+              liveMaxLatencyDurationCount: 2,
+              maxLiveSyncPlaybackRate: 1.08,
+            });
+            viewerHls.loadSource(sourceUrl);
+            viewerHls.attachMedia(video);
+            viewerHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+              syncViewerToLiveEdge(true);
+              video.play().catch(() => {});
+            });
+            viewerHls.on(window.Hls.Events.LEVEL_UPDATED, () => {
+              syncViewerToLiveEdge();
+            });
+            viewerHls.on(window.Hls.Events.FRAG_BUFFERED, () => {
+              syncViewerToLiveEdge();
+            });
+            viewerHls.on(window.Hls.Events.ERROR, (_event, data) => {
+              if (!data?.fatal) {
+                return;
+              }
+
+              if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                viewerHls.startLoad();
+                return;
+              }
+
+              if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                viewerHls.recoverMediaError();
+                return;
+              }
+
+              destroyPlayer();
+              showFallback('No se pudo reproducir el directo', 'Intenta entrar de nuevo en unos segundos.');
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = sourceUrl;
+            video.addEventListener('loadedmetadata', () => {
+              const seekable = video.seekable;
+              if (seekable && seekable.length > 0) {
+                try {
+                  video.currentTime = Math.max(0, seekable.end(seekable.length - 1) - 1);
+                } catch (error) {
+                  console.warn('No se pudo ajustar el viewer nativo al borde del live:', error);
+                }
+              }
+              video.play().catch(() => {});
+            }, { once: true });
+          } else {
+            showFallback('Reproduccion no compatible', 'Este navegador no pudo cargar el directo.');
+            return;
+          }
+
+          viewerPlayerSourceUrl = sourceUrl;
+          viewerPlayerCreatedAt = readyAt;
+          viewerPlayerLastRetryAt = readyAt;
+        }
+
+        async function buildHostInputStream(source) {
+          const bundle = {
+            source,
+            previewStream: null,
+            publishedStream: null,
+            micStream: null,
+            audioContext: null,
+            systemAudioTracks: [],
+            micAudioTracks: [],
+            systemGainNode: null,
+            micGainNode: null,
+          };
+
+          if (source === 'screen' && isDesktopClient()) {
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+              video: true,
+              audio: true,
+            });
+            let micStream = null;
+
+            try {
+              micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch (error) {
+              micStream = null;
+            }
+
+            bundle.previewStream = displayStream;
+            bundle.micStream = micStream;
+
+            const finalStream = new MediaStream();
+            displayStream.getVideoTracks().forEach((track) => finalStream.addTrack(track));
+
+            const displayAudioTracks = displayStream.getAudioTracks();
+            const micAudioTracks = micStream?.getAudioTracks() || [];
+            bundle.systemAudioTracks = displayAudioTracks;
+            bundle.micAudioTracks = micAudioTracks;
+
+            if (displayAudioTracks.length && micAudioTracks.length) {
+              bundle.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              const destination = bundle.audioContext.createMediaStreamDestination();
+              const displaySource = bundle.audioContext.createMediaStreamSource(new MediaStream([displayAudioTracks[0]]));
+              const micSource = bundle.audioContext.createMediaStreamSource(new MediaStream([micAudioTracks[0]]));
+              bundle.systemGainNode = bundle.audioContext.createGain();
+              bundle.micGainNode = bundle.audioContext.createGain();
+              displaySource.connect(bundle.systemGainNode).connect(destination);
+              micSource.connect(bundle.micGainNode).connect(destination);
+              destination.stream.getAudioTracks().forEach((track) => finalStream.addTrack(track));
+            } else if (displayAudioTracks.length) {
+              finalStream.addTrack(displayAudioTracks[0]);
+            } else if (micAudioTracks.length) {
+              finalStream.addTrack(micAudioTracks[0]);
+            }
+
+            bundle.publishedStream = finalStream;
+            applyHostAudioState(bundle);
+            return bundle;
+          }
+
+          const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          bundle.previewStream = cameraStream;
+          bundle.publishedStream = cameraStream;
+          bundle.micAudioTracks = cameraStream.getAudioTracks();
+          applyHostAudioState(bundle);
+          return bundle;
+        }
+
+        async function startHostSource(nextSource = null, forceRestart = false) {
+          if (sourceBusy || !liveData?.stream_key) return;
+          sourceBusy = true;
+
+          try {
+            await ensureLivestreamLibraries();
+            const source = nextSource || liveData?.live_source || 'camera';
+            if (hostPublishing && !forceRestart && hostPublishedSource === source) {
+              return;
+            }
+
+            if (!ovenLivekit) {
+              ovenLivekit = window.OvenLiveKit.create({
+                callbacks: {
+                  error: (error) => {
+                    console.error('OvenLiveKit error:', error);
+                  },
+                },
+              });
+            }
+
+            const previousBundle = hostMediaBundle;
+            const nextBundle = await buildHostInputStream(source);
+            liveData.live_source = source;
+            ovenLivekit.attachMedia(hostPreviewVideo);
+            await ovenLivekit.setMediaStream(nextBundle.publishedStream);
+            hostMediaBundle = nextBundle;
+            hostPreviewVideo.srcObject = nextBundle.previewStream || nextBundle.publishedStream;
+            showHostPreview();
+            await hostPreviewVideo.play().catch(() => {});
+            if (!hostPublishing) {
+              await ovenLivekit.startStreaming(buildLivestreamPublishUrl(liveData.stream_key));
+              hostPublishing = true;
+            }
+            hostPublishing = true;
+            hostPublishedSource = source;
+            refreshHostAudioButtons();
+            cleanupMediaBundle(previousBundle);
+          } catch (error) {
+            console.error('No se pudo iniciar el directo con OME:', error);
+            hostPublishing = false;
+            hostPublishedSource = null;
+            showFallback('Fuente no disponible', 'No se pudo acceder a la camara o pantalla compartida para el directo.');
+            showToast('No se pudo iniciar la transmision en vivo', 'error');
+          } finally {
+            sourceBusy = false;
+          }
+        }
+
+        async function loadLivestream() {
+          const result = await PostsAPI.getLivestream(liveId);
+          if (!result?.ok) {
+            liveTitle.textContent = 'No se pudo cargar el directo';
+            liveMeta.textContent = result?.data?.error || 'Este directo ya no esta disponible.';
+            showFallback('No se pudo cargar el directo', result?.data?.error || 'Este directo ya no esta disponible.');
+            return;
+          }
+
+          liveData = result.data;
+          liveTitle.textContent = liveData.live_title || 'Directo UPT';
+          liveMeta.textContent = `${displayName(resolveProfileData({ id: liveData.user_id, user_name: liveData.user_name, user_faculty: liveData.user_faculty, user_school: liveData.user_school, user_avatar: liveData.user_avatar }))} · ${liveData.live_status === 'live' ? 'En vivo' : 'Finalizado'}`;
+          liveViewerCount.textContent = String(liveData.live_status === 'live' ? Number(liveData.viewer_count || 0) : 0);
+          activeReaction = liveData.current_reaction || activeReaction;
+          refreshReactionButtons();
+          refreshLiveStatusBadge();
+
+          const isOwner = Number(liveData.user_id) === Number(user.id) && isHostRoute;
+          hostEndButton.classList.toggle('hidden', !isOwner);
+          hostTools.classList.toggle('hidden', !isOwner);
+          hostTools.classList.toggle('flex', isOwner);
+          refreshHostAudioButtons();
+
+          if (!isOwner && liveData.live_status === 'live') {
+            await ensureViewerPlayer(viewerPlaybackLooksStalled());
+            syncViewerToLiveEdge();
+          }
+
+          if (liveData.live_status !== 'live') {
+            destroyPlayer();
+            showFallback('Directo finalizado', 'La transmision termino, pero puedes seguir viendo su registro y comentarios.');
+          }
+        }
+
+        async function loadComments() {
+          const stickToBottom = shouldStickCommentsToBottom();
+          const result = await PostsAPI.getComments(liveId, 'newest');
+          const comments = getList(result).slice().reverse().slice(-40);
+          if (!result?.ok) {
+            liveComments.innerHTML = '<p class="text-sm text-white/55">No se pudieron cargar los comentarios.</p>';
+            return;
+          }
+          if (!comments.length) {
+            liveComments.innerHTML = '<p class="text-sm text-white/55">Todavia no hay comentarios en este directo.</p>';
+            commentsInitialized = true;
+            return;
+          }
+          liveComments.innerHTML = comments.map(commentMarkup).join('');
+          commentsInitialized = true;
+          if (stickToBottom) {
+            liveComments.scrollTop = liveComments.scrollHeight;
+          }
+        }
+
+        async function sendComment() {
+          const content = liveCommentInput.value.trim();
+          if (!content) return;
+          const result = await PostsAPI.addComment(liveId, content);
+          if (!result?.ok) {
+            showToast(result?.data?.error || 'No se pudo comentar en el directo', 'error');
+            return;
+          }
+          liveCommentInput.value = '';
+          await loadComments();
+        }
+
+        async function heartbeat() {
+          if (liveData?.live_status !== 'live') {
+            liveViewerCount.textContent = '0';
+            return;
+          }
+          const result = await PostsAPI.livestreamHeartbeat(liveId);
+          if (result?.ok) {
+            liveViewerCount.textContent = String(Number(result.data?.viewer_count || 0));
+          }
+        }
+
+        async function pollReactionEvents() {
+          const result = await PostsAPI.getLivestreamEvents(liveId, lastEventId);
+          const events = getList(result);
+          if (!result?.ok || !events.length) return;
+          events.forEach((event) => {
+            lastEventId = Math.max(lastEventId, Number(event.id || 0));
+            addFloatingReaction(event.reaction_type);
+          });
+        }
+
+        async function sendActiveReaction() {
+          const result = await PostsAPI.reactLivestream(liveId, activeReaction);
+          if (!result?.ok) {
+            showToast(result?.data?.error || 'No se pudo enviar la reaccion', 'error');
+            return;
+          }
+          lastEventId = Math.max(lastEventId, Number(result.data?.event_id || 0));
+          addFloatingReaction(activeReaction);
+        }
+
+        async function endLivestream() {
+          const durationSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+          const result = await PostsAPI.endLivestream(liveId, durationSeconds);
+          if (!result?.ok) {
+            showToast(result?.data?.error || 'No se pudo finalizar el directo', 'error');
+            return;
+          }
+          endedByHost = true;
+          if (ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
+            try {
+              ovenLivekit.stopStreaming();
+            } catch (error) {
+              console.warn('No se pudo detener OvenLiveKit al finalizar:', error);
+            }
+          }
+          showToast('Directo finalizado', 'success');
+          router.navigate('feed');
+        }
+
+        const commentsLoop = () => loadComments().catch(() => {});
+        const heartbeatLoop = () => heartbeat().catch(() => {});
+        const stateLoop = async () => {
+          await loadLivestream();
+          await pollReactionEvents();
+        };
+
+        liveCommentSendButton.addEventListener('click', sendComment);
+        liveCommentInput.addEventListener('keydown', async (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            await sendComment();
+          }
+        });
+        liveCommentInput.addEventListener('input', () => {
+          liveCommentInput.style.height = 'auto';
+          liveCommentInput.style.height = `${Math.min(liveCommentInput.scrollHeight, 112)}px`;
+        });
+        hostEndButton.addEventListener('click', endLivestream);
+        toggleMicButton?.addEventListener('click', () => {
+          hostMicMuted = !hostMicMuted;
+          applyHostAudioState();
+          refreshHostAudioButtons();
+        });
+        toggleSystemAudioButton?.addEventListener('click', () => {
+          hostSystemMuted = !hostSystemMuted;
+          applyHostAudioState();
+          refreshHostAudioButtons();
+        });
+        switchSourceButton?.addEventListener('click', async () => {
+          const next = liveData?.live_source === 'screen' ? 'camera' : 'screen';
+          liveData.live_source = next;
+          await startHostSource(next, true);
+        });
+
+        container.querySelectorAll('[data-live-set-reaction]').forEach((button) => {
+          button.addEventListener('click', async () => {
+            activeReaction = button.dataset.liveSetReaction || 'me_gusta';
+            refreshReactionButtons();
+            await sendActiveReaction();
+          });
+        });
+
+        loadLivestream().then(async () => {
+          refreshReactionButtons();
+          await loadComments();
+          await heartbeat();
+          await pollReactionEvents();
+          if (isHostOwner()) {
+            startedAt = Date.now();
+            await startHostSource(liveData?.live_source || (isDesktopClient() ? 'camera' : 'camera'));
+          }
+        });
+
+        commentsTimer = window.setInterval(commentsLoop, 2200);
+        heartbeatTimer = window.setInterval(heartbeatLoop, 10000);
+        liveStateTimer = window.setInterval(stateLoop, 2400);
+
+        return () => {
+          if (commentsTimer) window.clearInterval(commentsTimer);
+          if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+          if (liveStateTimer) window.clearInterval(liveStateTimer);
+          if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
+            try {
+              ovenLivekit.stopStreaming();
+            } catch (error) {
+              console.warn('No se pudo detener la transmision al salir del live:', error);
+            }
+          }
+          hostPublishing = false;
+          hostPublishedSource = null;
+          if (ovenLivekit && typeof ovenLivekit.remove === 'function') {
+            ovenLivekit.remove();
+          }
+          ovenLivekit = null;
+          destroyPlayer();
+          stopHostStreams();
+        };
+      },
+    },
     messages: {
       title: 'Mensajes',
       activeNav: 'messages',
@@ -4755,6 +5847,12 @@
               return;
             }
 
+            const liveButton = event.target.closest('[data-action="open-livestream"]');
+            if (liveButton) {
+              router.navigate('live', { id: liveButton.dataset.liveId });
+              return;
+            }
+
             const reportButton = event.target.closest('[data-action="report-post"]');
             if (reportButton) {
               const result = await PostsAPI.reportPost(reportButton.dataset.postId);
@@ -6128,6 +7226,10 @@
             }
             if (button.dataset.action === 'comment-post') {
               openProfileCommentModal(button.dataset.postId);
+              return;
+            }
+            if (button.dataset.action === 'open-livestream') {
+              router.navigate('live', { id: button.dataset.liveId });
               return;
             }
             if (button.dataset.action === 'report-post') {
