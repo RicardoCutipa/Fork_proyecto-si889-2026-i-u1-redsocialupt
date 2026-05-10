@@ -550,7 +550,19 @@
   }
 
   function isDesktopClient() {
-    return window.matchMedia('(min-width: 768px)').matches;
+    // Real device detection: UA + pointer + touch — NOT viewport size
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
+    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+    const isTouchOnly = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && !hasFinePointer;
+    // Desktop = not a mobile UA, has a fine pointer (mouse), and is not touch-only
+    if (isMobileUA || (hasCoarsePointer && !hasFinePointer) || isTouchOnly) return false;
+    return true;
+  }
+
+  function isMobileDevice() {
+    return !isDesktopClient();
   }
 
   function loadExternalScript(src, globalName) {
@@ -3592,76 +3604,120 @@
       render() {
         return `
           <section class="w-full">
-            <div id="live-shell" class="rounded-[32px] border border-slate-200 bg-[#0b1120] text-white shadow-[0_24px_90px_rgba(15,23,42,0.24)] overflow-hidden min-h-[72vh] lg:h-[calc(100vh-7rem)] lg:max-h-[860px]">
-              <div class="flex flex-col lg:flex-row min-h-[72vh] lg:h-full">
-                <div class="relative flex-1 min-w-0 bg-[#050816] p-3 sm:p-5">
-                  <div class="relative rounded-[28px] overflow-hidden bg-[radial-gradient(circle_at_top_left,_#6d28d9,_#020617_58%,_#000_100%)] aspect-video min-h-[260px] sm:min-h-[340px]">
+            <div id="live-shell" class="live-root text-white">
+              <div class="live-layout">
+
+                <!-- ═══ VIDEO PANEL ═══ -->
+                <div class="live-video-col">
+                  <div id="live-video-wrap" class="live-video-wrap">
                     <div id="live-viewer-player" class="absolute inset-0 hidden"></div>
-                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-cover hidden" playsinline autoplay muted></video>
-                    <div class="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-[1]"></div>
-                    <div id="live-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-contain hidden" playsinline autoplay muted></video>
+
+                    <!-- Fallback -->
+                    <div id="live-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-[5]">
                       <div class="w-20 h-20 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mb-5">
                         <span class="material-symbols-outlined text-[36px]">sensors</span>
                       </div>
                       <h3 id="live-fallback-title" class="text-2xl font-black">Preparando directo</h3>
                       <p id="live-fallback-copy" class="text-white/70 text-sm mt-3 max-w-md">Conecta la fuente del directo para comenzar a transmitir.</p>
                     </div>
-                    <div class="absolute top-4 left-4 right-4 flex items-center justify-between gap-3 z-10">
+
+                    <!-- ── OVERLAY (top) ── -->
+                    <div data-live-overlay class="live-overlay absolute top-0 left-0 right-0 z-30 flex items-start justify-between p-4 bg-gradient-to-b from-black/60 to-transparent transition-opacity duration-300">
                       <div class="flex items-center gap-2 flex-wrap">
-                        <div id="live-status-chip" class="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1.5">
-                          <div id="live-status-dot" class="w-2.5 h-2.5 rounded-full bg-[#ff0b53] animate-pulse"></div>
-                          <span id="live-status-badge" class="text-xs font-black tracking-[0.18em]">LIVE</span>
+                        <div id="live-status-chip" class="flex items-center gap-2 rounded-full gradient-live live-pulse shadow-glow px-3 py-1.5">
+                          <div id="live-status-dot" class="w-2 h-2 rounded-full bg-white"></div>
+                          <span id="live-status-badge" class="text-[10px] font-black tracking-[0.18em]">LIVE</span>
                         </div>
-                        <div class="rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+                        <div class="rounded-full glass px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
                           <span class="material-symbols-outlined text-[14px]">visibility</span>
                           <span id="live-viewer-count">0</span>
                         </div>
                       </div>
-                      <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em]">FINALIZAR</button>
-                    </div>
-                    <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-4 w-16 overflow-hidden"></div>
-                    <div class="absolute left-4 right-4 bottom-4 flex items-end justify-between gap-4 z-10 pointer-events-none">
-                      <div class="min-w-0 pointer-events-none">
-                        <h2 id="live-title" class="text-2xl md:text-3xl font-black leading-tight break-words">Cargando directo...</h2>
-                        <p id="live-meta" class="text-white/75 text-sm mt-2"></p>
-                      </div>
-                      <div id="live-host-tools" class="hidden items-center gap-2 pointer-events-auto">
-                        <button id="live-toggle-mic-btn" type="button" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center text-white" title="Silenciar microfono">
-                          <span class="material-symbols-outlined">mic</span>
+                      <div class="flex items-center gap-2">
+                        <button id="live-toggle-mic-btn-mobile" type="button" class="hidden w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar microfono">
+                          <span class="material-symbols-outlined text-[20px]">mic</span>
                         </button>
-                        <button id="live-toggle-system-audio-btn" type="button" class="hidden w-11 h-11 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center text-white" title="Silenciar audio del sistema">
-                          <span class="material-symbols-outlined">volume_up</span>
+                        <button id="live-immersive-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Modo inmersivo">
+                          <span class="material-symbols-outlined text-[20px]">open_in_full</span>
                         </button>
-                        <button id="live-switch-source-btn" type="button" class="rounded-full bg-white/10 hover:bg-white/15 px-4 py-2 text-xs font-semibold">Cambiar fuente</button>
+                        <button id="live-fullscreen-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa (video)">
+                          <span class="material-symbols-outlined text-[20px]">fullscreen</span>
+                        </button>
+                        <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em] transition">FINALIZAR</button>
                       </div>
                     </div>
-                  </div>
-                  <div class="mt-4 flex items-center gap-2 overflow-x-auto pb-1">
-                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_gusta">❤</button>
-                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_encanta">😍</button>
-                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_divierte">😂</button>
-                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_sorprende">😮</button>
-                      <button type="button" class="w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center text-xl shrink-0" data-live-set-reaction="me_enoja">😡</button>
-                    
+
+                    <!-- ── OVERLAY (bottom – title + host tools, desktop only) ── -->
+                    <div data-live-overlay class="live-overlay live-desktop-only absolute bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300">
+                      <div class="flex items-end justify-between gap-4">
+                        <div class="min-w-0">
+                          <h2 id="live-title" class="text-xl md:text-2xl font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
+                        </div>
+                        <div id="live-host-tools" class="hidden items-center gap-2 shrink-0">
+                          <button id="live-toggle-mic-btn" type="button" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar microfono">
+                            <span class="material-symbols-outlined text-[20px]">mic</span>
+                          </button>
+                          <button id="live-toggle-system-audio-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar audio del sistema">
+                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                          </button>
+                          <button id="live-switch-source-btn" type="button" class="rounded-full glass hover:bg-white/20 px-3 py-1.5 text-xs font-semibold transition">Cambiar fuente</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Floating reactions -->
+                    <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-4 w-16 overflow-hidden z-20"></div>
+
+                    <!-- ═══ MOBILE OVERLAY: comments + input (inside video, TikTok style) ═══ -->
+                    <div id="live-mobile-overlay" class="live-mobile-overlay live-mobile-only">
+                      <div class="px-4 pb-1 pt-2">
+                        <h2 id="live-title-mobile" class="text-lg font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
+                      </div>
+                      <div id="live-comments-mobile" class="live-mobile-comments custom-scrollbar"></div>
+                      <div class="live-mobile-input-row">
+                        <textarea id="live-comment-input-mobile" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
+                        <div class="relative">
+                          <button id="live-reaction-trigger" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
+                          <div id="live-reaction-selector" class="hidden absolute bottom-[120%] right-0 glass rounded-full px-2 py-1.5 flex items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
+                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_gusta">❤️</button>
+                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_encanta">😍</button>
+                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_divierte">😂</button>
+                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_sorprende">😮</button>
+                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_enoja">😡</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <aside class="w-full lg:w-[340px] xl:w-[360px] shrink-0 min-w-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-[#0f172a] flex flex-col min-h-[360px] lg:h-full overflow-hidden">
+
+                <!-- ═══ CHAT PANEL (desktop only) ═══ -->
+                <aside class="live-chat-col live-desktop-only live-desktop-flex">
                   <div class="px-5 py-4 border-b border-white/10">
                     <p class="text-xs uppercase tracking-[0.24em] text-white/45 font-black">Chat en vivo</p>
                     <h3 class="font-black text-xl mt-1">Comentarios</h3>
                   </div>
-                  <div id="live-comments" class="custom-scrollbar flex-1 h-0 min-h-[220px] max-h-[42vh] lg:max-h-none overflow-y-auto px-5 py-4 space-y-4">
+                  <div id="live-comments" class="custom-scrollbar flex-1 h-0 min-h-[220px] overflow-y-auto px-5 py-4 space-y-4">
                     <p class="text-sm text-white/55">Cargando comentarios...</p>
                   </div>
                   <div class="px-5 py-4 border-t border-white/10">
                     <div class="flex items-end gap-3">
-                      <textarea id="live-comment-input" rows="1" class="flex-1 min-h-[48px] max-h-28 rounded-[22px] bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none resize-none placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Escribe algo..."></textarea>
-                      <button id="live-comment-send-btn" type="button" class="w-12 h-12 rounded-full bg-[#ff0b53] hover:bg-[#e00549] flex items-center justify-center shrink-0">
-                        <span class="material-symbols-outlined">send</span>
-                      </button>
+                      <textarea id="live-comment-input" rows="1" class="flex-1 min-h-[48px] max-h-28 rounded-[22px] bg-slate-950/70 border border-white/10 focus:border-[#ec4899]/40 px-4 py-3 text-sm text-white caret-[#ec4899] outline-none resize-none placeholder:text-white/35 transition" style="-webkit-text-fill-color:#fff;" placeholder="Escribe algo..."></textarea>
+                      <div class="relative">
+                        <button id="live-reaction-trigger-desktop" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow hover:brightness-110 flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
+                        <div id="live-reaction-selector-desktop" class="hidden absolute bottom-[120%] right-0 glass rounded-full px-2 py-1.5 flex items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_gusta">❤️</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_encanta">😍</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_divierte">😂</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_sorprende">😮</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_enoja">😡</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </aside>
+
               </div>
             </div>
           </section>
@@ -3670,26 +3726,45 @@
       mount({ container, user, params, router }) {
         const liveId = Number(params.id || 0);
         const isHostRoute = String(params.host || '') === '1';
+
+        // Apply device class to root (controls entire layout via CSS)
+        const liveShell = container.querySelector('#live-shell');
+        if (isDesktopClient() && liveShell) {
+          liveShell.classList.add('live-is-desktop');
+        }
+
         const viewerPlayerRoot = container.querySelector('#live-viewer-player');
         const hostPreviewVideo = container.querySelector('#live-host-preview');
         const liveVideoFallback = container.querySelector('#live-video-fallback');
         const liveFallbackTitle = container.querySelector('#live-fallback-title');
         const liveFallbackCopy = container.querySelector('#live-fallback-copy');
         const liveTitle = container.querySelector('#live-title');
-        const liveMeta = container.querySelector('#live-meta');
         const liveViewerCount = container.querySelector('#live-viewer-count');
         const liveStatusChip = container.querySelector('#live-status-chip');
         const liveStatusDot = container.querySelector('#live-status-dot');
         const liveStatusBadge = container.querySelector('#live-status-badge');
         const liveComments = container.querySelector('#live-comments');
         const liveCommentInput = container.querySelector('#live-comment-input');
-        const liveCommentSendButton = container.querySelector('#live-comment-send-btn');
+        const liveCommentsMobile = container.querySelector('#live-comments-mobile');
+        const liveCommentInputMobile = container.querySelector('#live-comment-input-mobile');
+        const liveTitleMobile = container.querySelector('#live-title-mobile');
         const floatingReactions = container.querySelector('#live-floating-reactions');
         const hostEndButton = container.querySelector('#live-host-end-btn');
         const hostTools = container.querySelector('#live-host-tools');
         const toggleMicButton = container.querySelector('#live-toggle-mic-btn');
+        const toggleMicButtonMobile = container.querySelector('#live-toggle-mic-btn-mobile');
         const toggleSystemAudioButton = container.querySelector('#live-toggle-system-audio-btn');
         const switchSourceButton = container.querySelector('#live-switch-source-btn');
+
+        const fullscreenBtn = container.querySelector('#live-fullscreen-btn');
+        const immersiveBtn = container.querySelector('#live-immersive-btn');
+        const reactionTrigger = container.querySelector('#live-reaction-trigger');
+        const reactionSelector = container.querySelector('#live-reaction-selector');
+        const reactionTriggerDesktop = container.querySelector('#live-reaction-trigger-desktop');
+        const reactionSelectorDesktop = container.querySelector('#live-reaction-selector-desktop');
+        const liveVideoWrap = container.querySelector('#live-video-wrap');
+        const overlays = container.querySelectorAll('[data-live-overlay]');
+
         let liveData = null;
         let activeReaction = 'me_gusta';
         let commentsTimer = null;
@@ -3711,6 +3786,10 @@
         let viewerPlayerCreatedAt = 0;
         let viewerPlayerLastRetryAt = 0;
         let commentsInitialized = false;
+        let overlayTimer = null;
+        let longPressTimer = null;
+        let selectorOpen = false;
+        let lastKnownSource = null;
 
         function cleanupMediaBundle(bundle) {
           if (!bundle) {
@@ -3784,13 +3863,6 @@
           liveVideoFallback.classList.add('hidden');
         }
 
-        function shouldStickCommentsToBottom() {
-          if (!commentsInitialized) {
-            return true;
-          }
-
-          return (liveComments.scrollHeight - liveComments.scrollTop - liveComments.clientHeight) < 72;
-        }
 
         const commentMarkup = (comment) => {
           const author = resolveProfileData({
@@ -3799,49 +3871,56 @@
             user_faculty: comment.user_faculty,
             user_avatar: comment.user_avatar,
           });
+          const avatarBg = author.avatar_url ? `background-image:url('${safeUrl(author.avatar_url)}');background-color:${userColor(author)}` : `background:${userColor(author)}`;
+          const avatarContent = author.avatar_url ? '' : escapeHtml(initials(displayName(author)));
 
           return `
-            <article class="flex gap-3">
-              ${renderAvatar(author, { sizeClass: 'w-10 h-10', textClass: 'text-white font-bold text-sm' })}
+            <div class="flex items-start gap-3" style="animation:live-comment-in 0.3s ease-out both;">
+              <div class="w-10 h-10 rounded-full bg-slate-600 shrink-0 flex items-center justify-center text-white text-xs font-bold" style="${avatarBg};background-size:cover;background-position:center;">${avatarContent}</div>
               <div class="min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="font-bold text-sm">${escapeHtml(displayName(author))}</span>
-                  <span class="text-[11px] text-white/45">${escapeHtml(timeAgo(comment.created_at))}</span>
-                </div>
-                <p class="text-sm text-white/85 mt-1 whitespace-pre-wrap break-words">${escapeHtml(comment.content || '')}</p>
+                <span class="font-bold text-[13px] text-white">${escapeHtml(displayName(author))}</span>
+                <span class="text-[11px] text-white/35 ml-1.5">${escapeHtml(timeAgo(comment.created_at))}</span>
+                <p class="text-[13px] text-white/80 mt-0.5 break-words whitespace-pre-wrap">${escapeHtml(comment.content || '')}</p>
               </div>
-            </article>
+            </div>
           `;
         };
 
+
+
         function addFloatingReaction(type) {
           const emojiMap = {
-            me_gusta: '❤',
-            me_encanta: '😍',
+            me_gusta: '❤️',
             me_divierte: '😂',
             me_sorprende: '😮',
             me_enoja: '😡',
+            me_entristece: '😢',
           };
-          const bubble = document.createElement('div');
-          bubble.textContent = emojiMap[type] || '❤';
-          bubble.className = 'absolute right-0 text-3xl drop-shadow-[0_8px_18px_rgba(0,0,0,0.35)]';
-          bubble.style.bottom = `${16 + Math.random() * 120}px`;
-          bubble.style.transform = `translateX(0)`;
-          bubble.style.transition = 'transform 3.2s ease-out, opacity 3.2s ease-out';
-          floatingReactions.appendChild(bubble);
-          requestAnimationFrame(() => {
-            bubble.style.transform = `translate(-12px, -${240 + Math.random() * 140}px) scale(${0.82 + Math.random() * 0.45})`;
-            bubble.style.opacity = '0';
+          const emoji = emojiMap[type] || '❤️';
+          const xOffset = (Math.random() - 0.5) * 30;
+
+          [floatingReactions].forEach((target) => {
+            if (!target) return;
+            const bubble = document.createElement('div');
+            bubble.textContent = emoji;
+            bubble.className = 'live-float-emoji';
+            bubble.style.right = `${Math.random() * 40}px`;
+            bubble.style.setProperty('--float-x', `${xOffset}px`);
+            target.appendChild(bubble);
+            window.setTimeout(() => bubble.remove(), 3200);
           });
-          window.setTimeout(() => bubble.remove(), 3400);
         }
 
         function refreshReactionButtons() {
+          const emojiLookup = { me_gusta: '❤️', me_divierte: '😂', me_sorprende: '😮', me_enoja: '😡', me_entristece: '😢', me_encanta: '😍' };
+          const activeEmoji = emojiLookup[activeReaction] || '❤️';
+          // Update both trigger buttons
+          if (reactionTrigger) reactionTrigger.textContent = activeEmoji;
+          if (reactionTriggerDesktop) reactionTriggerDesktop.textContent = activeEmoji;
           container.querySelectorAll('[data-live-set-reaction]').forEach((button) => {
             const isActive = button.dataset.liveSetReaction === activeReaction;
-            button.classList.toggle('bg-[#ff0b53]', isActive);
-            button.classList.toggle('border-[#ff4d82]', isActive);
-            button.classList.toggle('shadow-[0_0_0_4px_rgba(255,11,83,0.15)]', isActive);
+            button.style.background = isActive ? 'rgba(255,255,255,0.18)' : '';
+            button.style.transform = isActive ? 'scale(1.18)' : '';
           });
         }
 
@@ -3874,29 +3953,25 @@
         }
 
         function refreshHostAudioButtons() {
-          if (!toggleMicButton || !toggleSystemAudioButton) {
-            return;
-          }
+          const allMicBtns = [toggleMicButton, toggleMicButtonMobile].filter(Boolean);
+          const allSysBtns = [toggleSystemAudioButton].filter(Boolean);
 
-          const micIcon = toggleMicButton.querySelector('.material-symbols-outlined');
-          if (micIcon) {
-            micIcon.textContent = hostMicMuted ? 'mic_off' : 'mic';
-          }
-          toggleMicButton.classList.toggle('bg-[#ff0b53]', hostMicMuted);
-          toggleMicButton.classList.toggle('hover:bg-[#e00549]', hostMicMuted);
-          toggleMicButton.title = hostMicMuted ? 'Activar microfono' : 'Silenciar microfono';
+          allMicBtns.forEach((btn) => {
+            const icon = btn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = hostMicMuted ? 'mic_off' : 'mic';
+            btn.classList.toggle('gradient-live', hostMicMuted);
+            btn.title = hostMicMuted ? 'Activar microfono' : 'Silenciar microfono';
+          });
 
           const isScreenSource = liveData?.live_source === 'screen' && isDesktopClient();
-          toggleSystemAudioButton.classList.toggle('hidden', !isScreenSource);
-          toggleSystemAudioButton.classList.toggle('flex', isScreenSource);
-
-          const systemIcon = toggleSystemAudioButton.querySelector('.material-symbols-outlined');
-          if (systemIcon) {
-            systemIcon.textContent = hostSystemMuted ? 'volume_off' : 'volume_up';
-          }
-          toggleSystemAudioButton.classList.toggle('bg-[#ff0b53]', hostSystemMuted);
-          toggleSystemAudioButton.classList.toggle('hover:bg-[#e00549]', hostSystemMuted);
-          toggleSystemAudioButton.title = hostSystemMuted ? 'Activar audio del sistema' : 'Silenciar audio del sistema';
+          allSysBtns.forEach((btn) => {
+            btn.classList.toggle('hidden', !isScreenSource);
+            btn.classList.toggle('flex', isScreenSource);
+            const icon = btn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = hostSystemMuted ? 'volume_off' : 'volume_up';
+            btn.classList.toggle('gradient-live', hostSystemMuted);
+            btn.title = hostSystemMuted ? 'Activar audio del sistema' : 'Silenciar audio del sistema';
+          });
         }
 
         function isHostOwner() {
@@ -3906,11 +3981,9 @@
         function refreshLiveStatusBadge() {
           const isLive = liveData?.live_status === 'live';
           liveStatusBadge.textContent = isLive ? 'LIVE' : 'FINALIZADO';
-          liveStatusChip.classList.toggle('bg-black/45', isLive);
+          liveStatusChip.classList.toggle('gradient-live', isLive);
+          liveStatusChip.classList.toggle('live-pulse', isLive);
           liveStatusChip.classList.toggle('bg-slate-700/85', !isLive);
-          liveStatusDot.classList.toggle('bg-[#ff0b53]', isLive);
-          liveStatusDot.classList.toggle('animate-pulse', isLive);
-          liveStatusDot.classList.toggle('bg-slate-300', !isLive);
         }
 
         function viewerPlaybackLooksStalled() {
@@ -3976,9 +4049,9 @@
 
         function createViewerVideo() {
           const video = document.createElement('video');
-          video.className = 'w-full h-full object-cover bg-black';
+          video.className = 'w-full h-full object-contain bg-black absolute inset-0';
           video.autoplay = true;
-          video.controls = true;
+          video.controls = false;
           video.playsInline = true;
           video.setAttribute('playsinline', '');
           viewerPlayerRoot.innerHTML = '';
@@ -4169,6 +4242,7 @@
             await ovenLivekit.setMediaStream(nextBundle.publishedStream);
             hostMediaBundle = nextBundle;
             hostPreviewVideo.srcObject = nextBundle.previewStream || nextBundle.publishedStream;
+
             showHostPreview();
             await hostPreviewVideo.play().catch(() => {});
             if (!hostPublishing) {
@@ -4194,15 +4268,17 @@
           const result = await PostsAPI.getLivestream(liveId);
           if (!result?.ok) {
             liveTitle.textContent = 'No se pudo cargar el directo';
-            liveMeta.textContent = result?.data?.error || 'Este directo ya no esta disponible.';
             showFallback('No se pudo cargar el directo', result?.data?.error || 'Este directo ya no esta disponible.');
             return;
           }
 
           liveData = result.data;
-          liveTitle.textContent = liveData.live_title || 'Directo UPT';
-          liveMeta.textContent = `${displayName(resolveProfileData({ id: liveData.user_id, user_name: liveData.user_name, user_faculty: liveData.user_faculty, user_school: liveData.user_school, user_avatar: liveData.user_avatar }))} · ${liveData.live_status === 'live' ? 'En vivo' : 'Finalizado'}`;
-          liveViewerCount.textContent = String(liveData.live_status === 'live' ? Number(liveData.viewer_count || 0) : 0);
+          const titleText = liveData.live_title || 'Directo UPT';
+          liveTitle.textContent = titleText;
+          if (liveTitleMobile) liveTitleMobile.textContent = titleText;
+          const viewCount = String(liveData.live_status === 'live' ? Number(liveData.viewer_count || 0) : 0);
+          liveViewerCount.textContent = viewCount;
+
           activeReaction = liveData.current_reaction || activeReaction;
           refreshReactionButtons();
           refreshLiveStatusBadge();
@@ -4211,10 +4287,16 @@
           hostEndButton.classList.toggle('hidden', !isOwner);
           hostTools.classList.toggle('hidden', !isOwner);
           hostTools.classList.toggle('flex', isOwner);
+          // Mobile host controls
+          if (toggleMicButtonMobile) { toggleMicButtonMobile.classList.toggle('hidden', !isOwner); toggleMicButtonMobile.classList.toggle('flex', isOwner); }
           refreshHostAudioButtons();
 
           if (!isOwner && liveData.live_status === 'live') {
-            await ensureViewerPlayer(viewerPlaybackLooksStalled());
+            // Detect source change → force viewer restart
+            const currentSource = liveData.live_source || 'camera';
+            const sourceChanged = lastKnownSource && lastKnownSource !== currentSource;
+            lastKnownSource = currentSource;
+            await ensureViewerPlayer(sourceChanged || viewerPlaybackLooksStalled());
             syncViewerToLiveEdge();
           }
 
@@ -4224,35 +4306,48 @@
           }
         }
 
+        function shouldStickCommentsToBottom() {
+          if (!commentsInitialized) return true;
+          return (liveComments.scrollHeight - liveComments.scrollTop - liveComments.clientHeight) < 72;
+        }
+
         async function loadComments() {
           const stickToBottom = shouldStickCommentsToBottom();
           const result = await PostsAPI.getComments(liveId, 'newest');
           const comments = getList(result).slice().reverse().slice(-40);
           if (!result?.ok) {
-            liveComments.innerHTML = '<p class="text-sm text-white/55">No se pudieron cargar los comentarios.</p>';
+            const errHtml = '<p class="text-sm text-white/55">No se pudieron cargar los comentarios.</p>';
+            liveComments.innerHTML = errHtml;
+            if (liveCommentsMobile) liveCommentsMobile.innerHTML = errHtml;
             return;
           }
           if (!comments.length) {
-            liveComments.innerHTML = '<p class="text-sm text-white/55">Todavia no hay comentarios en este directo.</p>';
+            const emptyHtml = '<p class="text-sm text-white/55">Todavia no hay comentarios en este directo.</p>';
+            liveComments.innerHTML = emptyHtml;
+            if (liveCommentsMobile) liveCommentsMobile.innerHTML = '';
             commentsInitialized = true;
             return;
           }
-          liveComments.innerHTML = comments.map(commentMarkup).join('');
+          const html = comments.map(commentMarkup).join('');
+          liveComments.innerHTML = html;
+          if (liveCommentsMobile) liveCommentsMobile.innerHTML = html;
           commentsInitialized = true;
           if (stickToBottom) {
             liveComments.scrollTop = liveComments.scrollHeight;
+            if (liveCommentsMobile) liveCommentsMobile.scrollTop = liveCommentsMobile.scrollHeight;
           }
         }
 
         async function sendComment() {
-          const content = liveCommentInput.value.trim();
+          const content = (liveCommentInput?.value || liveCommentInputMobile?.value || '').trim();
           if (!content) return;
           const result = await PostsAPI.addComment(liveId, content);
           if (!result?.ok) {
             showToast(result?.data?.error || 'No se pudo comentar en el directo', 'error');
             return;
           }
-          liveCommentInput.value = '';
+          if (liveCommentInput) liveCommentInput.value = '';
+          if (liveCommentInputMobile) liveCommentInputMobile.value = '';
           await loadComments();
         }
 
@@ -4263,7 +4358,8 @@
           }
           const result = await PostsAPI.livestreamHeartbeat(liveId);
           if (result?.ok) {
-            liveViewerCount.textContent = String(Number(result.data?.viewer_count || 0));
+            const count = String(Number(result.data?.viewer_count || 0));
+            liveViewerCount.textContent = count;
           }
         }
 
@@ -4313,40 +4409,149 @@
           await pollReactionEvents();
         };
 
-        liveCommentSendButton.addEventListener('click', sendComment);
-        liveCommentInput.addEventListener('keydown', async (event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            await sendComment();
-          }
-        });
-        liveCommentInput.addEventListener('input', () => {
-          liveCommentInput.style.height = 'auto';
-          liveCommentInput.style.height = `${Math.min(liveCommentInput.scrollHeight, 112)}px`;
-        });
-        hostEndButton.addEventListener('click', endLivestream);
-        toggleMicButton?.addEventListener('click', () => {
-          hostMicMuted = !hostMicMuted;
-          applyHostAudioState();
-          refreshHostAudioButtons();
-        });
-        toggleSystemAudioButton?.addEventListener('click', () => {
-          hostSystemMuted = !hostSystemMuted;
-          applyHostAudioState();
-          refreshHostAudioButtons();
-        });
-        switchSourceButton?.addEventListener('click', async () => {
-          const next = liveData?.live_source === 'screen' ? 'camera' : 'screen';
-          liveData.live_source = next;
-          await startHostSource(next, true);
-        });
+        // ── Auto-hide overlay (desktop hover) ──
+        function showOverlay() {
+          overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
+          clearTimeout(overlayTimer);
+          overlayTimer = setTimeout(hideOverlay, 3500);
+        }
+        function hideOverlay() {
+          if (selectorOpen) return;
+          overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
+        }
+        if (liveVideoWrap) {
+          liveVideoWrap.addEventListener('mouseenter', showOverlay);
+          liveVideoWrap.addEventListener('mousemove', showOverlay);
+          liveVideoWrap.addEventListener('mouseleave', () => { clearTimeout(overlayTimer); overlayTimer = setTimeout(hideOverlay, 1200); });
+          liveVideoWrap.addEventListener('touchstart', () => { showOverlay(); }, { passive: true });
+        }
+        // On desktop show overlay initially, on mobile start hidden (tap to reveal)
+        if (isDesktopClient()) {
+          showOverlay();
+        } else {
+          hideOverlay();
+        }
 
+        // ── Video Fullscreen (landscape, video only) ──
+        if (fullscreenBtn && liveVideoWrap) {
+          fullscreenBtn.addEventListener('click', async () => {
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(() => {});
+              try { screen.orientation.unlock(); } catch(e) {}
+            } else {
+              try {
+                await liveVideoWrap.requestFullscreen();
+                try { await screen.orientation.lock('landscape'); } catch(e) {}
+              } catch(e) {}
+            }
+          });
+          document.addEventListener('fullscreenchange', () => {
+            const icon = fullscreenBtn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = document.fullscreenElement ? 'fullscreen_exit' : 'fullscreen';
+            if (!document.fullscreenElement) {
+              try { screen.orientation.unlock(); } catch(e) {}
+            }
+          });
+        }
+
+        // ── Immersive mode (hides page chrome, keeps chat) ──
+        let immersiveActive = false;
+        if (immersiveBtn && liveShell) {
+          immersiveBtn.addEventListener('click', () => {
+            immersiveActive = !immersiveActive;
+            document.body.classList.toggle('live-immersive-active', immersiveActive);
+            liveShell.classList.toggle('live-immersive-shell', immersiveActive);
+            const icon = immersiveBtn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = immersiveActive ? 'close_fullscreen' : 'open_in_full';
+          });
+        }
+
+        // ── Long-press reaction selector (both mobile + desktop) ──
+        function openSelector(sel) {
+          if (!sel) return;
+          sel.classList.remove('hidden'); sel.classList.add('flex');
+          selectorOpen = true;
+        }
+        function closeAllSelectors() {
+          [reactionSelector, reactionSelectorDesktop].forEach(sel => {
+            if (sel) { sel.classList.add('hidden'); sel.classList.remove('flex'); }
+          });
+          selectorOpen = false;
+        }
+
+        function bindTrigger(trigger, selector) {
+          if (!trigger) return;
+          let lpTimer = null;
+          trigger.addEventListener('click', () => {
+            if (selectorOpen) { closeAllSelectors(); return; }
+            sendActiveReaction();
+          });
+          trigger.addEventListener('pointerdown', () => {
+            lpTimer = setTimeout(() => { openSelector(selector); }, 400);
+          });
+          trigger.addEventListener('pointerup', () => clearTimeout(lpTimer));
+          trigger.addEventListener('pointerleave', () => clearTimeout(lpTimer));
+        }
+        bindTrigger(reactionTrigger, reactionSelector);
+        bindTrigger(reactionTriggerDesktop, reactionSelectorDesktop);
+
+        // Selector item click (all)
         container.querySelectorAll('[data-live-set-reaction]').forEach((button) => {
           button.addEventListener('click', async () => {
             activeReaction = button.dataset.liveSetReaction || 'me_gusta';
             refreshReactionButtons();
+            closeAllSelectors();
             await sendActiveReaction();
           });
+        });
+
+        // Close selectors on outside click
+        document.addEventListener('click', (e) => {
+          if (!selectorOpen) return;
+          const clickedInsideTrigger = (reactionTrigger?.contains(e.target)) || (reactionTriggerDesktop?.contains(e.target));
+          const clickedInsideSelector = (reactionSelector?.contains(e.target)) || (reactionSelectorDesktop?.contains(e.target));
+          if (!clickedInsideTrigger && !clickedInsideSelector) closeAllSelectors();
+        });
+
+        // ─── Comment events (Enter to send, no send button) ───
+        function bindCommentInput(input) {
+          if (!input) return;
+          input.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              const text = input.value.trim();
+              if (!text) return;
+              // Copy value to canonical input for sendComment
+              liveCommentInput && (liveCommentInput.value = text);
+              liveCommentInputMobile && (liveCommentInputMobile.value = text);
+              await sendComment();
+              input.value = '';
+              if (liveCommentInput) liveCommentInput.value = '';
+              if (liveCommentInputMobile) liveCommentInputMobile.value = '';
+            }
+          });
+        }
+        bindCommentInput(liveCommentInput);
+        bindCommentInput(liveCommentInputMobile);
+
+        // ─── Host buttons ───
+        hostEndButton.addEventListener('click', endLivestream);
+        const toggleMicHandler = () => {
+          hostMicMuted = !hostMicMuted;
+          applyHostAudioState();
+          refreshHostAudioButtons();
+        };
+        toggleMicButton.addEventListener('click', toggleMicHandler);
+        if (toggleMicButtonMobile) toggleMicButtonMobile.addEventListener('click', toggleMicHandler);
+        toggleSystemAudioButton.addEventListener('click', () => {
+          hostSystemMuted = !hostSystemMuted;
+          applyHostAudioState();
+          refreshHostAudioButtons();
+        });
+        switchSourceButton.addEventListener('click', async () => {
+          const next = liveData?.live_source === 'screen' ? 'camera' : 'screen';
+          liveData.live_source = next;
+          await startHostSource(next, true);
         });
 
         loadLivestream().then(async () => {
@@ -4368,6 +4573,10 @@
           if (commentsTimer) window.clearInterval(commentsTimer);
           if (heartbeatTimer) window.clearInterval(heartbeatTimer);
           if (liveStateTimer) window.clearInterval(liveStateTimer);
+          if (overlayTimer) clearTimeout(overlayTimer);
+          if (longPressTimer) clearTimeout(longPressTimer);
+          // Clean up immersive mode
+          document.body.classList.remove('live-immersive-active');
           if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
               ovenLivekit.stopStreaming();
