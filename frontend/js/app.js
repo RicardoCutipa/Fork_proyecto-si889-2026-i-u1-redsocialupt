@@ -3620,7 +3620,7 @@
                 <div class="live-video-col">
                   <div id="live-video-wrap" class="live-video-wrap">
                     <div id="live-viewer-player" class="absolute inset-0 hidden"></div>
-                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-contain bg-black hidden" playsinline autoplay muted></video>
+                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-contain bg-black hidden" style="object-fit:contain" playsinline autoplay muted></video>
 
                     <!-- Fallback -->
                     <div id="live-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-[5]">
@@ -4118,6 +4118,7 @@
         function createViewerVideo() {
           const video = document.createElement('video');
           video.className = 'w-full h-full object-contain bg-black absolute inset-0';
+          video.style.objectFit = 'contain'; // inline guarantee
           video.autoplay = true;
           video.controls = false;
           video.playsInline = true;
@@ -4135,6 +4136,8 @@
             liveVideoWrap?.removeEventListener('click', unmuteHandler);
           };
           liveVideoWrap?.addEventListener('click', unmuteHandler);
+          // Re-check fullscreen button once actual video dimensions are known
+          video.addEventListener('loadedmetadata', () => updateFullscreenButtonVisibility(), { once: true });
           return video;
         }
 
@@ -4593,16 +4596,19 @@
         }
 
         // ── Video Fullscreen (landscape, video only) ──
+        let pendingVideoFs = false;
         if (fullscreenBtn && liveVideoWrap) {
           fullscreenBtn.addEventListener('click', async () => {
             if (document.fullscreenElement === liveVideoWrap) {
               document.exitFullscreen().catch(() => {});
               try { screen.orientation.unlock(); } catch(e) {}
             } else {
+              pendingVideoFs = true;
               try {
                 await liveVideoWrap.requestFullscreen();
                 try { await screen.orientation.lock('landscape'); } catch(e) {}
               } catch(e) {}
+              pendingVideoFs = false;
             }
           });
         }
@@ -4610,6 +4616,7 @@
         // ── Immersive mode (hides page chrome, keeps chat) ──
         let immersiveActive = false;
         let immersiveBtnOriginalParent = immersiveBtn?.parentElement || null;
+        let exitingLivestream = false;
 
         function activateImmersive() {
           immersiveActive = true;
@@ -4617,7 +4624,9 @@
           liveShell.classList.add('live-immersive-shell');
 
           if (!isDesktopClient()) {
-            // Mobile: move the X button out of the overlay → shell root so overlay hide can't affect it
+            // Mobile: use Fullscreen API for true immersive (hides browser chrome)
+            liveShell.requestFullscreen().catch(() => {});
+            // Move the X button out of the overlay so overlay timer can't hide it
             if (immersiveBtn && liveShell) {
               liveShell.appendChild(immersiveBtn);
             }
@@ -4634,6 +4643,11 @@
           document.body.classList.remove('live-immersive-active');
           liveShell.classList.remove('live-immersive-shell');
 
+          // Exit fullscreen if shell is the fullscreen element
+          if (document.fullscreenElement === liveShell) {
+            document.exitFullscreen().catch(() => {});
+          }
+
           // Mobile: move button back to its original parent (the overlay)
           if (!isDesktopClient() && immersiveBtn && immersiveBtnOriginalParent) {
             immersiveBtnOriginalParent.appendChild(immersiveBtn);
@@ -4644,12 +4658,16 @@
         }
 
         function exitLivestream() {
+          if (exitingLivestream) return;
+          exitingLivestream = true;
           deactivateImmersive();
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            router.navigate('feed');
-          }
+          setTimeout(() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              router.navigate('feed');
+            }
+          }, 80);
         }
 
         if (immersiveBtn && liveShell) {
@@ -4664,9 +4682,12 @@
           });
         }
 
-        // Unified fullscreenchange handler (handles both video fullscreen and immersive)
+        // Unified fullscreenchange handler
         document.addEventListener('fullscreenchange', () => {
+          if (exitingLivestream || pendingVideoFs) return;
+
           const fsEl = document.fullscreenElement;
+
           if (fsEl === liveVideoWrap) {
             // Entered video fullscreen (landscape)
             inVideoFullscreen = true;
@@ -4674,19 +4695,29 @@
             if (icon) icon.textContent = 'fullscreen_exit';
             if (mobileOverlay) { mobileOverlay.style.opacity = '0'; mobileOverlay.style.pointerEvents = 'none'; }
             if (immersiveBtn && !isDesktopClient()) immersiveBtn.classList.add('hidden');
-          } else if (!fsEl && inVideoFullscreen) {
-            // Exited video fullscreen
-            inVideoFullscreen = false;
-            try { screen.orientation.unlock(); } catch(e) {}
-            const icon = fullscreenBtn?.querySelector('.material-symbols-outlined');
-            if (icon) icon.textContent = 'fullscreen';
-            if (mobileOverlay) { mobileOverlay.style.opacity = ''; mobileOverlay.style.pointerEvents = ''; }
-            if (immersiveBtn) immersiveBtn.classList.remove('hidden');
+          } else if (fsEl === liveShell) {
+            // Entered/returned to shell fullscreen (immersive) — no special action
+          } else if (!fsEl) {
+            if (inVideoFullscreen) {
+              // Exited video fullscreen → re-enter immersive shell fullscreen
+              inVideoFullscreen = false;
+              try { screen.orientation.unlock(); } catch(e) {}
+              const icon = fullscreenBtn?.querySelector('.material-symbols-outlined');
+              if (icon) icon.textContent = 'fullscreen';
+              if (mobileOverlay) { mobileOverlay.style.opacity = ''; mobileOverlay.style.pointerEvents = ''; }
+              if (immersiveBtn) immersiveBtn.classList.remove('hidden');
+              // Re-enter immersive fullscreen on mobile
+              if (immersiveActive && !isDesktopClient() && liveShell) {
+                liveShell.requestFullscreen().catch(() => {});
+              }
+            } else if (immersiveActive && !isDesktopClient()) {
+              // User pressed browser back button while in immersive → exit livestream
+              exitLivestream();
+            }
           }
-          // Note: immersive mode no longer uses requestFullscreen so no conflict
         });
 
-        // On mobile, auto-enter immersive mode immediately (CSS only, no fullscreen API)
+        // On mobile, auto-enter immersive mode immediately (uses Fullscreen API)
         if (!isDesktopClient() && liveShell) {
           activateImmersive();
         }
