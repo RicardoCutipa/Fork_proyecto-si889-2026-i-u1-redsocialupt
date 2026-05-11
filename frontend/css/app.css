@@ -1554,6 +1554,12 @@ body {
   border-radius: 0;
   aspect-ratio: 16 / 9;
   width: 100%;
+  margin-top: 48px; /* space for X button above video on mobile */
+}
+
+/* ── Player controls on video (mobile) - smooth transition ── */
+#live-player-controls {
+  transition: opacity 0.3s ease;
 }
 .live-is-desktop .live-video-wrap {
   border-radius: 18px;
@@ -1561,6 +1567,7 @@ body {
   min-height: 220px;
   height: auto;
   flex: 1 1 auto;
+  margin-top: 0;
 }
 /* Narrow desktop: reduce video dominance, let chat have more room */
 @media (max-width: 960px) {
@@ -1713,14 +1720,30 @@ body.live-immersive-active #app-view {
   min-height: 100dvh !important;
 }
 
-/* In immersive mode (mobile only): always show the X exit button */
+/* In immersive mode (mobile only): X button ABOVE the video, not inside it */
 .live-immersive-shell:not(.live-is-desktop) #live-immersive-btn {
-  position: fixed !important;
-  top: 16px;
-  right: 16px;
+  position: absolute !important;
+  top: 10px;
+  right: 12px;
   z-index: 10000 !important;
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+/* In immersive: video-col fills the entire shell */
+.live-immersive-shell .live-video-col {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+/* No top margin for video wrap in desktop immersive */
+.live-immersive-shell.live-is-desktop .live-video-wrap {
+  margin-top: 0;
+}
+
+/* Smooth exit transition */
+.live-root {
+  transition: opacity 0.15s ease;
 }
 
 /* ═══════════════════════════
@@ -1752,7 +1775,8 @@ body.live-immersive-active #app-view {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 10px 12px 14px;
+  padding: 10px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
   flex-shrink: 0;
   background: rgba(11,17,32,0.95);
   border-top: 1px solid rgba(255,255,255,0.06);

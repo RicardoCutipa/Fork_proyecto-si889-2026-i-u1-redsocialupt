@@ -580,7 +580,11 @@ function requireAuth() {
     if (!isLoggedIn()) return;
 
     const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 min in ms
-    if (Date.now() - lastActivity >= INACTIVITY_LIMIT) {
+    // Skip inactivity logout if user is in a livestream (watching or streaming)
+    const isInLive = document.body.classList.contains('live-immersive-active')
+                  || !!document.querySelector('#live-shell')
+                  || window.location.hash?.includes('/live/');
+    if (!isInLive && Date.now() - lastActivity >= INACTIVITY_LIMIT) {
       logout();
       return;
     }

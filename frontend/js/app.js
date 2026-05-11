@@ -4631,12 +4631,17 @@
           await pollReactionEvents();
         };
 
-        // ── Auto-hide overlay (desktop hover / mobile tap) ──
+        // ── Auto-hide overlay (desktop hover / mobile tap-to-toggle) ──
         const mobileOverlay = container.querySelector('#live-mobile-overlay');
+        const playerControls = container.querySelector('#live-player-controls');
         let inVideoFullscreen = false; // landscape fullscreen (video only)
+        let overlayVisible = true;
 
         function showOverlay() {
+          overlayVisible = true;
           overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
+          // Also show player controls on video
+          if (playerControls) { playerControls.style.opacity = '1'; playerControls.style.pointerEvents = 'auto'; }
           // In video fullscreen (landscape): also show mobile overlay temporarily
           if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '1';
@@ -4647,19 +4652,30 @@
         }
         function hideOverlay() {
           if (selectorOpen) return;
+          overlayVisible = false;
           overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
-
+          // Also hide player controls
+          if (playerControls) { playerControls.style.opacity = '0'; playerControls.style.pointerEvents = 'none'; }
           // In video fullscreen (landscape): also hide mobile overlay
           if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '0';
             mobileOverlay.style.pointerEvents = 'none';
           }
         }
+        function toggleOverlay() {
+          if (overlayVisible) { clearTimeout(overlayTimer); hideOverlay(); }
+          else { showOverlay(); }
+        }
         if (liveVideoWrap) {
           liveVideoWrap.addEventListener('mouseenter', showOverlay);
           liveVideoWrap.addEventListener('mousemove', showOverlay);
           liveVideoWrap.addEventListener('mouseleave', () => { clearTimeout(overlayTimer); overlayTimer = setTimeout(hideOverlay, 1200); });
-          liveVideoWrap.addEventListener('touchstart', () => { showOverlay(); }, { passive: true });
+          // Mobile: tap toggles overlay instead of always showing
+          liveVideoWrap.addEventListener('touchstart', (e) => {
+            // Don't toggle if tapping a button
+            if (e.target.closest('button')) return;
+            toggleOverlay();
+          }, { passive: true });
         }
         // On desktop show overlay initially, on mobile start hidden (tap to reveal)
         if (isDesktopClient()) {
@@ -4733,14 +4749,20 @@
         function exitLivestream() {
           if (exitingLivestream) return;
           exitingLivestream = true;
-          deactivateImmersive();
-          setTimeout(() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              router.navigate('feed');
-            }
-          }, 80);
+          // Fade to black instantly to prevent flicker of normal layout
+          if (liveShell) liveShell.style.opacity = '0';
+          // Exit fullscreen then navigate
+          const doNav = () => {
+            setTimeout(() => {
+              if (window.history.length > 1) history.back();
+              else router.navigate('feed');
+            }, 50);
+          };
+          if (document.fullscreenElement) {
+            document.exitFullscreen().then(doNav).catch(doNav);
+          } else {
+            doNav();
+          }
         }
 
         if (immersiveBtn && liveShell) {
