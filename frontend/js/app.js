@@ -3797,6 +3797,7 @@
         let viewerPlayerSourceUrl = null;
         let viewerPlayerCreatedAt = 0;
         let viewerPlayerLastRetryAt = 0;
+        let viewerBootstrapInFlight = false;
         let commentsInitialized = false;
         let overlayTimer = null;
         let longPressTimer = null;
@@ -4083,23 +4084,35 @@
         }
 
         async function ensureViewerManifest(url) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = window.setTimeout(() => controller.abort(), 5000);
-            const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
-              method: 'GET',
-              cache: 'no-store',
-              signal: controller.signal,
-            });
-            window.clearTimeout(timeoutId);
-            if (!response.ok) {
-              return false;
+          const attempts = 5;
+          const pauseMs = 650;
+
+          for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = window.setTimeout(() => controller.abort(), 2200);
+              const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
+                signal: controller.signal,
+              });
+              window.clearTimeout(timeoutId);
+              if (response.ok) {
+                const manifest = await response.text();
+                if (manifest.includes('#EXTM3U')) {
+                  return true;
+                }
+              }
+            } catch (error) {
+              // seguimos intentando unos segundos antes de rendirnos
             }
-            const manifest = await response.text();
-            return manifest.includes('#EXTM3U');
-          } catch (error) {
-            return false;
+
+            if (attempt < attempts - 1) {
+              await new Promise((resolve) => window.setTimeout(resolve, pauseMs));
+            }
           }
+
+          return false;
         }
 
         function createViewerVideo() {
@@ -4126,91 +4139,101 @@
         }
 
         async function ensureViewerPlayer(forceRestart = false) {
+          if (viewerBootstrapInFlight) {
+            return;
+          }
+
           if (!liveData?.stream_key) {
             showFallback('Preparando directo', 'La transmision todavia esta preparando su senal en vivo.');
             return;
           }
 
-          await ensureLivestreamLibraries();
-          const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url);
-          if (!forceRestart && viewerVideo && viewerPlayerSourceUrl === sourceUrl) {
+          viewerBootstrapInFlight = true;
+
+          try {
+            await ensureLivestreamLibraries();
+            const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url);
+            if (!forceRestart && viewerVideo && viewerPlayerSourceUrl === sourceUrl) {
+              showViewerPlayer();
+              await viewerVideo.play().catch(() => {});
+              return;
+            }
+
+            const manifestReady = await ensureViewerManifest(sourceUrl);
+            if (!manifestReady) {
+              showFallback('Esperando directo', 'El stream todavia se esta preparando para los espectadores.');
+              return;
+            }
+
             showViewerPlayer();
-            await viewerVideo.play().catch(() => {});
-            return;
-          }
+            destroyPlayer();
+            const video = createViewerVideo();
+            const readyAt = Date.now();
 
-          const manifestReady = await ensureViewerManifest(sourceUrl);
-          if (!manifestReady) {
-            showFallback('Esperando directo', 'El stream todavia se esta preparando para los espectadores.');
-            return;
-          }
-
-          showViewerPlayer();
-          destroyPlayer();
-          const video = createViewerVideo();
-          const readyAt = Date.now();
-
-          if (window.Hls && window.Hls.isSupported()) {
-            viewerHls = new window.Hls({
-              lowLatencyMode: true,
-              liveDurationInfinity: true,
-              backBufferLength: 30,
-              maxBufferLength: 10,
-              liveSyncDurationCount: 1,
-              liveMaxLatencyDurationCount: 2,
-              maxLiveSyncPlaybackRate: 1.08,
-            });
-            viewerHls.loadSource(sourceUrl);
-            viewerHls.attachMedia(video);
-            viewerHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-              syncViewerToLiveEdge(true);
-              video.play().catch(() => {});
-            });
-            viewerHls.on(window.Hls.Events.LEVEL_UPDATED, () => {
-              syncViewerToLiveEdge();
-            });
-            viewerHls.on(window.Hls.Events.FRAG_BUFFERED, () => {
-              syncViewerToLiveEdge();
-            });
-            viewerHls.on(window.Hls.Events.ERROR, (_event, data) => {
-              if (!data?.fatal) {
-                return;
-              }
-
-              if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
-                viewerHls.startLoad();
-                return;
-              }
-
-              if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
-                viewerHls.recoverMediaError();
-                return;
-              }
-
-              destroyPlayer();
-              showFallback('No se pudo reproducir el directo', 'Intenta entrar de nuevo en unos segundos.');
-            });
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = sourceUrl;
-            video.addEventListener('loadedmetadata', () => {
-              const seekable = video.seekable;
-              if (seekable && seekable.length > 0) {
-                try {
-                  video.currentTime = Math.max(0, seekable.end(seekable.length - 1) - 1);
-                } catch (error) {
-                  console.warn('No se pudo ajustar el viewer nativo al borde del live:', error);
+            if (window.Hls && window.Hls.isSupported()) {
+              viewerHls = new window.Hls({
+                lowLatencyMode: true,
+                liveDurationInfinity: true,
+                backBufferLength: 30,
+                maxBufferLength: 10,
+                liveSyncDurationCount: 1,
+                liveMaxLatencyDurationCount: 2,
+                maxLiveSyncPlaybackRate: 1.08,
+              });
+              viewerHls.loadSource(sourceUrl);
+              viewerHls.attachMedia(video);
+              viewerHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+                syncViewerToLiveEdge(true);
+                video.play().catch(() => {});
+              });
+              viewerHls.on(window.Hls.Events.LEVEL_UPDATED, () => {
+                syncViewerToLiveEdge();
+              });
+              viewerHls.on(window.Hls.Events.FRAG_BUFFERED, () => {
+                syncViewerToLiveEdge();
+              });
+              viewerHls.on(window.Hls.Events.ERROR, (_event, data) => {
+                if (!data?.fatal) {
+                  return;
                 }
-              }
-              video.play().catch(() => {});
-            }, { once: true });
-          } else {
-            showFallback('Reproduccion no compatible', 'Este navegador no pudo cargar el directo.');
-            return;
-          }
 
-          viewerPlayerSourceUrl = sourceUrl;
-          viewerPlayerCreatedAt = readyAt;
-          viewerPlayerLastRetryAt = readyAt;
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                  viewerHls.startLoad();
+                  return;
+                }
+
+                if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                  viewerHls.recoverMediaError();
+                  return;
+                }
+
+                destroyPlayer();
+                showFallback('No se pudo reproducir el directo', 'Intenta entrar de nuevo en unos segundos.');
+              });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+              video.src = sourceUrl;
+              video.addEventListener('loadedmetadata', () => {
+                const seekable = video.seekable;
+                if (seekable && seekable.length > 0) {
+                  try {
+                    video.currentTime = Math.max(0, seekable.end(seekable.length - 1) - 1);
+                  } catch (error) {
+                    console.warn('No se pudo ajustar el viewer nativo al borde del live:', error);
+                  }
+                }
+                video.play().catch(() => {});
+              }, { once: true });
+            } else {
+              showFallback('Reproduccion no compatible', 'Este navegador no pudo cargar el directo.');
+                return;
+            }
+
+            viewerPlayerSourceUrl = sourceUrl;
+            viewerPlayerCreatedAt = readyAt;
+            viewerPlayerLastRetryAt = readyAt;
+          } finally {
+            viewerBootstrapInFlight = false;
+          }
         }
 
         async function buildHostInputStream(source) {
@@ -4787,7 +4810,7 @@
 
         commentsTimer = window.setInterval(commentsLoop, 2200);
         heartbeatTimer = window.setInterval(heartbeatLoop, 10000);
-        liveStateTimer = window.setInterval(stateLoop, 2400);
+        liveStateTimer = window.setInterval(stateLoop, 1200);
 
         return () => {
           if (commentsTimer) window.clearInterval(commentsTimer);
