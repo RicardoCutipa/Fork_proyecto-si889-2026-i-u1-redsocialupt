@@ -517,22 +517,16 @@
   }
 
   function buildLivestreamHlsUrl(streamKey) {
-    const isSecure = window.location.protocol === 'https:';
-    const protocol = isSecure ? 'https:' : 'http:';
-    const port = isSecure ? 3334 : 3333;
-    const host = getLivestreamEngineHost();
-    return `${protocol}//${host}:${port}/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+    return `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}/master.m3u8`;
   }
 
   function normalizeLivestreamPlaybackUrl(streamKey, _playbackUrl) {
-    // Always rebuild from stream_key to ensure correct protocol/port
+    // Always rebuild from stream_key to ensure the viewer uses the frontend proxy
     return buildLivestreamHlsUrl(streamKey);
   }
 
   function buildLivestreamPublishUrl(streamKey) {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const host = getLivestreamEngineHost();
-    return `${protocol}//${host}:3333/app/${encodeURIComponent(streamKey)}?direction=whip&transport=tcp`;
+    return `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}?direction=whip&transport=tcp`;
   }
 
   function buildLivestreamStreamKey(userId) {
@@ -4017,6 +4011,25 @@
           liveStatusChip.classList.toggle('bg-slate-700/85', !isLive);
         }
 
+        // Show fullscreen button only for landscape streams (from PC, not mobile camera)
+        function updateFullscreenButtonVisibility() {
+          if (!fullscreenBtn || isDesktopClient()) return; // always show on desktop
+          // Check if the stream is from a screen share (always landscape)
+          if (liveData?.live_source === 'screen') {
+            fullscreenBtn.classList.remove('hidden');
+            return;
+          }
+          // For camera source: check actual video dimensions if available
+          const video = viewerVideo || hostPreviewVideo;
+          if (video && video.videoWidth && video.videoHeight) {
+            const isLandscape = video.videoWidth > video.videoHeight;
+            fullscreenBtn.classList.toggle('hidden', !isLandscape);
+          } else {
+            // No video yet — hide on mobile by default (will re-check)
+            fullscreenBtn.classList.add('hidden');
+          }
+        }
+
         function viewerPlaybackLooksStalled() {
           if (!viewerVideo || !viewerPlayerSourceUrl) {
             return false;
@@ -4357,6 +4370,7 @@
             lastKnownSource = currentSource;
             await ensureViewerPlayer(sourceChanged || viewerPlaybackLooksStalled());
             syncViewerToLiveEdge();
+            updateFullscreenButtonVisibility();
           }
 
           if (liveData.live_status !== 'live') {
@@ -4510,10 +4524,12 @@
 
         // ── Auto-hide overlay (desktop hover / mobile tap) ──
         const mobileOverlay = container.querySelector('#live-mobile-overlay');
+        let inVideoFullscreen = false; // landscape fullscreen (video only)
+
         function showOverlay() {
           overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
-          // In fullscreen on mobile, also show the chat overlay
-          if (mobileOverlay && document.fullscreenElement) {
+          // In video fullscreen (landscape): also show mobile overlay temporarily
+          if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '1';
             mobileOverlay.style.pointerEvents = 'auto';
           }
@@ -4523,10 +4539,17 @@
         function hideOverlay() {
           if (selectorOpen) return;
           overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
-          // In fullscreen on mobile, also hide the chat overlay
-          if (mobileOverlay && document.fullscreenElement) {
+
+          // In video fullscreen (landscape): also hide mobile overlay
+          if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '0';
             mobileOverlay.style.pointerEvents = 'none';
+          }
+
+          // In immersive mode: keep the immersive exit button visible always
+          if (immersiveActive && immersiveBtn) {
+            immersiveBtn.style.opacity = '1';
+            immersiveBtn.style.pointerEvents = 'auto';
           }
         }
         if (liveVideoWrap) {
@@ -4559,12 +4582,15 @@
             const icon = fullscreenBtn.querySelector('.material-symbols-outlined');
             if (icon) icon.textContent = document.fullscreenElement ? 'fullscreen_exit' : 'fullscreen';
             if (!document.fullscreenElement) {
+              inVideoFullscreen = false;
               try { screen.orientation.unlock(); } catch(e) {}
-              // Restore mobile overlay and immersive button when exiting fullscreen
+              // Restore mobile overlay visibility
               if (mobileOverlay) { mobileOverlay.style.opacity = ''; mobileOverlay.style.pointerEvents = ''; }
               if (immersiveBtn) immersiveBtn.classList.remove('hidden');
             } else {
-              // Hide immersive button in video fullscreen to prevent conflicts
+              inVideoFullscreen = true;
+              // In video fullscreen: hide chat + immersive button
+              if (mobileOverlay) { mobileOverlay.style.opacity = '0'; mobileOverlay.style.pointerEvents = 'none'; }
               if (immersiveBtn && !isDesktopClient()) immersiveBtn.classList.add('hidden');
             }
           });
@@ -4577,7 +4603,8 @@
           document.body.classList.add('live-immersive-active');
           liveShell.classList.add('live-immersive-shell');
           const icon = immersiveBtn?.querySelector('.material-symbols-outlined');
-          if (icon) icon.textContent = 'close_fullscreen';
+          // On mobile: show X close icon. On desktop: show close_fullscreen
+          if (icon) icon.textContent = isDesktopClient() ? 'close_fullscreen' : 'close';
           // On mobile, use native Fullscreen API to hide browser UI
           if (!isDesktopClient() && document.documentElement.requestFullscreen) {
             document.documentElement.requestFullscreen().catch(() => {});
@@ -4594,16 +4621,36 @@
             document.exitFullscreen().catch(() => {});
           }
         }
+        function exitLivestream() {
+          deactivateImmersive();
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            router.navigate('feed');
+          }
+        }
         if (immersiveBtn && liveShell) {
           immersiveBtn.addEventListener('click', () => {
-            if (immersiveActive) { deactivateImmersive(); } else { activateImmersive(); }
+            if (!isDesktopClient()) {
+              // Mobile: X button always exits the livestream
+              exitLivestream();
+            } else {
+              // Desktop: toggle immersive mode
+              if (immersiveActive) { deactivateImmersive(); } else { activateImmersive(); }
+            }
           });
           // Sync state when user exits fullscreen via back button / gesture
           document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement && immersiveActive && !isDesktopClient()) {
-              deactivateImmersive();
+              // On mobile, exiting fullscreen = exiting the livestream
+              exitLivestream();
             }
           });
+        }
+
+        // On mobile, auto-enter immersive mode immediately
+        if (!isDesktopClient() && liveShell) {
+          activateImmersive();
         }
 
         // ── Long-press reaction selector (both mobile + desktop) ──
@@ -4722,8 +4769,10 @@
           await pollReactionEvents();
           if (isHostOwner()) {
             startedAt = Date.now();
-            await startHostSource(liveData?.live_source || (isDesktopClient() ? 'camera' : 'camera'));
+            await startHostSource(liveData?.live_source || 'camera');
           }
+          // Show fullscreen button only for landscape streams (from PC)
+          updateFullscreenButtonVisibility();
         });
 
         commentsTimer = window.setInterval(commentsLoop, 2200);
