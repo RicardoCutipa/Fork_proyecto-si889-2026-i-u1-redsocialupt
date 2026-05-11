@@ -517,9 +517,11 @@
   }
 
   function buildLivestreamHlsUrl(streamKey) {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const isSecure = window.location.protocol === 'https:';
+    const protocol = isSecure ? 'https:' : 'http:';
+    const port = isSecure ? 3334 : 3333;
     const host = getLivestreamEngineHost();
-    return `${protocol}//${host}:3333/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+    return `${protocol}//${host}:${port}/app/${encodeURIComponent(streamKey)}/master.m3u8`;
   }
 
   function normalizeLivestreamPlaybackUrl(streamKey, playbackUrl) {
@@ -3355,6 +3357,25 @@
           }
 
           confirmLiveCreateButton.disabled = true;
+          confirmLiveCreateButton.textContent = 'PREPARANDO...';
+
+          // If screen source, request screen selection BEFORE creating the livestream
+          let preCapturedStream = null;
+          if (liveSource === 'screen' && isDesktopClient()) {
+            try {
+              preCapturedStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: true,
+              });
+            } catch (err) {
+              // User cancelled the screen picker
+              confirmLiveCreateButton.disabled = false;
+              confirmLiveCreateButton.textContent = 'EMPEZAR';
+              showToast('No se selecciono ninguna pantalla para compartir', 'error');
+              return;
+            }
+          }
+
           confirmLiveCreateButton.textContent = 'CREANDO...';
 
           const streamKey = buildLivestreamStreamKey(user.id);
@@ -3373,8 +3394,17 @@
           confirmLiveCreateButton.textContent = 'EMPEZAR';
 
           if (!result?.ok) {
+            // Release pre-captured stream if creation failed
+            if (preCapturedStream) {
+              preCapturedStream.getTracks().forEach(t => t.stop());
+            }
             showToast(result?.data?.error || 'No se pudo crear el directo', 'error');
             return;
+          }
+
+          // Store pre-captured stream for the live page to use
+          if (preCapturedStream) {
+            window.__uptLivePreCapturedStream = preCapturedStream;
           }
 
           postContent.value = '';
@@ -3661,7 +3691,7 @@
                     </div>
 
                     <!-- Floating reactions -->
-                    <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-4 w-16 overflow-hidden z-20"></div>
+                    <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-2 w-20 overflow-visible z-20"></div>
 
                     <!-- ═══ MOBILE OVERLAY: comments + input (inside video, TikTok style) ═══ -->
                     <div id="live-mobile-overlay" class="live-mobile-overlay live-mobile-only">
@@ -4177,10 +4207,17 @@
           };
 
           if (source === 'screen' && isDesktopClient()) {
-            const displayStream = await navigator.mediaDevices.getDisplayMedia({
-              video: true,
-              audio: true,
-            });
+            // Reuse pre-captured stream from the modal if available
+            let displayStream;
+            if (window.__uptLivePreCapturedStream) {
+              displayStream = window.__uptLivePreCapturedStream;
+              window.__uptLivePreCapturedStream = null;
+            } else {
+              displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: true,
+              });
+            }
             let micStream = null;
 
             try {
