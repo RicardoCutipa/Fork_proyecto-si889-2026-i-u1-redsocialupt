@@ -3053,10 +3053,7 @@
                   <span class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Titulo</span>
                   <input id="live-title-input" type="text" maxlength="180" class="mt-2 w-full rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none focus:border-[#ff0b53] placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Ponle un titulo a tu directo"/>
                 </label>
-                <label class="block">
-                  <span class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Descripcion</span>
-                  <textarea id="live-description-input" rows="4" class="mt-2 w-full rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 text-sm text-white caret-[#ff0b53] outline-none resize-none focus:border-[#ff0b53] placeholder:text-white/35" style="-webkit-text-fill-color:#fff;" placeholder="Describe lo que vas a transmitir."></textarea>
-                </label>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
                     <p class="text-xs uppercase tracking-[0.2em] text-white/55 font-bold">Fuente</p>
@@ -3130,7 +3127,7 @@
         const publishButton = container.querySelector('#btn-publish');
         const openLiveModalButton = container.querySelector('#open-live-modal-btn');
         const liveTitleInput = container.querySelector('#live-title-input');
-        const liveDescriptionInput = container.querySelector('#live-description-input');
+
         const confirmLiveCreateButton = container.querySelector('#confirm-live-create-btn');
         const liveScreenOption = container.querySelector('#live-screen-option');
         const visibilityLabels = {
@@ -3223,7 +3220,7 @@
           livestreamModal.classList.remove('hidden');
           livestreamModal.classList.add('flex');
           liveTitleInput.value = '';
-          liveDescriptionInput.value = postContent.value.trim();
+
           if (!isDesktopClient() && liveScreenOption) {
             liveScreenOption.classList.add('hidden');
             const cameraOption = livestreamModal.querySelector('input[name="live-source"][value="camera"]');
@@ -3348,7 +3345,7 @@
 
         async function createLivestream() {
           const liveTitle = liveTitleInput.value.trim();
-          const content = liveDescriptionInput.value.trim();
+
           const visibility = livestreamModal.querySelector('input[name="live-visibility"]:checked')?.value || 'all';
           const liveSource = livestreamModal.querySelector('input[name="live-source"]:checked')?.value || 'camera';
 
@@ -3365,7 +3362,7 @@
 
           const result = await PostsAPI.createLivestream({
             liveTitle,
-            content,
+
             visibility,
             liveSource,
             streamKey,

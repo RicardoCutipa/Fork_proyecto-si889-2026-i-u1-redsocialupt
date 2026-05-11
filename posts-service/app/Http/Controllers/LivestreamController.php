@@ -23,7 +23,6 @@ class LivestreamController extends BaseController
     {
         $this->validate($request, [
             'live_title' => 'required|string|max:180',
-            'content' => 'nullable|string|max:2000',
             'visibility' => 'nullable|in:all,friends,faculty',
             'live_source' => 'nullable|in:camera,screen',
             'stream_key' => 'nullable|string|max:120',
@@ -33,7 +32,6 @@ class LivestreamController extends BaseController
         try {
             $live = $this->livestreamService->create((int) $request->auth->sub, [
                 'live_title' => $request->input('live_title'),
-                'content' => $request->input('content'),
                 'visibility' => $request->input('visibility', 'all'),
                 'live_source' => $request->input('live_source', 'camera'),
                 'stream_key' => $request->input('stream_key'),

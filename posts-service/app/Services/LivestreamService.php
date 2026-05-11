@@ -32,7 +32,6 @@ class LivestreamService
             'user_school' => $data['user_school'] ?? '',
             'user_faculty' => $data['user_faculty'] ?? '',
             'user_avatar' => $data['user_avatar'] ?? null,
-            'content' => $data['content'] ?? null,
             'visibility' => $data['visibility'] ?? 'all',
             'live_status' => 'live',
             'live_title' => trim((string) ($data['live_title'] ?? '')) ?: 'Directo UPT',
