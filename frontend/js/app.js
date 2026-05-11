@@ -3644,13 +3644,14 @@
                         </div>
                       </div>
                       <div class="flex items-center gap-2">
-                        <button id="live-viewer-mute-btn" type="button" class="hidden w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar / Activar sonido">
+                        <!-- Desktop-only controls in top overlay -->
+                        <button id="live-viewer-mute-btn" type="button" class="hidden w-9 h-9 rounded-full glass items-center justify-center text-white hover:bg-white/20 transition live-desktop-only" title="Silenciar / Activar sonido">
                           <span class="material-symbols-outlined text-[20px]">volume_up</span>
                         </button>
                         <button id="live-immersive-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Modo inmersivo">
                           <span class="material-symbols-outlined text-[20px]">open_in_full</span>
                         </button>
-                        <button id="live-fullscreen-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa (video)">
+                        <button id="live-fullscreen-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition live-desktop-only" title="Pantalla completa (video)">
                           <span class="material-symbols-outlined text-[20px]">fullscreen</span>
                         </button>
                         <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em] transition">FINALIZAR</button>
@@ -3678,26 +3679,36 @@
                       </div>
                     </div>
 
+                    <!-- ── PLAYER CONTROLS (mobile only, bottom-right of video) ── -->
+                    <div id="live-player-controls" class="live-mobile-only absolute bottom-3 right-3 z-30 flex items-center gap-2">
+                      <button id="live-player-mute-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar / Activar sonido">
+                        <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                      </button>
+                      <button id="live-player-fs-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa">
+                        <span class="material-symbols-outlined text-[20px]">fullscreen</span>
+                      </button>
+                    </div>
+
                     <!-- Floating reactions -->
                     <div id="live-floating-reactions" class="pointer-events-none absolute inset-y-0 right-2 w-20 overflow-visible z-20"></div>
+                  </div>
 
-                    <!-- ═══ MOBILE OVERLAY: comments + input (inside video, TikTok style) ═══ -->
-                    <div id="live-mobile-overlay" class="live-mobile-overlay live-mobile-only">
-                      <div class="px-4 pb-1 pt-2">
-                        <h2 id="live-title-mobile" class="text-lg font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
-                      </div>
-                      <div id="live-comments-mobile" class="live-mobile-comments custom-scrollbar"></div>
-                      <div class="live-mobile-input-row">
-                        <textarea id="live-comment-input-mobile" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
-                        <div class="relative">
-                          <button id="live-reaction-trigger" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
-                          <div id="live-reaction-selector" class="hidden absolute bottom-[120%] right-0 glass rounded-2xl px-1.5 py-2 flex flex-col items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
-                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_gusta">❤️</button>
-                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_encanta">😍</button>
-                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_divierte">😂</button>
-                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_sorprende">😮</button>
-                            <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_enoja">😡</button>
-                          </div>
+                  <!-- ═══ MOBILE CONTENT: title + comments + input (BELOW video, not overlaid) ═══ -->
+                  <div id="live-mobile-overlay" class="live-mobile-content live-mobile-only">
+                    <div class="px-4 pb-1 pt-3">
+                      <h2 id="live-title-mobile" class="text-lg font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
+                    </div>
+                    <div id="live-comments-mobile" class="live-mobile-comments custom-scrollbar"></div>
+                    <div class="live-mobile-input-row">
+                      <textarea id="live-comment-input-mobile" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
+                      <div class="relative">
+                        <button id="live-reaction-trigger" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
+                        <div id="live-reaction-selector" class="hidden absolute bottom-[120%] right-0 glass rounded-2xl px-1.5 py-2 flex flex-col items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_gusta">❤️</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_encanta">😍</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_divierte">😂</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_sorprende">😮</button>
+                          <button type="button" class="w-10 h-10 rounded-full hover:bg-white/15 flex items-center justify-center text-lg transition-transform hover:scale-125" data-live-set-reaction="me_enoja">😡</button>
                         </div>
                       </div>
                     </div>
@@ -3804,6 +3815,31 @@
         let selectorOpen = false;
         let lastKnownSource = null;
         let currentFacingMode = 'environment'; // default: rear camera on mobile
+        let wakeLock = null; // Screen Wake Lock to prevent black screen
+
+        // Mobile-only player controls (on the video itself)
+        const playerMuteBtn = container.querySelector('#live-player-mute-btn');
+        const playerFsBtn = container.querySelector('#live-player-fs-btn');
+
+        // Wake Lock: keep screen awake during livestream
+        async function requestWakeLock() {
+          try {
+            if ('wakeLock' in navigator) {
+              wakeLock = await navigator.wakeLock.request('screen');
+              wakeLock.addEventListener('release', () => { wakeLock = null; });
+            }
+          } catch (e) { /* not critical */ }
+        }
+        function releaseWakeLock() {
+          if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+        }
+        // Re-acquire wake lock when page becomes visible again
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && liveData?.live_status === 'live') {
+            requestWakeLock();
+          }
+        });
+        requestWakeLock();
 
         function cleanupMediaBundle(bundle) {
           if (!bundle) {
@@ -3874,7 +3910,11 @@
         function showViewerPlayer() {
           hostPreviewVideo.classList.add('hidden');
           viewerPlayerRoot.classList.remove('hidden');
-          liveVideoFallback.classList.add('hidden');
+          // Don't hide fallback yet — wait until video actually has frames
+          // The fallback will be hidden in the 'playing' event listener on the video
+          if (viewerVideo && viewerVideo.readyState >= 2) {
+            liveVideoFallback.classList.add('hidden');
+          }
         }
 
 
@@ -4034,6 +4074,31 @@
           }
         }
 
+        // Show mobile-only player controls (mute + fullscreen on the video itself)
+        function updateMobilePlayerControls() {
+          if (isDesktopClient()) return;
+          const isOwner = Number(liveData?.user_id) === Number(user.id) && isHostRoute;
+          // Show mute button for viewers on mobile
+          if (playerMuteBtn) {
+            playerMuteBtn.classList.toggle('hidden', isOwner);
+            playerMuteBtn.classList.toggle('flex', !isOwner);
+          }
+          // Show fullscreen button only for landscape/PC streams on mobile
+          if (playerFsBtn) {
+            let showFs = false;
+            if (liveData?.live_source === 'screen') {
+              showFs = true;
+            } else {
+              const video = viewerVideo || hostPreviewVideo;
+              if (video && video.videoWidth && video.videoHeight) {
+                showFs = video.videoWidth > video.videoHeight;
+              }
+            }
+            playerFsBtn.classList.toggle('hidden', !showFs);
+            playerFsBtn.classList.toggle('flex', showFs);
+          }
+        }
+
         function viewerPlaybackLooksStalled() {
           if (!viewerVideo || !viewerPlayerSourceUrl) {
             return false;
@@ -4137,7 +4202,14 @@
           };
           liveVideoWrap?.addEventListener('click', unmuteHandler);
           // Re-check fullscreen button once actual video dimensions are known
-          video.addEventListener('loadedmetadata', () => updateFullscreenButtonVisibility(), { once: true });
+          video.addEventListener('loadedmetadata', () => {
+            updateFullscreenButtonVisibility();
+            updateMobilePlayerControls();
+          }, { once: true });
+          // Hide fallback once video actually starts rendering frames
+          video.addEventListener('playing', () => {
+            liveVideoFallback.classList.add('hidden');
+          }, { once: true });
           return video;
         }
 
@@ -4407,6 +4479,7 @@
             await ensureViewerPlayer(sourceChanged || viewerPlaybackLooksStalled());
             syncViewerToLiveEdge();
             updateFullscreenButtonVisibility();
+            updateMobilePlayerControls();
           }
 
           if (liveData.live_status !== 'live') {
@@ -4722,7 +4795,7 @@
           activateImmersive();
         }
 
-        // ── Viewer mute/unmute button ──
+        // ── Viewer mute/unmute button (desktop) ──
         const viewerMuteBtn = container.querySelector('#live-viewer-mute-btn');
         if (viewerMuteBtn) {
           viewerMuteBtn.addEventListener('click', () => {
@@ -4730,6 +4803,40 @@
               viewerVideo.muted = !viewerVideo.muted;
               const icon = viewerMuteBtn.querySelector('.material-symbols-outlined');
               if (icon) icon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
+              // Sync mobile mute icon
+              const mIcon = playerMuteBtn?.querySelector('.material-symbols-outlined');
+              if (mIcon) mIcon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
+            }
+          });
+        }
+
+        // ── Mobile player mute button ──
+        if (playerMuteBtn) {
+          playerMuteBtn.addEventListener('click', () => {
+            if (viewerVideo) {
+              viewerVideo.muted = !viewerVideo.muted;
+              const icon = playerMuteBtn.querySelector('.material-symbols-outlined');
+              if (icon) icon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
+              // Sync desktop mute icon
+              const dIcon = viewerMuteBtn?.querySelector('.material-symbols-outlined');
+              if (dIcon) dIcon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
+            }
+          });
+        }
+
+        // ── Mobile player fullscreen button (video-only landscape) ──
+        if (playerFsBtn && liveVideoWrap) {
+          playerFsBtn.addEventListener('click', async () => {
+            if (document.fullscreenElement === liveVideoWrap) {
+              document.exitFullscreen().catch(() => {});
+              try { screen.orientation.unlock(); } catch(e) {}
+            } else {
+              pendingVideoFs = true;
+              try {
+                await liveVideoWrap.requestFullscreen();
+                try { await screen.orientation.lock('landscape'); } catch(e) {}
+              } catch(e) {}
+              pendingVideoFs = false;
             }
           });
         }
@@ -4869,6 +4976,7 @@
           // Clean up immersive mode
           document.body.classList.remove('live-immersive-active');
           if (liveShell) liveShell.classList.remove('live-immersive-shell');
+          releaseWakeLock();
           if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
               ovenLivekit.stopStreaming();
