@@ -1728,15 +1728,14 @@ body {
   mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
   background: transparent;
   padding-bottom: 2px;
-  /* Concrete viewport-based max-height so overflow-y:auto actually triggers scroll */
+  /* Explicit height so overflow-y:auto triggers scroll */
   max-height: calc(55vh - 72px) !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  /* Push messages to bottom of available space */
-  justify-content: flex-end;
-  display: flex;
-  flex-direction: column;
+  /* grid align-content:end = messages pinned to bottom, scrollable */
+  display: grid !important;
+  align-content: end;
 }
 .live-host-mobile .live-mobile-comments::before,
 .live-cam-stream .live-mobile-comments::before {
@@ -1974,26 +1973,28 @@ body.live-immersive-active #app-view {
   background: #0b1120;
 }
 
+/* Cam-stream overlay: needs overflow:auto so child comments can scroll */
+.live-cam-stream .live-mobile-content,
+.live-host-mobile .live-mobile-content {
+  overflow: auto;
+}
+
 /* ── Mobile comments ── */
 .live-mobile-comments {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  display: flex;
-  flex-direction: column;
-  /* justify-content:flex-end pushes messages to bottom when content < container height */
-  justify-content: flex-end;
+  /* display:grid + align-content:end = reliable cross-browser pin-to-bottom */
+  display: grid;
+  align-content: end;
   gap: 10px;
   padding: 8px 16px 4px;
 }
 
-/* Spacer pushes messages to bottom; grows to fill empty space above */
+/* No spacer needed — grid align-content:end handles bottom alignment */
 .live-mobile-comments::before {
-  content: '';
-  flex-shrink: 0;
-  flex-grow: 1;
-  min-height: 4px;
+  display: none;
 }
 
 /* ── Mobile input row (default: separate section below video) ── */

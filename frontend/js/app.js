@@ -4482,6 +4482,9 @@
             await ovenLivekit.setMediaStream(nextBundle.publishedStream);
             hostMediaBundle = nextBundle;
             hostPreviewVideo.srcObject = nextBundle.previewStream || nextBundle.publishedStream;
+            // PC host (screen share or desktop camera): contain to preserve 16:9 frame
+            // Mobile host (camera): cover to fill vertical frame
+            hostPreviewVideo.style.objectFit = (!isDesktopClient() && source === 'camera') ? 'cover' : 'contain';
 
             showHostPreview();
             await hostPreviewVideo.play().catch(() => {});
@@ -4746,15 +4749,16 @@
           if (overlayVisible) { clearTimeout(overlayTimer); hideOverlay(); }
           else { showOverlay(); }
         }
+        let lastTouchTime = 0; // guard against synthetic mouse events after touch
         if (liveVideoWrap) {
-          liveVideoWrap.addEventListener('mouseenter', showOverlay);
-          liveVideoWrap.addEventListener('mousemove', showOverlay);
-          liveVideoWrap.addEventListener('mouseleave', () => { clearTimeout(overlayTimer); overlayTimer = setTimeout(hideOverlay, 1200); });
-          // Mobile: touchend toggles overlay (not touchstart, to avoid ghost-click conflict)
+          liveVideoWrap.addEventListener('mouseenter', () => { if (Date.now() - lastTouchTime > 600) showOverlay(); });
+          liveVideoWrap.addEventListener('mousemove',  () => { if (Date.now() - lastTouchTime > 600) showOverlay(); });
+          liveVideoWrap.addEventListener('mouseleave', () => { if (Date.now() - lastTouchTime > 600) { clearTimeout(overlayTimer); overlayTimer = setTimeout(hideOverlay, 1200); } });
+          // Mobile: touchend toggles overlay
           let lastTouchToggleTime = 0;
           liveVideoWrap.addEventListener('touchend', (e) => {
-            // Don't toggle if tapping a button
             if (e.target.closest('button')) return;
+            lastTouchTime = Date.now();
             lastTouchToggleTime = Date.now();
             toggleOverlay();
           }, { passive: true });
