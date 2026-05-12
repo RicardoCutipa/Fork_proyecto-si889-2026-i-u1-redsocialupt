@@ -3647,7 +3647,7 @@
                         <button id="live-immersive-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Modo inmersivo">
                           <span class="material-symbols-outlined text-[20px]">open_in_full</span>
                         </button>
-                        <button id="live-fullscreen-btn" type="button" class="hidden w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa (video)">
+                        <button id="live-fullscreen-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition live-desktop-only" title="Pantalla completa (video)">
                           <span class="material-symbols-outlined text-[20px]">fullscreen</span>
                         </button>
                         <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em] transition">FINALIZAR</button>
@@ -4206,9 +4206,16 @@
             updateMobilePlayerControls();
           }, { once: true });
           // Hide fallback once video actually starts rendering frames
-          video.addEventListener('playing', () => {
-            liveVideoFallback.classList.add('hidden');
-          }, { once: true });
+          const hideFallback = () => { liveVideoFallback.classList.add('hidden'); };
+          video.addEventListener('playing', hideFallback, { once: true });
+          video.addEventListener('canplay', hideFallback, { once: true });
+          video.addEventListener('loadeddata', hideFallback, { once: true });
+          // Fallback timeout: if no event fires within 4s, hide anyway
+          setTimeout(() => {
+            if (viewerVideo && !liveVideoFallback.classList.contains('hidden')) {
+              hideFallback();
+            }
+          }, 4000);
           return video;
         }
 

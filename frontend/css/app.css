@@ -1721,9 +1721,12 @@ body.live-immersive-active #app-view {
   min-height: 100dvh !important;
 }
 
-/* In immersive mode (mobile only): keep X button visible in overlay */
+/* In immersive mode (mobile only): X button escapes overlay, always visible */
 .live-immersive-shell:not(.live-is-desktop) #live-immersive-btn {
-  z-index: 10000 !important;
+  position: fixed !important;
+  top: 12px;
+  right: 12px;
+  z-index: 10001 !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
