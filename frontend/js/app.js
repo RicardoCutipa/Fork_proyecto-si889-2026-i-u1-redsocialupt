@@ -3703,10 +3703,6 @@
                       <button id="live-toggle-mic-mobile-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition shrink-0" title="Silenciar micrófono">
                         <span class="material-symbols-outlined text-[20px]">mic</span>
                       </button>
-                      <!-- Mobile stream mute button (viewer only, hidden for host) -->
-                      <button id="live-viewer-mute-mobile-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition shrink-0" title="Silenciar / Activar sonido">
-                        <span class="material-symbols-outlined text-[20px]">volume_up</span>
-                      </button>
                       <textarea id="live-comment-input-mobile" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
                       <div class="relative">
                         <button id="live-reaction-trigger" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
@@ -3787,7 +3783,6 @@
         const hostTools = container.querySelector('#live-host-tools');
         const toggleMicButton = container.querySelector('#live-toggle-mic-btn');
         const toggleMicMobileButton = container.querySelector('#live-toggle-mic-mobile-btn');
-        const viewerMuteMobileButton = container.querySelector('#live-viewer-mute-mobile-btn');
         const toggleSystemAudioButton = container.querySelector('#live-toggle-system-audio-btn');
         const switchSourceButton = container.querySelector('#live-switch-source-btn');
         const flipCameraButton = container.querySelector('#live-flip-camera-btn');
@@ -4133,17 +4128,13 @@
           }
 
           const now = Date.now();
-          if ((now - viewerPlayerCreatedAt) < 4000 || (now - viewerPlayerLastRetryAt) < 4000) {
+          // Give player plenty of time before declaring stalled (mobile needs more time)
+          if ((now - viewerPlayerCreatedAt) < 8000 || (now - viewerPlayerLastRetryAt) < 8000) {
             return false;
           }
 
-          // Stalled: not enough data buffered, or buffered but stuck at 0
-          if (viewerVideo.readyState < 2) return true;
-          if (viewerVideo.currentTime === 0 && viewerVideo.paused) {
-            // Try to kick-start playback before declaring stalled
-            viewerVideo.play().catch(() => {});
-            return false;
-          }
+          // Only stall if HAVE_NOTHING (no data at all) AND paused — be very conservative
+          if (viewerVideo.readyState < 1 && viewerVideo.paused) return true;
           return false;
         }
 
@@ -4160,7 +4151,9 @@
           const currentTime = Number(viewerVideo.currentTime || 0);
           const drift = syncPosition - currentTime;
 
-          if (force || currentTime <= 0 || drift > 1.15 || drift < -0.8) {
+          // Only seek on force or very large drift — seeking causes black frames
+          // Seek on initial load OR if truly stuck/looping (drift > 4s)
+          if ((force && currentTime <= 0) || drift > 4) {
             try {
               viewerVideo.currentTime = syncPosition;
             } catch (error) {
@@ -4168,8 +4161,9 @@
             }
           }
 
-          if (drift > 0.35) {
-            viewerVideo.playbackRate = Math.min(1.08, 1 + drift / 8);
+          // Speed up gently if behind — avoids stutter but corrects drift
+          if (drift > 1.5) {
+            viewerVideo.playbackRate = Math.min(1.06, 1 + drift / 14);
             return;
           }
 
@@ -4211,16 +4205,16 @@
         function createViewerVideo() {
           const video = document.createElement('video');
           video.className = 'w-full h-full object-contain bg-black absolute inset-0';
-          video.style.objectFit = 'contain'; // inline guarantee
+          video.style.objectFit = 'contain';
           video.autoplay = true;
           video.controls = false;
           video.playsInline = true;
           video.setAttribute('playsinline', '');
-          video.muted = true; // muted autoplay is allowed on all browsers
-          viewerPlayerRoot.innerHTML = '';
+          video.muted = true;
+          // Don't clear innerHTML yet — keep old video visible until new one is ready
           viewerPlayerRoot.appendChild(video);
           viewerVideo = video;
-          // Tap on video to unmute (only fires once, only unmutes — no play() to avoid HLS interruption)
+          // Tap on video to unmute (only fires once)
           const unmuteHandler = () => {
             if (viewerVideo && viewerVideo.muted) {
               viewerVideo.muted = false;
@@ -4228,23 +4222,26 @@
             liveVideoWrap?.removeEventListener('click', unmuteHandler);
           };
           liveVideoWrap?.addEventListener('click', unmuteHandler);
-          // Re-check fullscreen button once actual video dimensions are known
+          // Re-check layout once dimensions are known
           video.addEventListener('loadedmetadata', () => {
             updateFullscreenButtonVisibility();
             updateMobilePlayerControls();
             updateStreamLayout();
+            // Now safe to remove previous video elements
+            Array.from(viewerPlayerRoot.children).forEach(el => {
+              if (el !== video) viewerPlayerRoot.removeChild(el);
+            });
           }, { once: true });
-          // Hide fallback once video actually starts rendering frames
+          // Hide fallback once video is actually rendering frames
           const hideFallback = () => { liveVideoFallback.classList.add('hidden'); };
           video.addEventListener('playing', hideFallback, { once: true });
           video.addEventListener('canplay', hideFallback, { once: true });
-          video.addEventListener('loadeddata', hideFallback, { once: true });
-          // Fallback timeout: if no event fires within 4s, hide anyway
+          // Generous timeout: only hide fallback after 8s as last resort
           setTimeout(() => {
-            if (viewerVideo && !liveVideoFallback.classList.contains('hidden')) {
+            if (viewerVideo === video && !liveVideoFallback.classList.contains('hidden')) {
               hideFallback();
             }
-          }, 4000);
+          }, 8000);
           return video;
         }
 
@@ -4265,7 +4262,7 @@
             const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url);
             if (!forceRestart && viewerVideo && viewerPlayerSourceUrl === sourceUrl) {
               showViewerPlayer();
-              await viewerVideo.play().catch(() => {});
+              // Don't call play() — HLS is already streaming, play() interrupts and causes black frames
               return;
             }
 
@@ -4275,8 +4272,9 @@
               return;
             }
 
-            showViewerPlayer();
+            // Destroy old player first, then show viewer container, then create new video
             destroyPlayer();
+            showViewerPlayer();
             const video = createViewerVideo();
             const readyAt = Date.now();
 
@@ -4284,11 +4282,11 @@
               viewerHls = new window.Hls({
                 lowLatencyMode: true,
                 liveDurationInfinity: true,
-                backBufferLength: 30,
-                maxBufferLength: 10,
-                liveSyncDurationCount: 1,
-                liveMaxLatencyDurationCount: 2,
-                maxLiveSyncPlaybackRate: 1.08,
+                backBufferLength: 8,          // reduce to avoid old-segment loop playback
+                maxBufferLength: 12,
+                liveSyncDurationCount: 2,     // stay 2 segments behind live edge (more stable)
+                liveMaxLatencyDurationCount: 5,
+                maxLiveSyncPlaybackRate: 1.06,
               });
               viewerHls.loadSource(sourceUrl);
               viewerHls.attachMedia(video);

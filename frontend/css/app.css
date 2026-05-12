@@ -1438,14 +1438,26 @@ body {
 .live-root {
   background: #0b1120;
   overflow: hidden;
-
-  /* Mobile (default): fill parent chain (parent has explicit height set via :has) */
   border-radius: 0;
   border: none;
   box-shadow: none;
   height: 100%;
   min-height: calc(100vh - 4rem);
   min-height: calc(100dvh - 4rem);
+}
+
+/* Mobile: use fixed positioning to bypass grid/flex height chain issues */
+@media (max-width: 960px) {
+  .live-root:not(.live-is-desktop) {
+    position: fixed;
+    top: 4rem;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto !important;
+    min-height: 0 !important;
+    z-index: 90;
+  }
 }
 
 /* On mobile, remove parent grid margins/padding so the live root fills edge-to-edge */
