@@ -3620,7 +3620,7 @@
                 <div class="live-video-col">
                   <div id="live-video-wrap" class="live-video-wrap">
                     <div id="live-viewer-player" class="absolute inset-0 hidden"></div>
-                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-contain bg-black hidden" style="object-fit:contain" playsinline autoplay muted></video>
+                    <video id="live-host-preview" class="absolute inset-0 w-full h-full object-cover bg-black hidden" style="object-fit:cover" playsinline autoplay muted></video>
 
                     <!-- Fallback -->
                     <div id="live-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-[5]">
@@ -3753,6 +3753,10 @@
         const liveShell = container.querySelector('#live-shell');
         if (isDesktopClient() && liveShell) {
           liveShell.classList.add('live-is-desktop');
+        }
+        // Host broadcasting from mobile: full-bleed camera mode
+        if (isHostRoute && !isDesktopClient() && liveShell) {
+          liveShell.classList.add('live-host-mobile');
         }
 
         const viewerPlayerRoot = container.querySelector('#live-viewer-player');
@@ -4098,6 +4102,21 @@
           }
         }
 
+        // Detect portrait/phone camera streams for viewer → apply full-bleed TikTok layout
+        function updateStreamLayout() {
+          if (isDesktopClient() || isHostRoute) return; // only for mobile viewers
+          const video = viewerVideo;
+          if (!video || !video.videoWidth || !video.videoHeight) return;
+          const isPortrait = video.videoHeight > video.videoWidth;
+          if (liveShell) {
+            liveShell.classList.toggle('live-cam-stream', isPortrait);
+          }
+          // Also apply object-cover directly on the video element
+          if (isPortrait) {
+            video.style.objectFit = 'cover';
+          }
+        }
+
         function viewerPlaybackLooksStalled() {
           if (!viewerVideo || !viewerPlayerSourceUrl) {
             return false;
@@ -4204,6 +4223,7 @@
           video.addEventListener('loadedmetadata', () => {
             updateFullscreenButtonVisibility();
             updateMobilePlayerControls();
+            updateStreamLayout();
           }, { once: true });
           // Hide fallback once video actually starts rendering frames
           const hideFallback = () => { liveVideoFallback.classList.add('hidden'); };
@@ -4486,6 +4506,7 @@
             syncViewerToLiveEdge();
             updateFullscreenButtonVisibility();
             updateMobilePlayerControls();
+            updateStreamLayout();
           }
 
           if (liveData.live_status !== 'live') {
@@ -4642,19 +4663,25 @@
         const playerControls = container.querySelector('#live-player-controls');
         let inVideoFullscreen = false; // landscape fullscreen (video only)
         let overlayVisible = true;
+        const isHostOnMobile = isHostRoute && !isDesktopClient();
 
         function showOverlay() {
           overlayVisible = true;
           overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
           // Also show player controls on video
           if (playerControls) { playerControls.style.opacity = '1'; playerControls.style.pointerEvents = 'auto'; }
+          // Show X button on mobile viewers only (host never sees X)
+          if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
+            immersiveBtn.style.opacity = '1';
+            immersiveBtn.style.pointerEvents = 'auto';
+          }
           // In video fullscreen (landscape): also show mobile overlay temporarily
           if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '1';
             mobileOverlay.style.pointerEvents = 'auto';
           }
           clearTimeout(overlayTimer);
-          overlayTimer = setTimeout(hideOverlay, 3500);
+          overlayTimer = setTimeout(hideOverlay, 5000);
         }
         function hideOverlay() {
           if (selectorOpen) return;
@@ -4662,6 +4689,11 @@
           overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
           // Also hide player controls
           if (playerControls) { playerControls.style.opacity = '0'; playerControls.style.pointerEvents = 'none'; }
+          // Also hide X button
+          if (immersiveBtn && !isDesktopClient()) {
+            immersiveBtn.style.opacity = '0';
+            immersiveBtn.style.pointerEvents = 'none';
+          }
           // In video fullscreen (landscape): also hide mobile overlay
           if (inVideoFullscreen && mobileOverlay) {
             mobileOverlay.style.opacity = '0';
@@ -4688,6 +4720,10 @@
           showOverlay();
         } else {
           hideOverlay();
+          // Host on mobile: always hide X button
+          if (isHostOnMobile && immersiveBtn) {
+            immersiveBtn.style.display = 'none';
+          }
         }
 
         // ── Video Fullscreen (landscape, video only) ──
