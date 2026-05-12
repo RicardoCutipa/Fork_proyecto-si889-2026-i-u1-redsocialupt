@@ -3644,14 +3644,10 @@
                         </div>
                       </div>
                       <div class="flex items-center gap-2">
-                        <!-- Desktop-only controls in top overlay -->
-                        <button id="live-viewer-mute-btn" type="button" class="hidden w-9 h-9 rounded-full glass items-center justify-center text-white hover:bg-white/20 transition live-desktop-only" title="Silenciar / Activar sonido">
-                          <span class="material-symbols-outlined text-[20px]">volume_up</span>
-                        </button>
                         <button id="live-immersive-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Modo inmersivo">
                           <span class="material-symbols-outlined text-[20px]">open_in_full</span>
                         </button>
-                        <button id="live-fullscreen-btn" type="button" class="w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition live-desktop-only" title="Pantalla completa (video)">
+                        <button id="live-fullscreen-btn" type="button" class="hidden w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa (video)">
                           <span class="material-symbols-outlined text-[20px]">fullscreen</span>
                         </button>
                         <button id="live-host-end-btn" type="button" class="hidden rounded-full bg-[#ff0b53] hover:bg-[#e00549] px-4 py-2 text-xs font-black tracking-[0.16em] transition">FINALIZAR</button>
@@ -3661,8 +3657,11 @@
                     <!-- ── OVERLAY (bottom – title + host tools, desktop only) ── -->
                     <div data-live-overlay class="live-overlay live-desktop-only absolute bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300">
                       <div class="flex items-end justify-between gap-4">
-                        <div class="min-w-0">
+                        <div class="min-w-0 flex items-center gap-3">
                           <h2 id="live-title" class="text-xl md:text-2xl font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
+                          <button id="live-viewer-mute-btn" type="button" class="hidden w-9 h-9 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition shrink-0" title="Silenciar / Activar sonido">
+                            <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                          </button>
                         </div>
                         <div id="live-host-tools" class="hidden items-center gap-2 shrink-0">
                           <button id="live-toggle-mic-btn" type="button" class="w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar microfono">

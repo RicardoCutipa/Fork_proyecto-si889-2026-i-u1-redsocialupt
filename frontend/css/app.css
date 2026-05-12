@@ -1414,8 +1414,10 @@ body {
   border-radius: 0;
   border: none;
   box-shadow: none;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
+  height: calc(100vh - 4rem);
+  height: calc(100dvh - 4rem);
 }
 
 /* On mobile, remove parent grid margins/padding so the live root fills edge-to-edge */
@@ -1514,6 +1516,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 /* Desktop default: side-by-side (video left, chat right) — Twitch style */
@@ -1554,7 +1557,6 @@ body {
   border-radius: 0;
   aspect-ratio: 16 / 9;
   width: 100%;
-  margin-top: 48px; /* space for X button above video on mobile */
 }
 
 /* ── Player controls on video (mobile) - smooth transition ── */
@@ -1567,7 +1569,6 @@ body {
   min-height: 220px;
   height: auto;
   flex: 1 1 auto;
-  margin-top: 0;
 }
 /* Narrow desktop: reduce video dominance, let chat have more room */
 @media (max-width: 960px) {
@@ -1720,11 +1721,8 @@ body.live-immersive-active #app-view {
   min-height: 100dvh !important;
 }
 
-/* In immersive mode (mobile only): X button ABOVE the video, not inside it */
+/* In immersive mode (mobile only): keep X button visible in overlay */
 .live-immersive-shell:not(.live-is-desktop) #live-immersive-btn {
-  position: absolute !important;
-  top: 10px;
-  right: 12px;
   z-index: 10000 !important;
   opacity: 1 !important;
   pointer-events: auto !important;
@@ -1735,10 +1733,6 @@ body.live-immersive-active #app-view {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-}
-/* No top margin for video wrap in desktop immersive */
-.live-immersive-shell.live-is-desktop .live-video-wrap {
-  margin-top: 0;
 }
 
 /* Smooth exit transition */
