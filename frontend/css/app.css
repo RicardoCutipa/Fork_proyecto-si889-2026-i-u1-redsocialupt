@@ -1707,7 +1707,7 @@ body {
   pointer-events: none;
   flex-direction: column;
   justify-content: flex-end;
-  max-height: 40%;
+  max-height: 55%; /* increased: more comments visible */
 }
 
 .live-host-mobile .live-mobile-content>*,
@@ -1728,7 +1728,19 @@ body {
   mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
   background: transparent;
   padding-bottom: 2px;
+  /* Scroll support in overlay mode */
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  max-height: 100%;
+  height: auto;
+  /* Disable spacer trick in overlay mode (justify-content:flex-end handles alignment) */
 }
+.live-host-mobile .live-mobile-comments::before,
+.live-cam-stream .live-mobile-comments::before {
+  display: none;
+}
+
 
 /* Input row: gradient background (no solid border) */
 .live-host-mobile .live-mobile-input-row,
@@ -1964,12 +1976,19 @@ body.live-immersive-active #app-view {
 .live-mobile-comments {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scroll */
   padding: 8px 16px 4px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  /* No justify-content:flex-end — broken with overflow-y on mobile */
   gap: 10px;
   min-height: 0;
+}
+
+/* Spacer pushes messages to bottom; grows to fill empty space above */
+.live-mobile-comments::before {
+  content: '';
+  flex: 1 0 auto;
 }
 
 /* ── Mobile input row (default: separate section below video) ── */

@@ -4709,17 +4709,11 @@
         function showOverlay() {
           overlayVisible = true;
           overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
-          // Also show player controls on video
           if (playerControls) { playerControls.style.opacity = '1'; playerControls.style.pointerEvents = 'auto'; }
           // Show X button on mobile viewers only (host never sees X)
           if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
             immersiveBtn.style.opacity = '1';
             immersiveBtn.style.pointerEvents = 'auto';
-          }
-          // In video fullscreen (landscape): also show mobile overlay temporarily
-          if (inVideoFullscreen && mobileOverlay) {
-            mobileOverlay.style.opacity = '1';
-            mobileOverlay.style.pointerEvents = 'auto';
           }
           clearTimeout(overlayTimer);
           overlayTimer = setTimeout(hideOverlay, 5000);
@@ -4728,18 +4722,14 @@
           if (selectorOpen) return;
           overlayVisible = false;
           overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
-          // Also hide player controls
+          // Hide player controls
           if (playerControls) { playerControls.style.opacity = '0'; playerControls.style.pointerEvents = 'none'; }
-          // Also hide X button
+          // Hide X button
           if (immersiveBtn && !isDesktopClient()) {
             immersiveBtn.style.opacity = '0';
             immersiveBtn.style.pointerEvents = 'none';
           }
-          // In video fullscreen (landscape): also hide mobile overlay
-          if (inVideoFullscreen && mobileOverlay) {
-            mobileOverlay.style.opacity = '0';
-            mobileOverlay.style.pointerEvents = 'none';
-          }
+          // DO NOT hide mobile-overlay (title/comments/input/reactions must always be visible)
         }
         function toggleOverlay() {
           if (overlayVisible) { clearTimeout(overlayTimer); hideOverlay(); }
@@ -4761,6 +4751,21 @@
           liveVideoWrap.addEventListener('click', (e) => {
             if (Date.now() - lastTouchToggleTime < 600) e.stopImmediatePropagation();
           }, true);
+        }
+        // Also toggle on tap anywhere on the live shell (not just video wrap)
+        // Catches cam-stream top area and non-video regions
+        if (liveShell && !isDesktopClient()) {
+          let lastShellTouchTime = 0;
+          liveShell.addEventListener('touchend', (e) => {
+            // Ignore taps inside buttons, input, textarea, or the comments section
+            if (e.target.closest('button, input, textarea, #live-comments-mobile, .live-mobile-input')) return;
+            // Ignore if the video wrap already handled it (avoid double toggle)
+            if (liveVideoWrap && liveVideoWrap.contains(e.target)) return;
+            const now = Date.now();
+            if (now - lastShellTouchTime < 400) return;
+            lastShellTouchTime = now;
+            toggleOverlay();
+          }, { passive: true });
         }
         // On desktop show overlay initially, on mobile start hidden (tap to reveal)
         if (isDesktopClient()) {
@@ -4880,19 +4885,28 @@
             if (mobileOverlay) { mobileOverlay.style.opacity = '0'; mobileOverlay.style.pointerEvents = 'none'; }
             if (immersiveBtn && !isDesktopClient()) immersiveBtn.classList.add('hidden');
           } else if (fsEl === liveShell) {
-            // Entered/returned to shell fullscreen (immersive) — no special action
+            // Returned to shell fullscreen (immersive) — show overlay so X becomes visible
+            if (!isDesktopClient()) {
+              showOverlay();
+            }
           } else if (!fsEl) {
             if (inVideoFullscreen) {
-              // Exited video fullscreen → re-enter immersive shell fullscreen
+              // Exited video fullscreen → restore X button and reset state
               inVideoFullscreen = false;
               try { screen.orientation.unlock(); } catch(e) {}
               const icon = fullscreenBtn?.querySelector('.material-symbols-outlined');
               if (icon) icon.textContent = 'fullscreen';
               if (mobileOverlay) { mobileOverlay.style.opacity = ''; mobileOverlay.style.pointerEvents = ''; }
-              if (immersiveBtn) immersiveBtn.classList.remove('hidden');
-              // Re-enter immersive fullscreen on mobile
+              // Restore X button visibility
+              if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
+                immersiveBtn.classList.remove('hidden');
+              }
+              // Re-enter immersive shell fullscreen
               if (immersiveActive && !isDesktopClient() && liveShell) {
                 liveShell.requestFullscreen().catch(() => {});
+              } else {
+                // Not re-entering fullscreen: show overlay so X is visible
+                showOverlay();
               }
             } else if (immersiveActive && !isDesktopClient()) {
               // User pressed browser back button while in immersive → exit livestream
@@ -5099,6 +5113,11 @@
           document.body.classList.remove('live-immersive-active');
           if (liveShell) liveShell.classList.remove('live-immersive-shell');
           releaseWakeLock();
+          // If host mobile navigates away while stream is active, auto-end the stream via API
+          if (isHostRoute && !isDesktopClient() && !endedByHost && liveId) {
+            const dur = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+            PostsAPI.endLivestream(liveId, dur).catch(() => {});
+          }
           if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
               ovenLivekit.stopStreaming();
