@@ -4508,11 +4508,6 @@
             toggleMicMobileButton.classList.toggle('hidden', !isOwner);
             toggleMicMobileButton.classList.toggle('flex', isOwner && !isDesktopClient());
           }
-          // Mobile viewer mute button — viewer only
-          if (viewerMuteMobileButton) {
-            viewerMuteMobileButton.classList.toggle('hidden', isOwner);
-            viewerMuteMobileButton.classList.toggle('flex', !isOwner && !isDesktopClient());
-          }
 
           if (!isOwner && liveData.live_status === 'live') {
             // Detect source change → force viewer restart
@@ -4913,22 +4908,6 @@
               // Sync desktop mute icon
               const dIcon = viewerMuteBtn?.querySelector('.material-symbols-outlined');
               if (dIcon) dIcon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
-            }
-          });
-        }
-
-        // ── Mobile viewer mute button (in input row, viewer only) ──
-        if (viewerMuteMobileButton) {
-          viewerMuteMobileButton.addEventListener('click', () => {
-            if (viewerVideo) {
-              viewerVideo.muted = !viewerVideo.muted;
-              const icon = viewerMuteMobileButton.querySelector('.material-symbols-outlined');
-              if (icon) icon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
-              // Sync other mute buttons
-              const dIcon = container.querySelector('#live-viewer-mute-btn .material-symbols-outlined');
-              if (dIcon) dIcon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
-              const pIcon = playerMuteBtn?.querySelector('.material-symbols-outlined');
-              if (pIcon) pIcon.textContent = viewerVideo.muted ? 'volume_off' : 'volume_up';
             }
           });
         }
