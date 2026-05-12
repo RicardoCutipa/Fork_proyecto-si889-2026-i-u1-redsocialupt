@@ -1901,11 +1901,15 @@ body.live-immersive-active #app-view {
   border: none !important;
   box-shadow: none !important;
   max-height: none !important;
+  /* Use dvh + -webkit-fill-available for cross-browser mobile support */
   height: 100vh !important;
   height: 100dvh !important;
+  height: -webkit-fill-available !important;
   min-height: 100vh !important;
+  min-height: 100dvh !important;
   margin: 0 !important;
   padding: 0 !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   width: 100vw !important;
   max-width: none !important;
 }
@@ -1978,6 +1982,23 @@ body.live-immersive-active #app-view {
   flex-shrink: 0;
   background: rgba(11, 17, 32, 0.95);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* On mobile live view: pin input row to viewport bottom regardless of layout */
+@media (max-width: 960px) {
+  body:has(.live-root:not(.live-is-desktop)) .live-mobile-input-row {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 95;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    background: rgba(11, 17, 32, 0.98);
+  }
+  /* Add padding at bottom of comments so messages aren't hidden behind pinned input */
+  body:has(.live-root:not(.live-is-desktop)) .live-mobile-comments {
+    padding-bottom: 72px;
+  }
 }
 
 /* ── Mobile textarea ── */

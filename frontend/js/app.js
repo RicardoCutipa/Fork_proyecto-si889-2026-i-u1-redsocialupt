@@ -1603,10 +1603,25 @@
     async function ensureLocalStream(mode = 'audio') {
       const needsVideo = mode === 'video';
       if (!callState.localStream) {
-        callState.localStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: needsVideo,
-        });
+        try {
+          callState.localStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: needsVideo,
+          });
+        } catch (err) {
+          // If device is busy (another app using mic/camera), release and retry once
+          if (err.name === 'NotReadableError' || err.name === 'AbortError') {
+            // Release any partial streams held by other contexts
+            releaseCallRuntime();
+            await new Promise(r => setTimeout(r, 600));
+            callState.localStream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: needsVideo,
+            });
+          } else {
+            throw err;
+          }
+        }
       } else {
         if (!getLocalAudioTrack()) {
           const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -2011,7 +2026,11 @@
       try {
         await ensureLocalStream(mode);
       } catch (error) {
-        showToast(mode === 'video' ? 'Debes permitir microfono y camara para iniciar la videollamada' : 'Debes permitir el microfono para iniciar la llamada', 'error');
+        const busy = error?.name === 'NotReadableError' || error?.name === 'AbortError';
+        showToast(busy
+          ? (mode === 'video' ? 'Otro app usa el micrófono/cámara. Ciérrala e inténtalo de nuevo.' : 'Otro app usa el micrófono. Ciérralo e inténtalo de nuevo.')
+          : (mode === 'video' ? 'Debes permitir microfono y camara para iniciar la videollamada' : 'Debes permitir el microfono para iniciar la llamada'),
+        'error');
         return;
       }
 
@@ -2043,7 +2062,11 @@
       try {
         await ensureLocalStream(callState.mode);
       } catch (error) {
-        showToast(callState.mode === 'video' ? 'Debes permitir microfono y camara para aceptar la videollamada' : 'Debes permitir el microfono para aceptar la llamada', 'error');
+        const busy = error?.name === 'NotReadableError' || error?.name === 'AbortError';
+        showToast(busy
+          ? (callState.mode === 'video' ? 'Otro app usa el micrófono/cámara. Ciérrala e inténtalo de nuevo.' : 'Otro app usa el micrófono. Ciérralo e inténtalo de nuevo.')
+          : (callState.mode === 'video' ? 'Debes permitir microfono y camara para aceptar la videollamada' : 'Debes permitir el microfono para aceptar la llamada'),
+        'error');
         return;
       }
       const result = await ChatAPI.acceptCall(callState.session.id);
