@@ -4631,6 +4631,13 @@
 
           if (!hostPublishing) {
             await livekit.startStreaming(buildLivestreamPublishUrl(liveData.stream_key));
+            if (
+              window.location.protocol === 'https:'
+              && typeof livekit.resourceUrl === 'string'
+              && livekit.resourceUrl.startsWith('http://')
+            ) {
+              livekit.resourceUrl = livekit.resourceUrl.replace(/^http:\/\//i, 'https://');
+            }
           }
 
           hostPublishing = true;
