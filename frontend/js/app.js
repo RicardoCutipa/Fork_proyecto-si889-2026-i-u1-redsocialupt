@@ -3866,6 +3866,15 @@
             }
           } catch (e) { /* not critical */ }
         }
+
+        // If the user is scrolling the chat, avoid snapping back to bottom on the next poll.
+        let lastCommentsUserScrollAt = 0;
+        function markCommentsUserScroll() {
+          lastCommentsUserScrollAt = Date.now();
+        }
+        function userRecentlyScrolledComments() {
+          return (Date.now() - lastCommentsUserScrollAt) < 1500;
+        }
         function releaseWakeLock() {
           if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
         }
@@ -4635,7 +4644,7 @@
           }
 
           commentsInitialized = true;
-          if (stickToBottom) {
+          if (stickToBottom && !userRecentlyScrolledComments()) {
             liveComments.scrollTop = liveComments.scrollHeight;
             if (liveCommentsMobile) liveCommentsMobile.scrollTop = liveCommentsMobile.scrollHeight;
           }
@@ -5080,6 +5089,14 @@
         }
         bindCommentInput(liveCommentInput);
         bindCommentInput(liveCommentInputMobile);
+
+        // Mark user interaction with comments so polling doesn't fight touch scrolling.
+        [liveComments, liveCommentsMobile].forEach((el) => {
+          if (!el) return;
+          el.addEventListener('scroll', markCommentsUserScroll, { passive: true });
+          el.addEventListener('touchstart', markCommentsUserScroll, { passive: true });
+          el.addEventListener('touchmove', markCommentsUserScroll, { passive: true });
+        });
 
         // ─── Host buttons ───
         hostEndButton.addEventListener('click', endLivestream);

@@ -1107,13 +1107,13 @@ body {
 
 /* Mobile comments */
 .live-mobile-comments {
-  max-height: 200px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  margin-bottom: 10px;
-  padding-left: 2px;
+  /* NOTE: Legacy block (kept for cascade compatibility).
+     Real sizing/scrolling is defined later under "MOBILE CONTENT" and the
+     full-bleed overlay rules. Avoid constraints that break mobile scroll. */
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .live-mobile-comment {
@@ -1705,7 +1705,8 @@ body {
   right: 0;
   z-index: 26;
   background: transparent;
-  pointer-events: none;
+  /* Allow touch scrolling inside comments on mobile. */
+  pointer-events: auto;
   flex-direction: column;
   justify-content: flex-end;
   max-height: 55%; /* increased: more comments visible */
@@ -1725,8 +1726,7 @@ body {
 /* Comments fade from transparent at top, visible at bottom */
 .live-host-mobile .live-mobile-comments,
 .live-cam-stream .live-mobile-comments {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
+  /* Avoid mask-image here: it can break touch scrolling on some mobile browsers. */
   background: transparent;
   padding: 8px 12px 2px;
   /* Concrete viewport-based max-height so overflow-y:auto actually triggers scroll */
@@ -1736,15 +1736,9 @@ body {
   touch-action: pan-y;
   overscroll-behavior: contain;
   pointer-events: auto;
-  /* Flex layout with margin-top:auto on spacer is the safest pin-to-bottom method */
+  /* Keep the container scrollable; bottom pinning is handled by the first child auto margin. */
   display: flex !important;
   flex-direction: column;
-}
-.live-host-mobile .live-mobile-comments::before,
-.live-cam-stream .live-mobile-comments::before {
-  content: '';
-  flex: 1 0 0;
-  display: block;
 }
 
 
@@ -1981,7 +1975,8 @@ body.live-immersive-active #app-view {
 /* Cam-stream overlay: needs overflow:auto so child comments can scroll */
 .live-cam-stream .live-mobile-content,
 .live-host-mobile .live-mobile-content {
-  overflow: auto;
+  /* Keep overlay stable; the comments container itself scrolls. */
+  overflow: hidden;
 }
 
 /* ── Mobile comments ── */
@@ -1998,11 +1993,9 @@ body.live-immersive-active #app-view {
   padding: 8px 12px 8px;
 }
 
-/* Spacer pushes messages to bottom; grows to fill empty space above */
-.live-mobile-comments::before {
-  content: '';
-  flex: 1 0 0;
-  display: block;
+/* Push short chats to the bottom without breaking scroll when content overflows. */
+.live-mobile-comments > :first-child {
+  margin-top: auto;
 }
 
 /* ── Mobile input row (default: separate section below video) ── */
