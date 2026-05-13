@@ -516,13 +516,17 @@
     return window.location.hostname || 'localhost';
   }
 
-  function buildLivestreamHlsUrl(streamKey) {
-    return `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+  function buildLivestreamHlsUrl(streamKey, revision = '') {
+    const baseUrl = `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+    if (!revision) {
+      return baseUrl;
+    }
+    return `${baseUrl}?v=${encodeURIComponent(revision)}`;
   }
 
-  function normalizeLivestreamPlaybackUrl(streamKey, _playbackUrl) {
+  function normalizeLivestreamPlaybackUrl(streamKey, _playbackUrl, revision = '') {
     // Always rebuild from stream_key to ensure the viewer uses the frontend proxy
-    return buildLivestreamHlsUrl(streamKey);
+    return buildLivestreamHlsUrl(streamKey, revision);
   }
 
   function buildLivestreamPublishUrl(streamKey) {
@@ -3845,12 +3849,15 @@
         let viewerPlayerCreatedAt = 0;
         let viewerPlayerLastRetryAt = 0;
         let viewerBootstrapInFlight = false;
+        let viewerLastMediaTime = 0;
+        let viewerLastMediaProgressAt = 0;
         let commentsInitialized = false;
         let overlayTimer = null;
         let longPressTimer = null;
         let selectorOpen = false;
         let lastKnownSource = null;
         let currentFacingMode = 'environment'; // default: rear camera on mobile
+        let currentVideoDeviceId = '';
         let wakeLock = null; // Screen Wake Lock to prevent black screen
 
         // Mobile-only player controls (on the video itself)
@@ -3922,6 +3929,10 @@
           hostPreviewVideo.srcObject = null;
         }
 
+        function delay(ms) {
+          return new Promise((resolve) => window.setTimeout(resolve, ms));
+        }
+
         function destroyPlayer() {
           if (viewerHls && typeof viewerHls.destroy === 'function') {
             viewerHls.destroy();
@@ -3935,6 +3946,8 @@
           viewerVideo = null;
           viewerPlayerSourceUrl = null;
           viewerPlayerCreatedAt = 0;
+          viewerLastMediaTime = 0;
+          viewerLastMediaProgressAt = 0;
           viewerPlayerRoot.innerHTML = '';
         }
 
@@ -4175,8 +4188,27 @@
             return false;
           }
 
-          // Only stall if HAVE_NOTHING (no data at all) AND paused — be very conservative
+          // No data at all: definitely stalled.
           if (viewerVideo.readyState < 1 && viewerVideo.paused) return true;
+
+          // If playback time is not progressing for several seconds while live is active,
+          // the player is likely stuck on an old segment loop after a source restart.
+          const currentTime = Number(viewerVideo.currentTime || 0);
+          if (currentTime > (viewerLastMediaTime + 0.05)) {
+            viewerLastMediaTime = currentTime;
+            viewerLastMediaProgressAt = now;
+            return false;
+          }
+
+          if (!viewerLastMediaProgressAt) {
+            viewerLastMediaProgressAt = now;
+            viewerLastMediaTime = currentTime;
+            return false;
+          }
+
+          if (!viewerVideo.paused && viewerVideo.readyState >= 2 && (now - viewerLastMediaProgressAt) > 5000) {
+            return true;
+          }
           return false;
         }
 
@@ -4301,7 +4333,8 @@
 
           try {
             await ensureLivestreamLibraries();
-            const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url);
+            const sourceRevision = liveData.updated_at || liveData.playback_url || '';
+            const sourceUrl = normalizeLivestreamPlaybackUrl(liveData.stream_key, liveData.playback_url, sourceRevision);
             if (!forceRestart && viewerVideo && viewerPlayerSourceUrl === sourceUrl) {
               showViewerPlayer();
               // Don't call play() — HLS is already streaming, play() interrupts and causes black frames
@@ -4381,9 +4414,30 @@
             viewerPlayerSourceUrl = sourceUrl;
             viewerPlayerCreatedAt = readyAt;
             viewerPlayerLastRetryAt = readyAt;
+            viewerLastMediaTime = 0;
+            viewerLastMediaProgressAt = 0;
           } finally {
             viewerBootstrapInFlight = false;
           }
+        }
+
+        function pickPreferredMobileCameraDevice(videoInputs, desiredFacing, currentDeviceId) {
+          if (!Array.isArray(videoInputs) || !videoInputs.length) {
+            return null;
+          }
+
+          const normalizedFacing = desiredFacing === 'user' ? 'user' : 'environment';
+          const facingPattern = normalizedFacing === 'user'
+            ? /(front|frontal|user|selfie)/i
+            : /(back|rear|environment|trasera|posterior)/i;
+
+          const differentDevice = videoInputs.filter((device) => device.deviceId && device.deviceId !== currentDeviceId);
+          return (
+            differentDevice.find((device) => facingPattern.test(device.label || ''))
+            || differentDevice[0]
+            || videoInputs.find((device) => facingPattern.test(device.label || ''))
+            || videoInputs[0]
+          );
         }
 
         async function buildHostInputStream(source) {
@@ -4452,10 +4506,53 @@
           }
 
           // On mobile use facingMode for front/rear camera; on desktop just { video: true }
-          const videoConstraints = isDesktopClient()
-            ? true
-            : { facingMode: { ideal: currentFacingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } };
-          const cameraStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true });
+          let cameraStream = null;
+          if (isDesktopClient()) {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          } else {
+            const videoInputs = await navigator.mediaDevices.enumerateDevices()
+              .then((devices) => devices.filter((device) => device.kind === 'videoinput'))
+              .catch(() => []);
+            const preferredDevice = pickPreferredMobileCameraDevice(videoInputs, currentFacingMode, currentVideoDeviceId);
+            const candidateConstraints = [];
+
+            if (preferredDevice?.deviceId) {
+              candidateConstraints.push({
+                deviceId: { exact: preferredDevice.deviceId },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+              });
+            }
+
+            candidateConstraints.push(
+              { facingMode: { exact: currentFacingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+              { facingMode: { ideal: currentFacingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+              { width: { ideal: 1920 }, height: { ideal: 1080 } }
+            );
+
+            let lastCameraError = null;
+            for (const videoConstraints of candidateConstraints) {
+              try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true });
+                break;
+              } catch (error) {
+                lastCameraError = error;
+              }
+            }
+
+            if (!cameraStream) {
+              throw lastCameraError || new Error('No se pudo obtener la camara');
+            }
+          }
+
+          const selectedVideoTrack = cameraStream.getVideoTracks()[0] || null;
+          const selectedSettings = selectedVideoTrack?.getSettings?.() || {};
+          if (selectedSettings.deviceId) {
+            currentVideoDeviceId = selectedSettings.deviceId;
+          }
+          if (selectedSettings.facingMode === 'user' || selectedSettings.facingMode === 'environment') {
+            currentFacingMode = selectedSettings.facingMode;
+          }
           bundle.previewStream = cameraStream;
           bundle.publishedStream = cameraStream;
           bundle.micAudioTracks = cameraStream.getAudioTracks();
@@ -4463,54 +4560,114 @@
           return bundle;
         }
 
+        async function syncLivestreamSourceState(source) {
+          if (!liveId || !PostsAPI.updateLivestreamSource) {
+            throw new Error('No existe API para sincronizar la fuente del directo');
+          }
+
+          const result = await PostsAPI.updateLivestreamSource(liveId, source);
+          if (!result?.ok || !result.data) {
+            throw new Error(result?.data?.error || 'No se pudo sincronizar la fuente del directo');
+          }
+
+          liveData = { ...liveData, ...result.data };
+          return result.data;
+        }
+
+        async function publishHostBundle(bundle, source, restartExisting = false) {
+          if (!ovenLivekit) {
+            ovenLivekit = window.OvenLiveKit.create({
+              callbacks: {
+                error: (error) => {
+                  console.error('OvenLiveKit error:', error);
+                },
+              },
+            });
+          }
+
+          if (restartExisting && hostPublishing && typeof ovenLivekit.stopStreaming === 'function') {
+            try {
+              await Promise.resolve(ovenLivekit.stopStreaming());
+            } catch (error) {
+              console.warn('No se pudo detener la transmision antes de cambiar la fuente:', error);
+            }
+            hostPublishing = false;
+            await delay(250);
+          }
+
+          ovenLivekit.attachMedia(hostPreviewVideo);
+          await ovenLivekit.setMediaStream(bundle.publishedStream);
+          hostPreviewVideo.srcObject = bundle.previewStream || bundle.publishedStream;
+          hostPreviewVideo.style.objectFit = (!isDesktopClient() && source === 'camera') ? 'cover' : 'contain';
+          showHostPreview();
+          await hostPreviewVideo.play().catch(() => {});
+
+          if (!hostPublishing) {
+            await ovenLivekit.startStreaming(buildLivestreamPublishUrl(liveData.stream_key));
+          }
+
+          hostPublishing = true;
+          hostPublishedSource = source;
+        }
+
         async function startHostSource(nextSource = null, forceRestart = false) {
-          if (sourceBusy || !liveData?.stream_key) return;
+          if (sourceBusy || !liveData?.stream_key) return false;
           sourceBusy = true;
+
+          let nextBundle = null;
+          const previousBundle = hostMediaBundle;
+          const previousSource = hostPublishedSource || previousBundle?.source || liveData?.live_source || 'camera';
+          let interruptedExistingStream = false;
 
           try {
             await ensureLivestreamLibraries();
             const source = nextSource || liveData?.live_source || 'camera';
             if (hostPublishing && !forceRestart && hostPublishedSource === source) {
-              return;
+              return true;
             }
 
-            if (!ovenLivekit) {
-              ovenLivekit = window.OvenLiveKit.create({
-                callbacks: {
-                  error: (error) => {
-                    console.error('OvenLiveKit error:', error);
-                  },
-                },
-              });
-            }
-
-            const previousBundle = hostMediaBundle;
-            const nextBundle = await buildHostInputStream(source);
-            liveData.live_source = source;
-            ovenLivekit.attachMedia(hostPreviewVideo);
-            await ovenLivekit.setMediaStream(nextBundle.publishedStream);
+            nextBundle = await buildHostInputStream(source);
+            interruptedExistingStream = !!(forceRestart || hostPublishing);
+            await publishHostBundle(nextBundle, source, interruptedExistingStream);
             hostMediaBundle = nextBundle;
-            hostPreviewVideo.srcObject = nextBundle.previewStream || nextBundle.publishedStream;
-            // PC host (screen share or desktop camera): contain to preserve 16:9 frame
-            // Mobile host (camera): cover to fill vertical frame
-            hostPreviewVideo.style.objectFit = (!isDesktopClient() && source === 'camera') ? 'cover' : 'contain';
-
-            showHostPreview();
-            await hostPreviewVideo.play().catch(() => {});
-            if (!hostPublishing) {
-              await ovenLivekit.startStreaming(buildLivestreamPublishUrl(liveData.stream_key));
-              hostPublishing = true;
-            }
-            hostPublishing = true;
-            hostPublishedSource = source;
+            liveData.live_source = source;
+            await syncLivestreamSourceState(source);
             refreshHostAudioButtons();
             cleanupMediaBundle(previousBundle);
+            return true;
           } catch (error) {
             console.error('No se pudo iniciar el directo con OME:', error);
-            hostPublishing = false;
-            hostPublishedSource = null;
-            showFallback('Fuente no disponible', 'No se pudo acceder a la camara o pantalla compartida para el directo.');
-            showToast('No se pudo iniciar la transmision en vivo', 'error');
+            if (nextBundle) {
+              cleanupMediaBundle(nextBundle);
+            }
+
+            let restored = false;
+            if (previousBundle && interruptedExistingStream) {
+              try {
+                await publishHostBundle(previousBundle, previousSource, hostPublishing);
+                hostMediaBundle = previousBundle;
+                liveData.live_source = previousSource;
+                restored = true;
+                showHostPreview();
+                refreshHostAudioButtons();
+              } catch (restoreError) {
+                console.error('No se pudo restaurar la fuente anterior del directo:', restoreError);
+              }
+            } else if (previousBundle) {
+              hostMediaBundle = previousBundle;
+              liveData.live_source = previousSource;
+              restored = true;
+              showHostPreview();
+              refreshHostAudioButtons();
+            }
+
+            if (!restored) {
+              hostPublishing = false;
+              hostPublishedSource = null;
+              showFallback('Fuente no disponible', 'No se pudo acceder a la camara o pantalla compartida para el directo.');
+            }
+            showToast(restored ? 'No se pudo cambiar la fuente del directo' : 'No se pudo iniciar la transmision en vivo', 'error');
+            return false;
           } finally {
             sourceBusy = false;
           }
@@ -5114,15 +5271,18 @@
         });
         switchSourceButton.addEventListener('click', async () => {
           const next = liveData?.live_source === 'screen' ? 'camera' : 'screen';
-          liveData.live_source = next;
           await startHostSource(next, true);
         });
 
         // Flip camera on mobile (front ↔ rear) — desktop host tool button
         if (flipCameraButton) {
           flipCameraButton.addEventListener('click', async () => {
+            const previousFacingMode = currentFacingMode;
             currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            await startHostSource('camera', true);
+            const changed = await startHostSource('camera', true);
+            if (!changed) {
+              currentFacingMode = previousFacingMode;
+            }
             if (hostPreviewVideo) {
               hostPreviewVideo.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : '';
             }
@@ -5131,8 +5291,12 @@
         // Flip camera — mobile input row button (same logic)
         if (flipCameraMobileButton) {
           flipCameraMobileButton.addEventListener('click', async () => {
+            const previousFacingMode = currentFacingMode;
             currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            await startHostSource('camera', true);
+            const changed = await startHostSource('camera', true);
+            if (!changed) {
+              currentFacingMode = previousFacingMode;
+            }
             if (hostPreviewVideo) {
               hostPreviewVideo.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : '';
             }

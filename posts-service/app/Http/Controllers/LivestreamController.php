@@ -88,6 +88,29 @@ class LivestreamController extends BaseController
         }
     }
 
+    public function source(Request $request, int $id): JsonResponse
+    {
+        $this->validate($request, [
+            'live_source' => 'required|in:camera,screen',
+        ]);
+
+        try {
+            return response()->json(
+                $this->hydrate(
+                    $this->livestreamService->updateSource(
+                        (int) $request->auth->sub,
+                        $id,
+                        $request->input('live_source')
+                    ),
+                    (int) $request->auth->sub
+                ),
+                200
+            );
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
     public function end(Request $request, int $id): JsonResponse
     {
         try {

@@ -17,6 +17,7 @@ $router->group(['prefix' => 'api', 'middleware' => 'jwt'], function () use ($rou
     $router->post('/livestreams', 'LivestreamController@store');
     $router->get('/livestreams/active', 'LivestreamController@active');
     $router->get('/livestreams/{id}', 'LivestreamController@show');
+    $router->put('/livestreams/{id}/source', 'LivestreamController@source');
     $router->put('/livestreams/{id}/end', 'LivestreamController@end');
     $router->post('/livestreams/{id}/heartbeat', 'LivestreamController@heartbeat');
     $router->post('/livestreams/{id}/reaction', 'LivestreamController@react');

@@ -113,6 +113,20 @@ class LivestreamService
         return $this->getViewerCount($post->id);
     }
 
+    public function updateSource(int $userId, int $postId, string $source): Post
+    {
+        $post = $this->getById($postId);
+        if ((int) $post->user_id !== $userId) {
+            throw new PostsServiceException('No autorizado para actualizar este directo', 403);
+        }
+
+        $post->live_source = $this->normalizeSource($source);
+        $post->updated_at = Carbon::now();
+        $post->save();
+
+        return $post->fresh();
+    }
+
     public function getViewerCount(int $postId): int
     {
         if (!Post::whereKey($postId)->where('live_status', 'live')->exists()) {
