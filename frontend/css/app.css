@@ -1470,9 +1470,9 @@ body {
     height: 100%;
   }
 
-  /* live-video-col must fill live-layout */
+  /* live-video-col takes only needed height in normal view, allowing chat to fill the rest */
   .live-root:not(.live-is-desktop) .live-video-col {
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -1693,6 +1693,7 @@ body {
 .live-host-mobile .live-video-col,
 .live-cam-stream .live-video-col {
   position: relative;
+  flex: 1; /* override flex: 0 0 auto from normal view to fill screen */
 }
 
 .live-host-mobile .live-mobile-content,
@@ -1728,18 +1729,20 @@ body {
   mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
   background: transparent;
   padding-bottom: 2px;
-  /* Explicit height so overflow-y:auto triggers scroll */
+  /* Concrete viewport-based max-height so overflow-y:auto actually triggers scroll */
   max-height: calc(55vh - 72px) !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  /* grid align-content:end = messages pinned to bottom, scrollable */
-  display: grid !important;
-  align-content: end;
+  /* Flex layout with margin-top:auto on spacer is the safest pin-to-bottom method */
+  display: flex !important;
+  flex-direction: column;
 }
 .live-host-mobile .live-mobile-comments::before,
 .live-cam-stream .live-mobile-comments::before {
-  display: none;
+  content: '';
+  margin-top: auto;
+  display: block;
 }
 
 
@@ -1985,16 +1988,16 @@ body.live-immersive-active #app-view {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  /* display:grid + align-content:end = reliable cross-browser pin-to-bottom */
-  display: grid;
-  align-content: end;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   padding: 8px 16px 4px;
 }
 
-/* No spacer needed — grid align-content:end handles bottom alignment */
+/* Spacer pushes messages to bottom; grows to fill empty space above */
 .live-mobile-comments::before {
-  display: none;
+  content: '';
+  margin-top: auto;
 }
 
 /* ── Mobile input row (default: separate section below video) ── */
