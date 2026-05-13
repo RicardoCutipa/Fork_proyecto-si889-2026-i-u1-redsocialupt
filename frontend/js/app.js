@@ -4587,11 +4587,36 @@
           return ovenLivekit;
         }
 
+        function normalizeWhipResourceUrl(url) {
+          if (!url || typeof url !== 'string') {
+            return '';
+          }
+
+          try {
+            const resolved = new URL(url, window.location.origin);
+            if (window.location.protocol === 'https:' && resolved.protocol === 'http:' && resolved.host === window.location.host) {
+              resolved.protocol = 'https:';
+            }
+            return resolved.toString();
+          } catch (_error) {
+            return url;
+          }
+        }
+
         async function disposeOvenLivekit() {
           if (!ovenLivekit) {
             hostPublishing = false;
             hostPublishedSource = null;
             return;
+          }
+
+          const directDeleteUrl = normalizeWhipResourceUrl(ovenLivekit.resourceUrl);
+          if (directDeleteUrl) {
+            try {
+              await fetch(directDeleteUrl, { method: 'DELETE' });
+            } catch (error) {
+              console.warn('No se pudo cerrar directamente la sesion WHIP anterior:', error);
+            }
           }
 
           let stoppedCleanly = false;
