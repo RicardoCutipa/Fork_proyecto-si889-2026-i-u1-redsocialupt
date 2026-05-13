@@ -1728,12 +1728,14 @@ body {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
   mask-image: linear-gradient(to bottom, transparent 0%, black 35%);
   background: transparent;
-  padding-bottom: 2px;
+  padding: 8px 12px 2px;
   /* Concrete viewport-based max-height so overflow-y:auto actually triggers scroll */
   max-height: calc(55vh - 72px) !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  overscroll-behavior: contain;
+  pointer-events: auto;
   /* Flex layout with margin-top:auto on spacer is the safest pin-to-bottom method */
   display: flex !important;
   flex-direction: column;
@@ -1741,7 +1743,7 @@ body {
 .live-host-mobile .live-mobile-comments::before,
 .live-cam-stream .live-mobile-comments::before {
   content: '';
-  margin-top: auto;
+  flex: 1 0 0;
   display: block;
 }
 
@@ -1988,16 +1990,19 @@ body.live-immersive-active #app-view {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 8px 16px 4px;
+  padding: 8px 12px 8px;
 }
 
 /* Spacer pushes messages to bottom; grows to fill empty space above */
 .live-mobile-comments::before {
   content: '';
-  margin-top: auto;
+  flex: 1 0 0;
+  display: block;
 }
 
 /* ── Mobile input row (default: separate section below video) ── */
@@ -2012,9 +2017,10 @@ body.live-immersive-active #app-view {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* On mobile live view: pin input row to viewport bottom regardless of layout */
+/* Only full-bleed mobile modes pin the composer to the viewport bottom */
 @media (max-width: 960px) {
-  body:has(.live-root:not(.live-is-desktop)) .live-mobile-input-row {
+  body:has(.live-root.live-host-mobile) .live-mobile-input-row,
+  body:has(.live-root.live-cam-stream) .live-mobile-input-row {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -2023,10 +2029,27 @@ body.live-immersive-active #app-view {
     padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
     background: rgba(11, 17, 32, 0.98);
   }
-  /* Pad comments so last message isn't hidden behind the fixed input bar (~64px tall) */
-  body:has(.live-root:not(.live-is-desktop)) .live-mobile-comments {
+  /* Pad comments only when the composer is fixed over the video */
+  body:has(.live-root.live-host-mobile) .live-mobile-comments,
+  body:has(.live-root.live-cam-stream) .live-mobile-comments {
     padding-bottom: 68px;
   }
+  /* In standard mobile layout, keep the composer in flow and the comments flush to the bottom */
+  body:has(.live-root:not(.live-is-desktop):not(.live-host-mobile):not(.live-cam-stream)) .live-mobile-input-row {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    z-index: auto;
+  }
+  body:has(.live-root:not(.live-is-desktop):not(.live-host-mobile):not(.live-cam-stream)) .live-mobile-comments {
+    padding-bottom: 8px;
+  }
+}
+
+.live-mobile-comment {
+  align-self: flex-start;
+  margin-right: auto;
 }
 
 /* ── Mobile textarea ── */

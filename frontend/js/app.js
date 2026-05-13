@@ -4563,9 +4563,15 @@
           }
         }
 
+        function isCommentsNearBottom(element) {
+          if (!element || element.clientHeight <= 0) return true;
+          return (element.scrollHeight - element.scrollTop - element.clientHeight) < 72;
+        }
+
         function shouldStickCommentsToBottom() {
           if (!commentsInitialized) return true;
-          return (liveComments.scrollHeight - liveComments.scrollTop - liveComments.clientHeight) < 72;
+          const activeCommentsContainer = (!isDesktopClient() && liveCommentsMobile) ? liveCommentsMobile : liveComments;
+          return isCommentsNearBottom(activeCommentsContainer);
         }
 
         async function loadComments() {
