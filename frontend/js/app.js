@@ -4594,15 +4594,17 @@
             return;
           }
 
+          let stoppedCleanly = false;
           if (typeof ovenLivekit.stopStreaming === 'function') {
             try {
               await Promise.resolve(ovenLivekit.stopStreaming());
+              stoppedCleanly = true;
             } catch (error) {
               console.warn('No se pudo detener la transmision antes de reiniciar la fuente:', error);
             }
           }
 
-          if (typeof ovenLivekit.remove === 'function') {
+          if (!stoppedCleanly && typeof ovenLivekit.remove === 'function') {
             try {
               ovenLivekit.remove();
             } catch (error) {
@@ -4615,13 +4617,12 @@
           hostPublishedSource = null;
         }
 
-        async function publishHostBundle(bundle, source, restartExisting = false) {
-          if (restartExisting && hostPublishing) {
-            await disposeOvenLivekit();
-            await delay(350);
-          }
+        function isWhipConflictError(error) {
+          const message = String(error?.message || error || '');
+          return message.includes('409');
+        }
 
-          const livekit = createOvenLivekit();
+        async function attachAndPublishBundle(livekit, bundle, source) {
           livekit.attachMedia(hostPreviewVideo);
           await livekit.setMediaStream(bundle.publishedStream);
           hostPreviewVideo.srcObject = bundle.previewStream || bundle.publishedStream;
@@ -4638,6 +4639,28 @@
             ) {
               livekit.resourceUrl = livekit.resourceUrl.replace(/^http:\/\//i, 'https://');
             }
+          }
+        }
+
+        async function publishHostBundle(bundle, source, restartExisting = false) {
+          if (restartExisting && hostPublishing) {
+            await disposeOvenLivekit();
+            await delay(900);
+          }
+
+          let livekit = createOvenLivekit();
+          try {
+            await attachAndPublishBundle(livekit, bundle, source);
+          } catch (error) {
+            if (!isWhipConflictError(error)) {
+              throw error;
+            }
+
+            console.warn('OME todavia no libero la sesion anterior; reintentando cambio de fuente...', error);
+            await disposeOvenLivekit();
+            await delay(1500);
+            livekit = createOvenLivekit();
+            await attachAndPublishBundle(livekit, bundle, source);
           }
 
           hostPublishing = true;
