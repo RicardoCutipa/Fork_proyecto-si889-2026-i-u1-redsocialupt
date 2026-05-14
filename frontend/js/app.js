@@ -3795,15 +3795,14 @@
         const liveId = Number(params.id || 0);
         const isHostRoute = String(params.host || '') === '1';
 
-        // Apply device class to root (controls entire layout via CSS)
         const liveShell = container.querySelector('#live-shell');
-        if (isDesktopClient() && liveShell) {
-          liveShell.classList.add('live-is-desktop');
+        function syncLiveDeviceClasses() {
+          if (!liveShell) return;
+          const desktop = isDesktopClient();
+          liveShell.classList.toggle('live-is-desktop', desktop);
+          liveShell.classList.toggle('live-host-mobile', isHostRoute && !desktop);
         }
-        // Host broadcasting from mobile: full-bleed camera mode
-        if (isHostRoute && !isDesktopClient() && liveShell) {
-          liveShell.classList.add('live-host-mobile');
-        }
+        syncLiveDeviceClasses();
 
         const viewerPlayerRoot = container.querySelector('#live-viewer-player');
         const hostPreviewVideo = container.querySelector('#live-host-preview');
@@ -4287,9 +4286,11 @@
             flipCameraMobileButton.classList.toggle('hidden', !isMobileCamera);
             flipCameraMobileButton.classList.toggle('flex', isMobileCamera);
           }
-          // Hide switch source button on mobile (only desktop has screen share)
-          if (switchSourceButton && !isDesktopClient()) {
-            switchSourceButton.classList.add('hidden');
+          // Only desktop hosts can switch between screen and camera.
+          if (switchSourceButton) {
+            const showSwitchSource = isHostOwner() && isDesktopClient();
+            switchSourceButton.classList.toggle('hidden', !showSwitchSource);
+            switchSourceButton.classList.toggle('inline-flex', showSwitchSource);
           }
         }
 
@@ -5394,10 +5395,37 @@
         }
 
         let endingLivestream = false;
+        let pageLeaveEndSent = false;
+        function getLivestreamDurationSeconds() {
+          return Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+        }
+
+        function shouldAutoEndHostStream() {
+          return isHostOwner() && !endedByHost && liveData?.live_status === 'live' && liveId;
+        }
+
+        function endHostStreamOnPageLeave() {
+          if (pageLeaveEndSent || !shouldAutoEndHostStream()) return;
+          pageLeaveEndSent = true;
+          const body = JSON.stringify({ duration_seconds: getLivestreamDurationSeconds() });
+
+          try {
+            fetch(`/api/livestreams/${liveId}/end`, {
+              method: 'PUT',
+              headers: {
+                ...authHeaders(),
+                'Content-Type': 'application/json',
+              },
+              body,
+              keepalive: true,
+            }).catch(() => {});
+          } catch (_error) {}
+        }
+
         async function endLivestream() {
           if (endingLivestream) return;
           endingLivestream = true;
-          const durationSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+          const durationSeconds = getLivestreamDurationSeconds();
           const result = await PostsAPI.endLivestream(liveId, durationSeconds);
           if (!result?.ok) {
             showToast(result?.data?.error || 'No se pudo finalizar el directo', 'error');
@@ -5426,6 +5454,9 @@
         };
 
         // ── Auto-hide overlay (desktop hover / mobile tap-to-toggle) ──
+        window.addEventListener('pagehide', endHostStreamOnPageLeave);
+        window.addEventListener('beforeunload', endHostStreamOnPageLeave);
+
         const mobileOverlay = container.querySelector('#live-mobile-overlay');
         const playerControls = container.querySelector('#live-player-controls');
         let inVideoFullscreen = false; // landscape fullscreen (video only)
@@ -5805,7 +5836,12 @@
           el.addEventListener('touchstart', markCommentsUserScroll, { passive: true });
           el.addEventListener('touchmove', markCommentsUserScroll, { passive: true });
         });
-        window.addEventListener('resize', refreshMobileCommentsOverflowState);
+        const handleLiveResize = () => {
+          syncLiveDeviceClasses();
+          refreshHostAudioButtons();
+          refreshMobileCommentsOverflowState();
+        };
+        window.addEventListener('resize', handleLiveResize);
 
         // ─── Host buttons ───
         hostEndButton.addEventListener('click', endLivestream);
@@ -5882,6 +5918,7 @@
           if (commentsTimer) window.clearInterval(commentsTimer);
           if (heartbeatTimer) window.clearInterval(heartbeatTimer);
           if (liveStateTimer) window.clearInterval(liveStateTimer);
+          window.removeEventListener('resize', handleLiveResize);
           if (overlayTimer) clearTimeout(overlayTimer);
           if (longPressTimer) clearTimeout(longPressTimer);
           // Clean up immersive mode
@@ -5889,9 +5926,10 @@
           if (liveShell) liveShell.classList.remove('live-immersive-shell');
           releaseWakeLock();
           // If host mobile navigates away while stream is active, auto-end the stream via API
-          if (isHostRoute && !isDesktopClient() && !endedByHost && liveId) {
-            const dur = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-            PostsAPI.endLivestream(liveId, dur).catch(() => {});
+          window.removeEventListener('pagehide', endHostStreamOnPageLeave);
+          window.removeEventListener('beforeunload', endHostStreamOnPageLeave);
+          if (shouldAutoEndHostStream()) {
+            endHostStreamOnPageLeave();
           }
           if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
