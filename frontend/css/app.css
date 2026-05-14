@@ -1707,10 +1707,12 @@ body {
   background: transparent;
   /* Allow touch scrolling inside comments on mobile. */
   pointer-events: auto;
-  flex-direction: column;
-  justify-content: flex-end;
-  height: min(55dvh, 55%);
-  max-height: 55%; /* increased: more comments visible */
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: end;
+  height: min(58dvh, 58%);
+  max-height: min(58dvh, 58%);
+  min-height: 220px;
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
 }
 
 .live-host-mobile .live-mobile-content>*,
@@ -1730,9 +1732,9 @@ body {
   /* Avoid mask-image here: it can break touch scrolling on some mobile browsers. */
   background: transparent;
   padding: 8px 12px 8px;
-  /* Concrete viewport-based max-height so overflow-y:auto actually triggers scroll */
-  height: calc(55vh - 72px) !important;
-  max-height: calc(55vh - 72px) !important;
+  /* Let the composer own its own row so it never gets pushed out of view. */
+  height: auto !important;
+  max-height: none !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
@@ -1743,6 +1745,7 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   min-height: 0;
+  align-self: stretch;
 }
 
 .live-mobile-comments.live-comments-overflowing {
@@ -1755,7 +1758,9 @@ body {
 .live-cam-stream .live-mobile-input-row {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.65) 0%, transparent 100%);
   border-top: none;
-  padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 18px));
+  position: relative;
+  z-index: 2;
 }
 
 /* Viewer gets object-cover for vertical streams — mobile viewers only */
