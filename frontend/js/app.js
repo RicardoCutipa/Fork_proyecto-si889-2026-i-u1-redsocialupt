@@ -71,9 +71,26 @@
     throw new Error('No se cargaron las utilidades de media live');
   }
 
+  const realtime = window.UPTRealtime || {
+    buildCollectionSignature(items, fields) {
+      if (!Array.isArray(items) || !Array.isArray(fields)) return '';
+      return items.map((item) => fields.map((field) => {
+        const value = typeof field === 'function' ? field(item) : item?.[field];
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'object') {
+          try {
+            return JSON.stringify(value);
+          } catch (_error) {
+            return '';
+          }
+        }
+        return String(value);
+      }).join(':')).join('|');
+    },
+  };
+
   const {
     ROUTE_ALIASES,
-    EMOJI_DATA,
     REACTION_META,
     escapeHtml,
     nl2br,
@@ -117,23 +134,191 @@
     createMixedAudioTrack,
   } = liveMedia;
 
-  function renderReactionButtons(targetType, targetId, currentReaction, interactive = true) {
-    const baseClass = 'inline-flex items-center justify-center w-8 h-8 rounded-full border text-sm transition-colors';
-    return Object.entries(REACTION_META).map(([type, meta]) => {
-      const active = currentReaction === type;
-      const tone = active
-        ? 'bg-[#1B2A6B] text-white border-[#1B2A6B]'
-        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50';
-      if (!interactive) {
-        return `<span class="${baseClass} ${tone}" title="${escapeHtml(meta.label)}">${meta.emoji}</span>`;
+  const {
+    buildCollectionSignature,
+  } = realtime;
+
+  async function ensurePublicUsersLoaded(force = false) {
+    if (publicUsersState.loaded && !force) return publicUsersState.map;
+    if (publicUsersState.loading && !force) return publicUsersState.loading;
+
+    publicUsersState.loading = (async () => {
+      const result = await AuthAPI.listPublicUsers();
+      if (result?.ok) {
+        publicUsersState.map = new Map();
+        getList(result).forEach((listedUser) => {
+          const id = numericId(listedUser?.id);
+          if (id !== null) {
+            publicUsersState.map.set(id, listedUser);
+          }
+        });
+        publicUsersState.loaded = true;
       }
-      return `
-        <button type="button" data-action="react-${targetType}" data-${targetType}-id="${targetId}" data-reaction="${type}" class="${baseClass} ${tone}" title="${escapeHtml(meta.label)}">
-          ${meta.emoji}
-        </button>
-      `;
-    }).join('');
+      return publicUsersState.map;
+    })();
+
+    try {
+      return await publicUsersState.loading;
+    } finally {
+      publicUsersState.loading = null;
+    }
   }
+
+  function resolveProfileData(source = {}) {
+    const id = numericId(source.id ?? source.user_id);
+    const cached = id !== null ? publicUsersState.map.get(id) : null;
+    const fullName = source.full_name || source.name || source.user_name || cached?.full_name || cached?.name || (id !== null ? `Usuario #${id}` : 'Usuario');
+    const school = source.school || source.user_school || source.career || cached?.career || cached?.school || '';
+    const faculty = source.faculty || source.user_faculty || cached?.faculty || '';
+
+    return {
+      ...cached,
+      ...source,
+      id,
+      name: fullName,
+      full_name: fullName,
+      school,
+      career: school,
+      faculty,
+      avatar_url: source.avatar_url || cached?.avatar_url || source.user_avatar || null,
+      banner_url: source.banner_url || cached?.banner_url || null,
+      last_seen_at: source.last_seen_at || cached?.last_seen_at || null,
+      is_online: typeof source.is_online === 'boolean' ? source.is_online : cached?.is_online,
+    };
+  }
+
+  function normalizeFriendEntries(entries = []) {
+    return entries.map((entry) => {
+      if (entry && typeof entry === 'object') {
+        return resolveProfileData(entry);
+      }
+
+      const cached = publicUsersState.map.get(Number(entry));
+      return cached ? resolveProfileData(cached) : resolveProfileData({ id: entry });
+    }).filter((entry) => entry.id !== null);
+  }
+
+  function findIncomingRequest(requests = [], targetUserId) {
+    const targetId = numericId(targetUserId);
+    return requests.find((request) => numericId(request?.sender_id || request?.sender?.id || request?.sender?.user_id) === targetId) || null;
+  }
+
+  const REACTION_ASSETS = {
+    me_gusta: '/assets/reactions/me-gusta.webp',
+    me_encanta: '/assets/reactions/me-encanta.webp',
+    me_divierte: '/assets/reactions/me-divierte.webp',
+    me_sorprende: '/assets/reactions/me-sorprende.webp',
+    me_enoja: '/assets/reactions/me-enoja.webp',
+  };
+
+  function renderReactionAsset(type, meta, className = 'reaction-asset') {
+    const src = REACTION_ASSETS[type];
+    if (!src) {
+      return `<span class="${className}">${meta.emoji}</span>`;
+    }
+
+    return `<img class="${className}" src="${src}" alt="${escapeHtml(meta.label)}" loading="lazy" decoding="async"/>`;
+  }
+
+  function renderReactionButtons(targetType, targetId, currentReaction, interactive = true) {
+    const activeMeta = REACTION_META[currentReaction] || REACTION_META.me_gusta;
+    const activeReaction = currentReaction || 'me_gusta';
+
+    if (!interactive) {
+      return `<span class="reaction-trigger is-readonly" title="${escapeHtml(activeMeta.label)}">${renderReactionAsset(currentReaction || 'me_gusta', activeMeta, 'reaction-trigger-asset')}</span>`;
+    }
+
+    const options = Object.entries(REACTION_META).map(([type, meta], index) => `
+      <button type="button" data-action="react-${targetType}" data-${targetType}-id="${targetId}" data-reaction="${type}" class="reaction-option ${type === currentReaction ? 'is-active' : ''}" title="${escapeHtml(meta.label)}" style="--reaction-index:${index}">
+        ${renderReactionAsset(type, meta, 'reaction-option-asset')}
+        <span class="reaction-option-label">${escapeHtml(meta.label)}</span>
+      </button>
+    `).join('');
+
+    return `
+      <span class="reaction-picker-wrap" data-reaction-picker>
+        <button type="button" data-reaction-trigger data-action="react-${targetType}" data-${targetType}-id="${targetId}" data-reaction="${activeReaction}" class="reaction-trigger ${currentReaction ? 'is-active' : ''}" title="Mantén presionado para elegir reacción">
+          ${renderReactionAsset(currentReaction || 'me_gusta', activeMeta, 'reaction-trigger-asset')}
+          <span class="reaction-trigger-label">${escapeHtml(currentReaction ? activeMeta.label : 'Reaccionar')}</span>
+        </button>
+        <span class="reaction-picker" role="menu" aria-label="Elegir reacción">
+          ${options}
+        </span>
+      </span>
+    `;
+  }
+
+  const reactionPickerBoundRoots = new WeakSet();
+
+  function closeReactionPickers(root = document) {
+    root.querySelectorAll?.('.reaction-picker-wrap.is-open').forEach((picker) => {
+      picker.classList.remove('is-open');
+    });
+  }
+
+  function bindReactionPickerInteractions(root) {
+    if (!root || reactionPickerBoundRoots.has(root)) return;
+    reactionPickerBoundRoots.add(root);
+
+    let longPressTimer = null;
+    let longPressOpened = false;
+
+    root.addEventListener('pointerdown', (event) => {
+      const trigger = event.target.closest('[data-reaction-trigger]');
+      if (!trigger || !root.contains(trigger)) return;
+
+      longPressOpened = false;
+      clearTimeout(longPressTimer);
+      longPressTimer = window.setTimeout(() => {
+        const picker = trigger.closest('[data-reaction-picker]');
+        if (!picker) return;
+        closeReactionPickers();
+        picker.classList.add('is-open');
+        longPressOpened = true;
+      }, 360);
+    });
+
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+      root.addEventListener(eventName, () => {
+        clearTimeout(longPressTimer);
+      });
+    });
+
+    root.addEventListener('click', (event) => {
+      const option = event.target.closest('.reaction-option');
+      if (option) {
+        closeReactionPickers();
+        return;
+      }
+
+      const trigger = event.target.closest('[data-reaction-trigger]');
+      if (trigger && longPressOpened) {
+        event.preventDefault();
+        event.stopPropagation();
+        longPressOpened = false;
+      }
+    }, true);
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-reaction-picker]')) {
+      closeReactionPickers();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeReactionPickers();
+    }
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!event.target.closest('[data-reaction-picker]')) {
+      closeReactionPickers();
+    }
+  });
+
+  bindReactionPickerInteractions(document);
 
   async function reportContent(kind, id) {
     const confirmed = window.confirm(`Quieres reportar esta ${kind}?`);
@@ -2600,15 +2785,6 @@
                     <button id="open-live-modal-btn" type="button" class="feed-composer-tool" title="Iniciar directo">
                       <span class="material-symbols-outlined text-[19px]">broadcast_on_personal</span>
                     </button>
-                    <div class="relative feed-composer-emoji-anchor">
-                      <button id="toggle-emoji-btn" type="button" class="feed-composer-tool">
-                        <span class="material-symbols-outlined text-[19px]">mood</span>
-                      </button>
-                      <div id="emoji-picker">
-                        <div class="emoji-cats" id="emoji-cats"></div>
-                        <div class="emoji-grid" id="emoji-grid"></div>
-                      </div>
-                    </div>
                   </div>
                   <div class="feed-composer-actions">
                     <div class="feed-composer-visibility">
@@ -2647,6 +2823,12 @@
                     <button id="btn-publish" type="button" class="feed-composer-submit bg-[#E5D59A] text-[#5A4A1A] px-6 py-1.5 rounded-full text-sm font-bold hover:bg-[#d8c686] transition-colors">Publicar</button>
                   </div>
                 </div>
+              </div>
+              <div id="feed-refresh-banner" class="hidden sticky top-20 z-20 flex justify-center">
+                <button id="feed-refresh-btn" type="button" class="inline-flex items-center gap-2 rounded-full bg-[#1B2A6B] px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-[#263a82] transition">
+                  <span class="material-symbols-outlined text-[18px]">sync</span>
+                  <span id="feed-refresh-text">Nuevas publicaciones</span>
+                </button>
               </div>
               <div id="feed-posts" class="flex flex-col gap-6">
                 <p class="text-center text-slate-500 py-8">Cargando publicaciones...</p>
@@ -2770,9 +2952,19 @@
         let pendingCommentId = null;
         let currentCommentSort = 'newest';
         let feedPosts = [];
-        let currentCategory = '😀';
+        let currentFeedSignature = '';
+        let pendingFeedPosts = null;
+        let pendingFeedSignature = '';
+        let feedRefreshTimer = null;
+        let feedRefreshInFlight = false;
+        let commentsRefreshTimer = null;
+        let commentsRefreshInFlight = false;
+        let currentCommentsSignature = '';
 
         const composerAvatar = container.querySelector('#composer-avatar');
+        const feedRefreshBanner = container.querySelector('#feed-refresh-banner');
+        const feedRefreshButton = container.querySelector('#feed-refresh-btn');
+        const feedRefreshText = container.querySelector('#feed-refresh-text');
         const postsContainer = container.querySelector('#feed-posts');
         const onlineFriends = container.querySelector('#online-friends');
         const fileInput = container.querySelector('#file-input');
@@ -2783,9 +2975,6 @@
         const postVisibilityTrigger = container.querySelector('#post-visibility-trigger');
         const postVisibilityText = container.querySelector('#post-visibility-text');
         const postVisibilityMenu = container.querySelector('#post-visibility-menu');
-        const emojiPicker = container.querySelector('#emoji-picker');
-        const emojiCats = container.querySelector('#emoji-cats');
-        const emojiGrid = container.querySelector('#emoji-grid');
         const deleteModal = container.querySelector('#delete-modal');
         const commentModal = container.querySelector('#comment-modal');
         const livestreamModal = container.querySelector('#livestream-modal');
@@ -2806,16 +2995,6 @@
         };
 
         setAvatarElement(composerAvatar, user);
-
-        function renderEmojiPicker() {
-          emojiCats.innerHTML = Object.keys(EMOJI_DATA).map((category) => `
-            <button type="button" class="${category === currentCategory ? 'active' : ''}" data-emoji-category="${category}">${category}</button>
-          `).join('');
-
-          emojiGrid.innerHTML = EMOJI_DATA[currentCategory].map((emoji) => `
-            <button type="button" data-emoji-value="${emoji}">${emoji}</button>
-          `).join('');
-        }
 
         function clearImage() {
           selectedImageFile = null;
@@ -2851,6 +3030,87 @@
           return feedPosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
+        function buildFeedSignature(posts) {
+          return buildCollectionSignature(posts, [
+            'id',
+            (post) => post.updated_at || post.created_at,
+            'live_status',
+            'live_source',
+            'current_reaction',
+            'comments_count',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
+        function buildCommentsSignature(comments) {
+          return buildCollectionSignature(comments, [
+            'id',
+            (comment) => comment.updated_at || comment.created_at,
+            'current_reaction',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
+        function hasNewerFeedItems(nextPosts) {
+          if (!feedPosts.length || !nextPosts.length) return false;
+          const currentFirstId = Number(feedPosts[0]?.id);
+          if (!Number.isFinite(currentFirstId)) return false;
+          const currentFirstIndex = nextPosts.findIndex((post) => Number(post.id) === currentFirstId);
+          return currentFirstIndex > 0 || currentFirstIndex === -1;
+        }
+
+        function isNearFeedTop() {
+          return window.scrollY < 260;
+        }
+
+        function setPendingFeed(posts, signature) {
+          pendingFeedPosts = posts;
+          pendingFeedSignature = signature;
+          const newCount = feedPosts.length
+            ? posts.findIndex((post) => Number(post.id) === Number(feedPosts[0]?.id))
+            : posts.length;
+          const labelCount = newCount > 0 ? Math.min(newCount, posts.length) : posts.length;
+          if (feedRefreshText) {
+            feedRefreshText.textContent = labelCount === 1 ? '1 publicacion nueva' : `${labelCount} publicaciones nuevas`;
+          }
+          feedRefreshBanner?.classList.remove('hidden');
+        }
+
+        function clearPendingFeed() {
+          pendingFeedPosts = null;
+          pendingFeedSignature = '';
+          feedRefreshBanner?.classList.add('hidden');
+        }
+
+        function renderFeedPosts(posts, options = {}) {
+          const previousScrollY = window.scrollY;
+          feedPosts = posts;
+          currentFeedSignature = options.signature || buildFeedSignature(posts);
+
+          if (!posts.length) {
+            postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No hay publicaciones todavia. Se el primero.</p>';
+          } else {
+            postsContainer.innerHTML = posts.map((post) => renderPostCard(post, user.id)).join('');
+          }
+
+          if (pendingCommentId) {
+            renderCommentModalPost(pendingCommentId);
+          }
+
+          if (options.preserveScroll) {
+            window.scrollTo({ top: previousScrollY });
+          }
+        }
+
+        function applyPendingFeed() {
+          if (!pendingFeedPosts) return;
+          renderFeedPosts(pendingFeedPosts, { signature: pendingFeedSignature });
+          clearPendingFeed();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         function renderCommentModalPost(postId = pendingCommentId) {
           commentPostPreview.innerHTML = renderPostModalPreview(findFeedPost(postId), user.id);
         }
@@ -2869,6 +3129,7 @@
 
         function closeCommentModal() {
           pendingCommentId = null;
+          currentCommentsSignature = '';
           commentPostPreview.innerHTML = '';
           commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
           commentModal.classList.add('hidden');
@@ -2904,21 +3165,31 @@
           livestreamModal.classList.remove('flex');
         }
 
-        async function loadComments(postId = pendingCommentId, sort = currentCommentSort) {
+        async function loadComments(postId = pendingCommentId, sort = currentCommentSort, options = {}) {
           if (!postId) return;
 
           currentCommentSort = sort;
           commentSort.value = sort;
-          commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          if (!options.silent) {
+            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          }
 
           await ensurePublicUsersLoaded();
           const result = await PostsAPI.getComments(postId, sort);
           const comments = getList(result);
 
           if (!result?.ok) {
-            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            if (!options.silent) {
+              commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            }
             return;
           }
+
+          const nextSignature = buildCommentsSignature(comments);
+          if (options.silent && nextSignature === currentCommentsSignature) {
+            return;
+          }
+          currentCommentsSignature = nextSignature;
 
           if (!comments.length) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Todavia no hay comentarios en esta publicacion.</p>';
@@ -2928,25 +3199,53 @@
           commentList.innerHTML = comments.map((comment) => renderCommentCard(comment)).join('');
         }
 
-        async function loadFeed() {
-          await ensurePublicUsersLoaded();
-          const result = await PostsAPI.getFeed();
-          const posts = getList(result);
-
-          if (!result?.ok) {
-            postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No se pudo cargar el feed.</p>';
-            return;
+        async function refreshOpenComments() {
+          if (!pendingCommentId || document.hidden || commentsRefreshInFlight) return;
+          commentsRefreshInFlight = true;
+          try {
+            await loadComments(pendingCommentId, currentCommentSort, { silent: true });
+          } finally {
+            commentsRefreshInFlight = false;
           }
+        }
 
-          feedPosts = posts;
-          if (!posts.length) {
-            postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No hay publicaciones todavia. Se el primero.</p>';
-            return;
-          }
+        async function loadFeed(options = {}) {
+          if (feedRefreshInFlight) return;
+          if (options.silent && document.hidden) return;
 
-          postsContainer.innerHTML = posts.map((post) => renderPostCard(post, user.id)).join('');
-          if (pendingCommentId) {
-            renderCommentModalPost(pendingCommentId);
+          feedRefreshInFlight = true;
+          const silent = !!options.silent;
+          const forceFriendRefresh = !!options.forceFriendRefresh;
+
+          try {
+            await ensurePublicUsersLoaded();
+            const result = await PostsAPI.getFeed(1, { forceFriendRefresh });
+            const posts = getList(result);
+
+            if (!result?.ok) {
+              if (!silent) {
+                postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No se pudo cargar el feed.</p>';
+              }
+              return;
+            }
+
+            const nextSignature = buildFeedSignature(posts);
+            if (currentFeedSignature && nextSignature === currentFeedSignature) {
+              return;
+            }
+
+            if (currentFeedSignature && silent && hasNewerFeedItems(posts) && !isNearFeedTop()) {
+              setPendingFeed(posts, nextSignature);
+              return;
+            }
+
+            renderFeedPosts(posts, {
+              signature: nextSignature,
+              preserveScroll: !!currentFeedSignature && silent && !isNearFeedTop(),
+            });
+            clearPendingFeed();
+          } finally {
+            feedRefreshInFlight = false;
           }
         }
 
@@ -3112,38 +3411,35 @@
           showToast(result?.data?.error || 'Error al eliminar', 'error');
         }
 
-        function insertEmoji(emoji) {
-          const start = postContent.selectionStart;
-          const end = postContent.selectionEnd;
-          postContent.value = `${postContent.value.slice(0, start)}${emoji}${postContent.value.slice(end)}`;
-          postContent.selectionStart = postContent.selectionEnd = start + emoji.length;
-          postContent.focus();
-        }
-
         const onDocumentClick = (event) => {
-          const insidePicker = event.target.closest('#emoji-picker');
-          const insideToggle = event.target.closest('#toggle-emoji-btn');
-          if (!insidePicker && !insideToggle) {
-            emojiPicker.classList.remove('open');
-          }
-
           const insideVisibility = event.target.closest('#post-visibility-trigger, #post-visibility-menu');
           if (!insideVisibility) {
             closeVisibilityMenu();
           }
         };
 
+        const handleFeedVisibilityRefresh = () => {
+          if (document.visibilityState === 'visible') {
+            loadFeed({ silent: true });
+            loadFriends();
+            refreshOpenComments();
+          }
+        };
+
+        const handleFeedFocusRefresh = () => {
+          loadFeed({ silent: true });
+          loadFriends();
+          refreshOpenComments();
+        };
+
         container.querySelector('#pick-image-btn').addEventListener('click', () => fileInput.click());
         container.querySelector('#clear-image-btn').addEventListener('click', clearImage);
-        container.querySelector('#toggle-emoji-btn').addEventListener('click', () => {
-          emojiPicker.classList.toggle('open');
-          if (emojiPicker.classList.contains('open')) renderEmojiPicker();
-        });
         postVisibilityTrigger?.addEventListener('click', toggleVisibilityMenu);
         container.querySelector('#cancel-delete-btn').addEventListener('click', closeDeleteModal);
         container.querySelector('#confirm-delete-btn').addEventListener('click', confirmDelete);
         container.querySelector('#close-comment-top-btn').addEventListener('click', closeCommentModal);
         container.querySelector('#confirm-comment-btn').addEventListener('click', confirmComment);
+        feedRefreshButton?.addEventListener('click', applyPendingFeed);
         openLiveModalButton?.addEventListener('click', openLivestreamModal);
         container.querySelector('#close-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
         container.querySelector('#cancel-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
@@ -3164,19 +3460,6 @@
             previewWrap.style.display = 'block';
           };
           reader.readAsDataURL(file);
-        });
-
-        emojiCats.addEventListener('click', (event) => {
-          const button = event.target.closest('[data-emoji-category]');
-          if (!button) return;
-          currentCategory = button.dataset.emojiCategory;
-          renderEmojiPicker();
-        });
-
-        emojiGrid.addEventListener('click', (event) => {
-          const button = event.target.closest('[data-emoji-value]');
-          if (!button) return;
-          insertEmoji(button.dataset.emojiValue);
         });
 
         postVisibilityMenu?.addEventListener('click', (event) => {
@@ -3277,22 +3560,33 @@
         setPostVisibility(postVisibility?.value || 'all');
         document.addEventListener('click', onDocumentClick);
           async function handleBlocksChanged() {
+            PostsAPI.clearFeedContextCache?.();
             await Promise.all([
-              loadFeed(),
+              loadFeed({ forceFriendRefresh: true }),
               loadFriends(),
             ]);
           }
 
           window.addEventListener('presence:updated', loadFriends);
+          window.addEventListener('friendship:changed', handleBlocksChanged);
           window.addEventListener('blocks:changed', handleBlocksChanged);
+          document.addEventListener('visibilitychange', handleFeedVisibilityRefresh);
+          window.addEventListener('focus', handleFeedFocusRefresh);
 
-          loadFeed();
+          loadFeed({ forceFriendRefresh: true });
           loadFriends();
+          feedRefreshTimer = window.setInterval(() => loadFeed({ silent: true }), 8000);
+          commentsRefreshTimer = window.setInterval(refreshOpenComments, 6500);
 
           return () => {
+            if (feedRefreshTimer) window.clearInterval(feedRefreshTimer);
+            if (commentsRefreshTimer) window.clearInterval(commentsRefreshTimer);
             document.removeEventListener('click', onDocumentClick);
             window.removeEventListener('presence:updated', loadFriends);
+            window.removeEventListener('friendship:changed', handleBlocksChanged);
             window.removeEventListener('blocks:changed', handleBlocksChanged);
+            document.removeEventListener('visibilitychange', handleFeedVisibilityRefresh);
+            window.removeEventListener('focus', handleFeedFocusRefresh);
           };
         },
       },
@@ -6589,6 +6883,12 @@
         let selectedEditCoverFile = null;
         let pendingCommentPostId = null;
         let currentCommentSort = 'newest';
+        let groupPostsSignature = '';
+        let groupCommentsSignature = '';
+        let groupPostsRefreshTimer = null;
+        let groupPostsRefreshInFlight = false;
+        let groupCommentsRefreshTimer = null;
+        let groupCommentsRefreshInFlight = false;
         const editCropState = {
           file: null,
           objectUrl: '',
@@ -6809,6 +7109,27 @@
           return groupPosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
+        function buildGroupPostsSignature(posts) {
+          return buildCollectionSignature(posts, [
+            'id',
+            (post) => post.updated_at || post.created_at,
+            'current_reaction',
+            'comments_count',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
+        function buildGroupCommentsSignature(comments) {
+          return buildCollectionSignature(comments, [
+            'id',
+            (comment) => comment.updated_at || comment.created_at,
+            'current_reaction',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
         function renderHeader() {
           if (!groupData) return;
           title.textContent = groupData.name;
@@ -6925,24 +7246,35 @@
 
         function closeCommentModal() {
           pendingCommentPostId = null;
+          groupCommentsSignature = '';
           commentModal.classList.add('hidden');
           commentModal.classList.remove('flex');
           commentPostPreview.innerHTML = '';
           commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
         }
 
-        async function loadComments(postId = pendingCommentPostId, sort = currentCommentSort) {
+        async function loadComments(postId = pendingCommentPostId, sort = currentCommentSort, options = {}) {
           if (!postId) return;
           currentCommentSort = sort;
           commentSort.value = sort;
-          commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          if (!options.silent) {
+            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          }
           const result = await PostsAPI.getComments(postId, sort);
           if (!result?.ok) {
-            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            if (!options.silent) {
+              commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            }
             return;
           }
 
           const comments = getList(result);
+          const nextSignature = buildGroupCommentsSignature(comments);
+          if (options.silent && nextSignature === groupCommentsSignature) {
+            return;
+          }
+          groupCommentsSignature = nextSignature;
+
           if (!comments.length) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No hay comentarios todavia.</p>';
             return;
@@ -6962,6 +7294,15 @@
         }
 
         async function loadConversation() {
+          if (groupPostsRefreshTimer) {
+            window.clearInterval(groupPostsRefreshTimer);
+            groupPostsRefreshTimer = null;
+          }
+          if (groupCommentsRefreshTimer) {
+            window.clearInterval(groupCommentsRefreshTimer);
+            groupCommentsRefreshTimer = null;
+          }
+
           renderConversationTabSkeleton();
           if (!groupData?.can_view_conversation) return;
 
@@ -6993,17 +7334,44 @@
             })).join('');
           }
 
-          async function reloadPosts() {
-            const result = await PostsAPI.getGroupPosts(groupId);
-            if (!result?.ok) {
-              postsList.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center text-sm text-slate-400">No se pudieron cargar las publicaciones del grupo.</div>';
-              return;
-            }
+          async function reloadPosts(options = {}) {
+            if (groupPostsRefreshInFlight) return;
+            if (options.silent && (document.hidden || currentTab !== 'conversation')) return;
 
-            groupPosts = getList(result);
-            renderPosts();
-            if (pendingCommentPostId) {
-              commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(pendingCommentPostId), user.id);
+            groupPostsRefreshInFlight = true;
+            try {
+              const result = await PostsAPI.getGroupPosts(groupId);
+              if (!result?.ok) {
+                if (!options.silent) {
+                  postsList.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center text-sm text-slate-400">No se pudieron cargar las publicaciones del grupo.</div>';
+                }
+                return;
+              }
+
+              const nextPosts = getList(result);
+              const nextSignature = buildGroupPostsSignature(nextPosts);
+              if (options.silent && nextSignature === groupPostsSignature) {
+                return;
+              }
+
+              groupPosts = nextPosts;
+              groupPostsSignature = nextSignature;
+              renderPosts();
+              if (pendingCommentPostId) {
+                commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(pendingCommentPostId), user.id);
+              }
+            } finally {
+              groupPostsRefreshInFlight = false;
+            }
+          }
+
+          async function refreshGroupComments() {
+            if (!pendingCommentPostId || document.hidden || currentTab !== 'conversation' || groupCommentsRefreshInFlight) return;
+            groupCommentsRefreshInFlight = true;
+            try {
+              await loadComments(pendingCommentPostId, currentCommentSort, { silent: true });
+            } finally {
+              groupCommentsRefreshInFlight = false;
             }
           }
 
@@ -7099,6 +7467,8 @@
           });
 
           await reloadPosts();
+          groupPostsRefreshTimer = window.setInterval(() => reloadPosts({ silent: true }), 9000);
+          groupCommentsRefreshTimer = window.setInterval(refreshGroupComments, 7000);
         }
 
         async function renderPeopleTab() {
@@ -7500,7 +7870,10 @@
           if (!ok) return null;
           setTab('info');
           renderInfoTab();
-          return () => {};
+          return () => {
+            if (groupPostsRefreshTimer) window.clearInterval(groupPostsRefreshTimer);
+            if (groupCommentsRefreshTimer) window.clearInterval(groupCommentsRefreshTimer);
+          };
         })();
       },
     },
@@ -7748,6 +8121,12 @@
         let profilePosts = [];
         let pendingProfileCommentId = null;
         let currentProfileCommentSort = 'newest';
+        let profilePostsSignature = '';
+        let profileCommentsSignature = '';
+        let profilePostsRefreshTimer = null;
+        let profilePostsRefreshInFlight = false;
+        let profileCommentsRefreshTimer = null;
+        let profileCommentsRefreshInFlight = false;
         const cropConfigs = {
           avatar: {
             field: 'avatar',
@@ -8137,6 +8516,27 @@
           return profilePosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
+        function buildProfilePostsSignature(posts) {
+          return buildCollectionSignature(posts, [
+            'id',
+            (post) => post.updated_at || post.created_at,
+            'current_reaction',
+            'comments_count',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
+        function buildProfileCommentsSignature(comments) {
+          return buildCollectionSignature(comments, [
+            'id',
+            (comment) => comment.updated_at || comment.created_at,
+            'current_reaction',
+            'reactions_total',
+            'reactions_count',
+          ]);
+        }
+
         function renderProfileCommentModalPost(postId = pendingProfileCommentId) {
           profileCommentPostPreview.innerHTML = renderPostModalPreview(findProfilePost(postId), user.id);
         }
@@ -8155,27 +8555,38 @@
 
         function closeProfileCommentModal() {
           pendingProfileCommentId = null;
+          profileCommentsSignature = '';
           profileCommentPostPreview.innerHTML = '';
           profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
           profileCommentModal.classList.add('hidden');
           profileCommentModal.classList.remove('flex');
         }
 
-        async function loadProfileComments(postId = pendingProfileCommentId, sort = currentProfileCommentSort) {
+        async function loadProfileComments(postId = pendingProfileCommentId, sort = currentProfileCommentSort, options = {}) {
           if (!postId) return;
 
           currentProfileCommentSort = sort;
           profileCommentSort.value = sort;
-          profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          if (!options.silent) {
+            profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
+          }
 
           await ensurePublicUsersLoaded();
           const result = await PostsAPI.getComments(postId, sort);
           const comments = getList(result);
 
           if (!result?.ok) {
-            profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            if (!options.silent) {
+              profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
+            }
             return;
           }
+
+          const nextSignature = buildProfileCommentsSignature(comments);
+          if (options.silent && nextSignature === profileCommentsSignature) {
+            return;
+          }
+          profileCommentsSignature = nextSignature;
 
           if (!comments.length) {
             profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Todavia no hay comentarios en esta publicacion.</p>';
@@ -8201,33 +8612,59 @@
           showToast(result?.data?.error || 'Error al comentar', 'error');
         }
 
-        async function loadPosts(targetUserId) {
-          await ensurePublicUsersLoaded();
-          const result = await PostsAPI.getFeed();
-          if (!result?.ok) {
-            postsList.innerHTML = `
-              <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
-                <p class="text-gray-500 text-sm">No se pudieron cargar las publicaciones.</p>
-              </div>
-            `;
-            return;
+        async function refreshProfileComments() {
+          if (!pendingProfileCommentId || document.hidden || profileCommentsRefreshInFlight) return;
+          profileCommentsRefreshInFlight = true;
+          try {
+            await loadProfileComments(pendingProfileCommentId, currentProfileCommentSort, { silent: true });
+          } finally {
+            profileCommentsRefreshInFlight = false;
           }
+        }
 
-          const posts = getList(result).filter((post) => Number(post.user_id) === Number(targetUserId));
-          profilePosts = posts;
+        async function loadPosts(targetUserId, options = {}) {
+          if (profilePostsRefreshInFlight) return;
+          if (options.silent && document.hidden) return;
 
-          if (!posts.length) {
-            postsList.innerHTML = `
-              <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
-                <p class="text-gray-500 text-sm">No hay publicaciones todavia.</p>
-              </div>
-            `;
-            return;
-          }
+          profilePostsRefreshInFlight = true;
+          try {
+            await ensurePublicUsersLoaded();
+            const result = await PostsAPI.getFeed();
+            if (!result?.ok) {
+              if (!options.silent) {
+                postsList.innerHTML = `
+                  <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
+                    <p class="text-gray-500 text-sm">No se pudieron cargar las publicaciones.</p>
+                  </div>
+                `;
+              }
+              return;
+            }
 
-          postsList.innerHTML = posts.map((post) => renderPostCard(post, user.id, { canDelete: false })).join('');
-          if (pendingProfileCommentId) {
-            renderProfileCommentModalPost(pendingProfileCommentId);
+            const posts = getList(result).filter((post) => Number(post.user_id) === Number(targetUserId));
+            const nextSignature = buildProfilePostsSignature(posts);
+            if (options.silent && nextSignature === profilePostsSignature) {
+              return;
+            }
+
+            profilePosts = posts;
+            profilePostsSignature = nextSignature;
+
+            if (!posts.length) {
+              postsList.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
+                  <p class="text-gray-500 text-sm">No hay publicaciones todavia.</p>
+                </div>
+              `;
+              return;
+            }
+
+            postsList.innerHTML = posts.map((post) => renderPostCard(post, user.id, { canDelete: false })).join('');
+            if (pendingProfileCommentId) {
+              renderProfileCommentModalPost(pendingProfileCommentId);
+            }
+          } finally {
+            profilePostsRefreshInFlight = false;
           }
         }
 
@@ -8602,6 +9039,17 @@
         });
 
         loadProfile();
+        profilePostsRefreshTimer = window.setInterval(() => {
+          if (profileData?.id) {
+            loadPosts(profileData.id, { silent: true });
+          }
+        }, 10000);
+        profileCommentsRefreshTimer = window.setInterval(refreshProfileComments, 7000);
+
+        return () => {
+          if (profilePostsRefreshTimer) window.clearInterval(profilePostsRefreshTimer);
+          if (profileCommentsRefreshTimer) window.clearInterval(profileCommentsRefreshTimer);
+        };
       },
     },
     admin: {
@@ -9837,6 +10285,7 @@
       this.currentRoute = parsed;
       appView.innerHTML = view.render({ user: appState.user, params: parsed.params, router: this });
       if (sidebar) sidebar.setAttribute('active-nav', view.activeNav || parsed.route);
+      if (window.closeMobileSidebar) window.closeMobileSidebar();
       if (window.setupLayoutData) window.setupLayoutData(appState.user);
       setDocumentTitle(view.title || parsed.route);
 

@@ -10,6 +10,13 @@ const API = {
   chat:   '/api/chat',
 };
 
+const FEED_CONTEXT_CACHE_MS = 30000;
+const feedContextCache = {
+  friendIds: [],
+  fetchedAt: 0,
+  loading: null,
+};
+
 function decodeJwtPayload(token) {
   try {
     const parts = String(token || '').split('.');
@@ -128,15 +135,18 @@ function buildResponseData(res, text) {
 /* ── Generic fetch (JSON) ────────────────────────────────────── */
 async function apiFetch(url, options = {}) {
   try {
+    const { noLogoutOnUnauthorized = false, ...fetchOptions } = options;
     const res = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers: {
         ...authHeaders(),
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
     });
     if (res.status === 401) {
-      logout();
+      if (!noLogoutOnUnauthorized) {
+        logout();
+      }
       return { ok: false, status: 401, data: { error: 'Sesion expirada' } };
     }
     const text = await res.text();
@@ -225,14 +235,45 @@ const AuthAPI = {
 
 /* ── Posts Service ────────────────────────────────────────────── */
 const PostsAPI = {
-  getFeed: async (page = 1) => {
-    let friendIds = [];
-    const friendsResult = await SocialAPI.getFriends();
-    if (friendsResult?.ok) {
-      friendIds = getList(friendsResult)
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value));
+  getFeedContextFriendIds: async (force = false) => {
+    const now = Date.now();
+    if (!force && feedContextCache.fetchedAt && (now - feedContextCache.fetchedAt) < FEED_CONTEXT_CACHE_MS) {
+      return feedContextCache.friendIds;
     }
+
+    if (!force && feedContextCache.loading) {
+      return feedContextCache.loading;
+    }
+
+    feedContextCache.loading = (async () => {
+      const friendsResult = await SocialAPI.getFriends();
+      if (friendsResult?.ok) {
+        feedContextCache.friendIds = getList(friendsResult)
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+        feedContextCache.fetchedAt = Date.now();
+      }
+
+      window.__friendIdsCache = feedContextCache.friendIds;
+      return feedContextCache.friendIds;
+    })();
+
+    try {
+      return await feedContextCache.loading;
+    } finally {
+      feedContextCache.loading = null;
+    }
+  },
+
+  clearFeedContextCache: () => {
+    feedContextCache.friendIds = [];
+    feedContextCache.fetchedAt = 0;
+    feedContextCache.loading = null;
+    window.__friendIdsCache = [];
+  },
+
+  getFeed: async (page = 1, options = {}) => {
+    const friendIds = await PostsAPI.getFeedContextFriendIds(!!options.forceFriendRefresh);
 
     const currentUser = getUser();
     return apiFetch(`${API.posts}?page=${page}`, {
@@ -438,7 +479,7 @@ const ChatAPI = {
     method: 'POST',
     body: JSON.stringify({ receiver_id: receiverId, mode }),
   }),
-  getPendingCalls: () => apiFetch(`${API.chat}/calls/pending`),
+  getPendingCalls: () => apiFetch(`${API.chat}/calls/pending`, { noLogoutOnUnauthorized: true }),
   getCall: (callId) => apiFetch(`${API.chat}/calls/${callId}`),
   acceptCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/accept`, { method: 'PUT' }),
   rejectCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/reject`, { method: 'PUT' }),

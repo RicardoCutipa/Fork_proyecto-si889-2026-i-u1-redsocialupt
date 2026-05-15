@@ -70,30 +70,48 @@ Importante: evitar `git add .` porque hay muchos archivos temporales y recursos 
 ## Cambios locales no confirmados actuales
 
 La primera refactorizacion de utilidades compartidas ya esta commiteada en `464227e`.
+La extraccion de helpers de media live quedo en commit local `245bb6e extraer helpers media live`, aun no pusheado a GitHub.
 
-Continuacion actual iniciada:
+Continuacion actual desplegada en VPS, sin commit:
 
-- Nuevo archivo `frontend/js/app-live-media.js` con helpers de media live:
-  - `getLiveAudioConstraints()`
-  - `getLiveVideoConstraints(source, overrides)`
-  - `applyLiveTrackHints(stream, source)`
-  - `createMixedAudioTrack(displayAudioTrack, micAudioTrack)`
-- `frontend/app.html` carga `/js/app-live-media.js?v=1` despues de `app-shared` y antes de `/js/app.js?v=51`.
-- `frontend/js/app.js` importa esos helpers desde `window.UPTLiveMedia`.
-- `frontend/js/app.js` bajo de 10,024 a 9,927 lineas.
+- Nuevo archivo `frontend/js/app-realtime.js` con `buildCollectionSignature()` para detectar cambios en listas sin re-render innecesario.
+- `frontend/app.html` carga `/css/app.css?v=34`, `/js/components.js?v=15`, `/js/app-realtime.js?v=1`, `/js/app.js?v=53` y `/js/api.js?v=18`.
+- `frontend/js/api.js` cachea por 30s el contexto de amigos usado por `PostsAPI.getFeed()` para que el polling del feed no dispare `SocialAPI.getFriends()` en cada ciclo.
+- `frontend/js/app.js` refresca automaticamente sin F5:
+  - Feed principal cada 8s, al volver a la pestana y al recuperar foco.
+  - Comentarios del modal del feed cada 6.5s.
+  - Publicaciones de grupos cada 9s cuando la conversacion esta activa.
+  - Comentarios de grupos cada 7s mientras el modal esta abierto.
+  - Publicaciones de perfil cada 10s.
+  - Comentarios de perfil cada 7s mientras el modal esta abierto.
+- En feed principal, si llegan publicaciones nuevas mientras el usuario esta scrolleado, se muestra un boton sticky de nuevas publicaciones para no moverle la lectura.
+- `frontend/nginx.conf` ahora fuerza revalidacion: HTML con `no-store` y JS/CSS con `no-cache`, para reducir casos donde el navegador exige F5 tras despliegues.
+- `frontend/js/components.js` adapta la barra lateral a movil:
+  - Boton hamburguesa en el header movil.
+  - Drawer lateral con backdrop.
+  - Cierre al navegar, tocar backdrop o presionar Escape.
+- Se quito el boton de emoji del composer de publicaciones y se eliminaron listeners/estilos asociados.
 
 Validaciones ya ejecutadas:
 
 - `node --check frontend/js/app.js`
+- `node --check frontend/js/api.js`
+- `node --check frontend/js/components.js`
 - `node --check frontend/js/app-shared.js`
 - `node --check frontend/js/app-live-media.js`
+- `node --check frontend/js/app-realtime.js`
 - `docker compose -p uptconnect -f docker-compose.server.yml up -d --build frontend`
 - Dentro de `uptconnect-frontend-1`, Nginx responde `200 OK` para `/js/app-live-media.js`.
+- Dentro de `uptconnect-frontend-1`, Nginx responde `200 OK` para `/js/app-realtime.js`.
 - Dentro de `uptconnect-frontend-1`, Nginx responde `200 OK` para `/js/app.js`.
+- Dentro de `uptconnect-frontend-1`, Nginx responde `200 OK` para `/app.html` con `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate`.
+- Dentro de `uptconnect-frontend-1`, Nginx responde JS con `Cache-Control: no-cache, must-revalidate`.
+- En publico, `https://uptconnect.duckdns.org/app.html` contiene `app.css?v=34`, `components.js?v=15` y `app.js?v=53`.
+- En publico, `/js/components.js` y `/css/app.css` responden `200 OK` con `Cache-Control: no-cache, must-revalidate`.
 
 Pendiente antes de publicar:
 
-- Commit/push stageando solo los archivos necesarios.
+- Commit/push stageando solo los archivos necesarios si se quiere subir a GitHub. En la VPS ya esta desplegado.
 
 ## Live / livestream
 
@@ -160,6 +178,12 @@ Segunda etapa iniciada:
 
 - Extraidos helpers de media live a `frontend/js/app-live-media.js`.
 - `app.js` bajo a 9,927 lineas.
+
+Tercera etapa desplegada en VPS:
+
+- Extraido helper pequeno de firmas de colecciones a `frontend/js/app-realtime.js`.
+- Agregado refresco automatico de feed, comentarios, grupos y perfil para evitar F5 en cambios de contenido.
+- Agregadas cabeceras de cache de Nginx para que HTML/JS/CSS se revaliden tras despliegues.
 
 Siguientes etapas recomendadas:
 

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
     rel="stylesheet" />
-  <link href="/css/app.css?v=33" rel="stylesheet" />
+  <link href="/css/app.css?v=36" rel="stylesheet" />
   <script id="tailwind-config">
     tailwind.config = {
       darkMode: 'class',
@@ -40,6 +40,7 @@
 
 <body class="bg-surface text-on-surface min-h-screen overflow-y-auto pt-16" style="font-family:'Inter',sans-serif;">
   <app-header></app-header>
+  <button id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop" type="button" aria-label="Cerrar menu"></button>
   <div class="max-w-7xl mx-auto px-4 min-h-[calc(100vh-4rem)]">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 py-6">
       <app-sidebar active-nav="feed"></app-sidebar>
@@ -51,11 +52,12 @@
     </div>
   </div>
 
-  <script src="/js/api.js?v=17"></script>
-  <script src="/js/components.js?v=14"></script>
+  <script src="/js/api.js?v=19"></script>
+  <script src="/js/components.js?v=15"></script>
   <script src="/js/app-shared.js?v=1"></script>
   <script src="/js/app-live-media.js?v=1"></script>
-  <script src="/js/app.js?v=51"></script>
+  <script src="/js/app-realtime.js?v=1"></script>
+  <script src="/js/app.js?v=58"></script>
 </body>
 
 </html>

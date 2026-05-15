@@ -7,6 +7,9 @@ class AppHeader extends HTMLElement {
     this.innerHTML = `
       <header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white border-b border-slate-200">
         <div class="flex items-center gap-4">
+          <button id="mobile-sidebar-toggle" class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-full text-slate-700 hover:bg-slate-100 transition-colors" type="button" aria-label="Abrir menu" aria-controls="app-sidebar" aria-expanded="false">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
           <a href="#feed" class="text-lg font-bold text-[#1B2A6B] uppercase tracking-wider">UPT Connect</a>
         </div>
         <div class="flex-1 max-w-xl mx-8 hidden md:block">
@@ -48,7 +51,17 @@ class AppHeader extends HTMLElement {
         </div>
       </header>
     `;
+
+    this.querySelector('#mobile-sidebar-toggle')?.addEventListener('click', () => {
+      const willOpen = !document.body.classList.contains('sidebar-mobile-open');
+      setMobileSidebarOpen(willOpen);
+    });
   }
+}
+
+function setMobileSidebarOpen(open) {
+  document.body.classList.toggle('sidebar-mobile-open', open);
+  document.getElementById('mobile-sidebar-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
 class AppSidebar extends HTMLElement {
@@ -72,7 +85,8 @@ class AppSidebar extends HTMLElement {
         : 'flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 rounded-xl transition-all duration-200'
     );
 
-    this.className = 'hidden md:flex md:col-span-3 flex-col gap-6 self-start';
+    this.id = 'app-sidebar';
+    this.className = 'app-sidebar-shell md:col-span-3 flex flex-col gap-6 self-start';
     this.innerHTML = `
       <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div class="h-16 bg-cover bg-center" id="profile-banner" style="background:#1B2A6B"></div>
@@ -111,6 +125,12 @@ class AppSidebar extends HTMLElement {
         </button>
       </nav>
     `;
+
+    this.querySelectorAll('a[href^="#"]').forEach((link) => {
+      link.addEventListener('click', () => {
+        setMobileSidebarOpen(false);
+      });
+    });
   }
 }
 
@@ -121,6 +141,22 @@ if (!customElements.get('app-header')) {
 if (!customElements.get('app-sidebar')) {
   customElements.define('app-sidebar', AppSidebar);
 }
+
+window.closeMobileSidebar = function closeMobileSidebar() {
+  setMobileSidebarOpen(false);
+};
+
+document.addEventListener('click', (event) => {
+  if (event.target?.id === 'mobile-sidebar-backdrop') {
+    setMobileSidebarOpen(false);
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('sidebar-mobile-open')) {
+    setMobileSidebarOpen(false);
+  }
+});
 
 window.setupLayoutData = function setupLayoutData(user) {
   if (!user) return;
