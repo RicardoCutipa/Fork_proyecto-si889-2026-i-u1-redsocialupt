@@ -4577,13 +4577,13 @@
 
             if (window.Hls && window.Hls.isSupported()) {
               const hls = new window.Hls({
-                lowLatencyMode: false,
+                lowLatencyMode: true,
                 liveDurationInfinity: true,
-                backBufferLength: 8,
-                maxBufferLength: 12,
-                liveSyncDurationCount: 2,
-                liveMaxLatencyDurationCount: 5,
-                maxLiveSyncPlaybackRate: 1.05,
+                backBufferLength: 4,
+                maxBufferLength: 6,
+                liveSyncDuration: 4,
+                liveMaxLatencyDuration: 10,
+                maxLiveSyncPlaybackRate: 1.2,
                 startFragPrefetch: true,
               });
               viewerHls = hls;

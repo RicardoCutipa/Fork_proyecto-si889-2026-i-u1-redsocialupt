@@ -354,16 +354,16 @@
 							<ChunkDuration>0.5</ChunkDuration>
 							<!-- PartHoldBack SHOULD be at least three times the Part Target Duration -->
 							<PartHoldBack>1.5</PartHoldBack>
-							<SegmentDuration>6</SegmentDuration>
-							<SegmentCount>10</SegmentCount>
+							<SegmentDuration>2</SegmentDuration>
+							<SegmentCount>8</SegmentCount>
 							<CrossDomains>
 								<Url>*</Url>
 							</CrossDomains>
 							<CreateDefaultPlaylist>true</CreateDefaultPlaylist> <!-- llhls.m3u8 -->
 						</LLHLS>
 						<HLS>
-							<SegmentCount>4</SegmentCount>
-							<SegmentDuration>4</SegmentDuration>
+							<SegmentCount>6</SegmentCount>
+							<SegmentDuration>2</SegmentDuration>
 							<!-- <DVR>
 								<Enable>true</Enable>
 								<EventPlaylistType>false</EventPlaylistType>
