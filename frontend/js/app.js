@@ -4365,6 +4365,13 @@
           const desktop = isDesktopClient();
           liveShell.classList.toggle('live-is-desktop', desktop);
           liveShell.classList.toggle('live-host-mobile', isHostRoute && !desktop);
+          liveShell.classList.toggle('live-mobile-shell', !desktop);
+          if (desktop) {
+            liveShell.style.removeProperty('--live-mobile-vh');
+            liveShell.style.removeProperty('--live-mobile-vw');
+            liveShell.style.removeProperty('--live-mobile-comments-max');
+            liveShell.style.removeProperty('--live-mobile-overlay-max');
+          }
         }
         syncLiveDeviceClasses();
 
@@ -4404,6 +4411,9 @@
         const reactionSelectorDesktop = container.querySelector('#live-reaction-selector-desktop');
         const liveVideoWrap = container.querySelector('#live-video-wrap');
         const overlays = container.querySelectorAll('[data-live-overlay]');
+        const mobileTopbar = container.querySelector('.live-mobile-topbar');
+        const liveMobileInputRow = container.querySelector('.live-mobile-input-row');
+        const liveMobileHeadingRow = liveTitleMobile?.closest('div');
 
         let liveData = null;
         let activeReaction = 'me_gusta';
@@ -4445,6 +4455,8 @@
         let transitionToken = 0;
         let transitionStartedAt = 0;
         let transitionHideTimer = null;
+        let liveMobileViewportSyncRaf = 0;
+        let liveMobileViewportSyncTimeout = 0;
 
         // Mobile-only player controls (on the video itself)
         const playerMuteBtn = container.querySelector('#live-player-mute-btn');
@@ -4470,6 +4482,46 @@
         }
         function releaseWakeLock() {
           if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+        }
+        function syncLiveMobileViewportMetrics() {
+          if (!liveShell || isDesktopClient()) {
+            return;
+          }
+
+          const viewport = window.visualViewport;
+          const viewportHeight = Math.max(1, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0));
+          const viewportWidth = Math.max(1, Math.round(viewport?.width || window.innerWidth || document.documentElement.clientWidth || 0));
+          const topbarHeight = mobileTopbar?.offsetHeight || 0;
+          const headingHeight = liveMobileHeadingRow?.offsetHeight || 0;
+          const inputHeight = liveMobileInputRow?.offsetHeight || 0;
+          const commentsMax = Math.max(120, Math.min(320, viewportHeight - topbarHeight - headingHeight - inputHeight - 34));
+          const overlayMax = Math.max(inputHeight + headingHeight + 24, Math.min(Math.round(viewportHeight * 0.58), commentsMax + headingHeight + inputHeight + 24));
+
+          liveShell.style.setProperty('--live-mobile-vh', `${viewportHeight}px`);
+          liveShell.style.setProperty('--live-mobile-vw', `${viewportWidth}px`);
+          liveShell.style.setProperty('--live-mobile-comments-max', `${commentsMax}px`);
+          liveShell.style.setProperty('--live-mobile-overlay-max', `${overlayMax}px`);
+        }
+        function scheduleLiveMobileViewportSync(delayMs = 0) {
+          if (isDesktopClient()) {
+            return;
+          }
+
+          window.cancelAnimationFrame(liveMobileViewportSyncRaf);
+          window.clearTimeout(liveMobileViewportSyncTimeout);
+
+          const run = () => {
+            liveMobileViewportSyncRaf = window.requestAnimationFrame(() => {
+              syncLiveMobileViewportMetrics();
+            });
+          };
+
+          if (delayMs > 0) {
+            liveMobileViewportSyncTimeout = window.setTimeout(run, delayMs);
+            return;
+          }
+
+          run();
         }
         // Re-acquire wake lock when page becomes visible again
         document.addEventListener('visibilitychange', () => {
@@ -5926,6 +5978,9 @@
             destroyPlayer();
             showFallback('Directo finalizado', 'La transmision termino, pero puedes seguir viendo su registro y comentarios.');
           }
+
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
         }
 
         function isCommentsNearBottom(element) {
@@ -5967,6 +6022,8 @@
           if (isOverflowing && !userRecentlyScrolledComments() && liveCommentsMobile.scrollTop === 0) {
             liveCommentsMobile.scrollTop = liveCommentsMobile.scrollHeight;
           }
+
+          scheduleLiveMobileViewportSync();
         }
 
         async function loadComments() {
@@ -6037,6 +6094,8 @@
               activeCommentsContainer.scrollTop = activeCommentsContainer.scrollHeight;
             }
           }
+
+          scheduleLiveMobileViewportSync();
         }
 
         async function sendComment() {
@@ -6232,6 +6291,9 @@
         };
         if (!isDesktopClient()) {
           document.addEventListener('touchend', handleGlobalLiveTouchToggle, { passive: true });
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
+          scheduleLiveMobileViewportSync(320);
         }
         // On desktop show overlay initially, on mobile start hidden (tap to reveal)
         if (isDesktopClient()) {
@@ -6271,6 +6333,9 @@
           immersiveActive = true;
           document.body.classList.add('live-immersive-active');
           liveShell.classList.add('live-immersive-shell');
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
+          scheduleLiveMobileViewportSync(320);
 
           if (!isDesktopClient()) {
             // Mobile: use Fullscreen API for true immersive (hides browser chrome)
@@ -6339,6 +6404,9 @@
 
         // Unified fullscreenchange handler
         document.addEventListener('fullscreenchange', () => {
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
+          scheduleLiveMobileViewportSync(320);
           if (exitingLivestream || pendingVideoFs) return;
 
           const fsEl = document.fullscreenElement;
@@ -6535,8 +6603,12 @@
           syncLiveDeviceClasses();
           refreshHostAudioButtons();
           refreshMobileCommentsOverflowState();
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
         };
         window.addEventListener('resize', handleLiveResize);
+        window.visualViewport?.addEventListener('resize', handleLiveResize);
+        window.visualViewport?.addEventListener('scroll', handleLiveResize);
 
         // ─── Host buttons ───
         hostEndButton.addEventListener('click', endLivestream);
@@ -6609,6 +6681,9 @@
           }
           // Show fullscreen button only for landscape streams (from PC)
           updateFullscreenButtonVisibility();
+          scheduleLiveMobileViewportSync();
+          scheduleLiveMobileViewportSync(140);
+          scheduleLiveMobileViewportSync(320);
         });
 
         commentsTimer = window.setInterval(commentsLoop, 2200);
@@ -6620,8 +6695,12 @@
           if (heartbeatTimer) window.clearInterval(heartbeatTimer);
           if (liveStateTimer) window.clearInterval(liveStateTimer);
           window.removeEventListener('resize', handleLiveResize);
+          window.visualViewport?.removeEventListener('resize', handleLiveResize);
+          window.visualViewport?.removeEventListener('scroll', handleLiveResize);
           if (overlayTimer) clearTimeout(overlayTimer);
           if (longPressTimer) clearTimeout(longPressTimer);
+          window.cancelAnimationFrame(liveMobileViewportSyncRaf);
+          window.clearTimeout(liveMobileViewportSyncTimeout);
           document.removeEventListener('touchend', handleGlobalLiveTouchToggle);
           // Clean up immersive mode
           document.body.classList.remove('live-immersive-active');

@@ -2172,6 +2172,20 @@ body {
   padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
 }
 
+.live-mobile-shell .live-video-col {
+  min-height: var(--live-mobile-vh, 100dvh);
+}
+
+.live-mobile-shell .live-mobile-content {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: var(--live-mobile-overlay-max, min(52dvh, 420px));
+  min-height: auto;
+  padding-bottom: 0;
+}
+
 .live-host-mobile .live-mobile-content>*,
 .live-cam-stream .live-mobile-content>* {
   pointer-events: auto;
@@ -2205,6 +2219,12 @@ body {
   align-self: stretch;
 }
 
+.live-mobile-shell .live-mobile-comments {
+  flex: 0 1 auto;
+  max-height: var(--live-mobile-comments-max, 220px);
+  padding-bottom: 10px;
+}
+
 .live-mobile-comments.live-comments-overflowing {
   justify-content: flex-start;
 }
@@ -2219,6 +2239,10 @@ body {
   position: relative;
   z-index: 2;
   min-height: 72px;
+}
+
+.live-mobile-shell .live-mobile-input-row {
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
 }
 
 /* Viewer gets object-cover for vertical streams — mobile viewers only */
