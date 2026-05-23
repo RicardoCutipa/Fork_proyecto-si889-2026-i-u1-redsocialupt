@@ -10,13 +10,6 @@ const API = {
   chat:   '/api/chat',
 };
 
-const FEED_CONTEXT_CACHE_MS = 30000;
-const feedContextCache = {
-  friendIds: [],
-  fetchedAt: 0,
-  loading: null,
-};
-
 function decodeJwtPayload(token) {
   try {
     const parts = String(token || '').split('.');
@@ -135,18 +128,15 @@ function buildResponseData(res, text) {
 /* ── Generic fetch (JSON) ────────────────────────────────────── */
 async function apiFetch(url, options = {}) {
   try {
-    const { noLogoutOnUnauthorized = false, ...fetchOptions } = options;
     const res = await fetch(url, {
-      ...fetchOptions,
+      ...options,
       headers: {
         ...authHeaders(),
-        ...(fetchOptions.headers || {}),
+        ...(options.headers || {}),
       },
     });
     if (res.status === 401) {
-      if (!noLogoutOnUnauthorized) {
-        logout();
-      }
+      logout();
       return { ok: false, status: 401, data: { error: 'Sesion expirada' } };
     }
     const text = await res.text();
@@ -235,45 +225,14 @@ const AuthAPI = {
 
 /* ── Posts Service ────────────────────────────────────────────── */
 const PostsAPI = {
-  getFeedContextFriendIds: async (force = false) => {
-    const now = Date.now();
-    if (!force && feedContextCache.fetchedAt && (now - feedContextCache.fetchedAt) < FEED_CONTEXT_CACHE_MS) {
-      return feedContextCache.friendIds;
+  getFeed: async (page = 1) => {
+    let friendIds = [];
+    const friendsResult = await SocialAPI.getFriends();
+    if (friendsResult?.ok) {
+      friendIds = getList(friendsResult)
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value));
     }
-
-    if (!force && feedContextCache.loading) {
-      return feedContextCache.loading;
-    }
-
-    feedContextCache.loading = (async () => {
-      const friendsResult = await SocialAPI.getFriends();
-      if (friendsResult?.ok) {
-        feedContextCache.friendIds = getList(friendsResult)
-          .map((value) => Number(value))
-          .filter((value) => Number.isFinite(value));
-        feedContextCache.fetchedAt = Date.now();
-      }
-
-      window.__friendIdsCache = feedContextCache.friendIds;
-      return feedContextCache.friendIds;
-    })();
-
-    try {
-      return await feedContextCache.loading;
-    } finally {
-      feedContextCache.loading = null;
-    }
-  },
-
-  clearFeedContextCache: () => {
-    feedContextCache.friendIds = [];
-    feedContextCache.fetchedAt = 0;
-    feedContextCache.loading = null;
-    window.__friendIdsCache = [];
-  },
-
-  getFeed: async (page = 1, options = {}) => {
-    const friendIds = await PostsAPI.getFeedContextFriendIds(!!options.forceFriendRefresh);
 
     const currentUser = getUser();
     return apiFetch(`${API.posts}?page=${page}`, {
@@ -479,7 +438,7 @@ const ChatAPI = {
     method: 'POST',
     body: JSON.stringify({ receiver_id: receiverId, mode }),
   }),
-  getPendingCalls: () => apiFetch(`${API.chat}/calls/pending`, { noLogoutOnUnauthorized: true }),
+  getPendingCalls: () => apiFetch(`${API.chat}/calls/pending`),
   getCall: (callId) => apiFetch(`${API.chat}/calls/${callId}`),
   acceptCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/accept`, { method: 'PUT' }),
   rejectCall: (callId) => apiFetch(`${API.chat}/calls/${callId}/reject`, { method: 'PUT' }),
@@ -568,6 +527,31 @@ function getDisplayName(userOrName) {
 function getCareerLabel(user) {
   if (!user) return '';
   return user.school || user.career || user.area || user.position_title || '';
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function timeAgo(value) {
+  if (!value) return 'Ahora';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Ahora';
+
+  const diffMs = Date.now() - date.getTime();
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return 'Ahora';
+  if (diffMs < hour) return `Hace ${Math.max(1, Math.floor(diffMs / minute))} min`;
+  if (diffMs < day) return `Hace ${Math.max(1, Math.floor(diffMs / hour))} h`;
+  return `Hace ${Math.max(1, Math.floor(diffMs / day))} d`;
 }
 
 function formatAcademicCycle(value, short = false) {
@@ -682,52 +666,246 @@ function requireGuest() {
 }
 
 /* ── Notifications (friend requests) ─────────────────────────── */
+const NOTIFICATION_SEEN_KEY = 'upt-notifications-seen-v1';
+
+function getSeenNotificationIds() {
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_SEEN_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function setSeenNotificationIds(ids) {
+  try {
+    window.localStorage.setItem(NOTIFICATION_SEEN_KEY, JSON.stringify(Array.from(new Set(ids.map(String)))));
+  } catch (_) {}
+}
+
+function notificationItemId(item) {
+  if (item.kind === 'friend') {
+    return `friend-${item.requestId}`;
+  }
+  return String(item.id || `group-${item.groupName || 'group'}-${item.createdAt || ''}`);
+}
+
+function updateNotificationsCountUi(count) {
+  const badge = document.getElementById('notif-badge');
+  const summaryPill = document.getElementById('notif-summary-pill');
+  const safeCount = Math.max(0, Number(count) || 0);
+  if (badge) {
+    badge.classList.toggle('hidden', safeCount === 0);
+    badge.classList.toggle('flex', safeCount > 0);
+    badge.textContent = safeCount > 99 ? '99+' : String(safeCount);
+  }
+  if (summaryPill) {
+    summaryPill.classList.toggle('hidden', safeCount === 0);
+    summaryPill.textContent = `${safeCount} pendiente${safeCount === 1 ? '' : 's'}`;
+  }
+}
+
+async function animateNotificationDismissal(nodes, { reverse = false, stagger = 55 } = {}) {
+  const orderedNodes = reverse ? [...nodes].reverse() : [...nodes];
+  if (!orderedNodes.length) return;
+  await Promise.all(orderedNodes.map((node, index) => new Promise((resolve) => {
+    window.setTimeout(() => {
+      node.classList.add('is-dismissing');
+      window.setTimeout(resolve, 240);
+    }, index * stagger);
+  })));
+}
+
+function bindNotificationInteractions(list) {
+  if (!list || list.dataset.bound === 'true') return;
+  list.dataset.bound = 'true';
+  list.addEventListener('click', async (event) => {
+    const seenButton = event.target.closest('[data-notif-seen-id]');
+    if (!seenButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const notificationId = String(seenButton.dataset.notifSeenId || '');
+    if (!notificationId) return;
+    const seenIds = getSeenNotificationIds();
+    seenIds.add(notificationId);
+    setSeenNotificationIds([...seenIds]);
+    const currentCount = Math.max(0, Number(list.dataset.unseenCount || '0') - 1);
+    list.dataset.unseenCount = String(currentCount);
+    updateNotificationsCountUi(currentCount);
+    const itemNode = seenButton.closest('.notif-item');
+    if (itemNode) {
+      await animateNotificationDismissal([itemNode]);
+    }
+    loadNotifications();
+  });
+}
+
 async function loadNotifications() {
   const list = document.getElementById('notifications-list');
   if (!list) return;
-  list.innerHTML = '<div class="px-4 py-6 text-sm text-slate-500 text-center">Cargando...</div>';
-
-  const [result, usersResult] = await Promise.all([
-    SocialAPI.getPendingRequests(),
-    AuthAPI.listPublicUsers(),
-  ]);
-  const requests = getList(result);
-  const usersById = new Map(getList(usersResult).map((item) => [Number(item.id), item]));
-  if (result && result.ok) {
-    if (requests.length === 0) {
-      list.innerHTML = '<div class="px-4 py-6 text-sm text-slate-500 text-center">No tienes notificaciones pendientes</div>';
-      const badge = document.getElementById('notif-badge');
-      if (badge) badge.classList.add('hidden');
-    } else {
-      const badge = document.getElementById('notif-badge');
-      if (badge) badge.classList.remove('hidden');
-      list.innerHTML = requests.map(req => {
-        const senderId = Number(req.sender_id || req.sender?.id || 0);
-        const u = req.sender || usersById.get(senderId) || {};
-        const userName = getDisplayName(u);
-        const userSchool = getCareerLabel(u);
-        const ini = initials(userName);
-        const color = getFacultyColor(u.faculty || userSchool || '');
-        return `
-          <div class="px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style="background:${color}">${ini}</div>
-                <div>
-                  <div class="font-bold text-sm text-slate-900">${userName || 'Usuario'}</div>
-                  <div class="text-xs text-slate-500">Solicitud de amistad</div>
-                </div>
-              </div>
-              <div class="flex flex-col gap-1">
-                <button onclick="acceptFriendRequest(${req.id})" class="text-[10px] font-bold text-white bg-[#1B2A6B] hover:bg-[#142052] px-2 py-1 rounded">Aceptar</button>
-                <button onclick="rejectFriendRequest(${req.id})" class="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">Rechazar</button>
+  bindNotificationInteractions(list);
+  const dropdown = document.getElementById('notifications-dropdown');
+  const markSeenButton = document.getElementById('notif-mark-seen-btn');
+  const dropdownOpen = dropdown && !dropdown.classList.contains('hidden');
+  const shouldShowSkeleton = dropdownOpen && list.dataset.loaded !== 'true';
+  if (shouldShowSkeleton) {
+    list.dataset.loaded = 'loading';
+    list.innerHTML = `
+      <div class="px-4 py-4 space-y-3">
+        ${Array.from({ length: 3 }, () => `
+          <div class="skeleton-card">
+            <div class="flex items-start gap-3">
+              <div class="skeleton skeleton-avatar shrink-0"></div>
+              <div class="flex-1 space-y-2">
+                <div class="skeleton skeleton-text" style="width:92%"></div>
+                <div class="skeleton skeleton-text" style="width:68%"></div>
               </div>
             </div>
-          </div>`;
-      }).join('');
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  try {
+    const settled = await Promise.allSettled([
+      SocialAPI.getPendingRequests(),
+      AuthAPI.listPublicUsers(),
+      SocialAPI.getMyGroups(),
+    ]);
+    const result = settled[0].status === 'fulfilled' ? settled[0].value : null;
+    const usersResult = settled[1].status === 'fulfilled' ? settled[1].value : null;
+    const myGroupsResult = settled[2].status === 'fulfilled' ? settled[2].value : null;
+    const requests = getList(result);
+    const usersById = new Map(getList(usersResult).map((item) => [Number(item.id), item]));
+    if (!(result && result.ok)) {
+      updateNotificationsCountUi(0);
+      if (markSeenButton) {
+        markSeenButton.classList.add('hidden');
+      }
+      list.dataset.loaded = 'false';
+      list.innerHTML = `<div class="px-4 py-6 text-sm text-slate-500 text-center">${escapeHtml(result?.data?.error || 'Error al cargar notificaciones')}</div>`;
+      return;
     }
-  } else {
-    list.innerHTML = '<div class="px-4 py-6 text-sm text-slate-500 text-center">Error al cargar</div>';
+
+  const groups = getList(myGroupsResult);
+  const groupNotifications = [];
+  await Promise.all(groups.map(async (group) => {
+    const role = String(group.current_user_role || group.current_role || group.role || '').toLowerCase();
+    if (!['owner', 'creator', 'admin'].includes(role)) return;
+    try {
+      const reqResult = await SocialAPI.getGroupRequests(group.id);
+      if (!reqResult?.ok) return;
+      getList(reqResult).forEach((membership) => {
+        const requester = membership.user || usersById.get(Number(membership.user_id || 0)) || {};
+        groupNotifications.push({
+          id: `group-${group.id}-${membership.membership_id}`,
+          name: getDisplayName(requester),
+          faculty: requester.faculty || '',
+          career: getCareerLabel(requester),
+          groupName: group.name,
+          createdAt: membership.created_at,
+        });
+      });
+    } catch (_) {
+      return;
+    }
+  }));
+
+  const items = [
+    ...requests.map((req) => {
+      const senderId = Number(req.sender_id || req.sender?.id || 0);
+      const user = req.sender || usersById.get(senderId) || {};
+      return { kind: 'friend', requestId: req.id, user, createdAt: req.created_at };
+    }),
+    ...groupNotifications.map((item) => ({ kind: 'group', ...item })),
+  ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const seenIds = getSeenNotificationIds();
+  const unseenItems = items.filter((item) => !seenIds.has(notificationItemId(item)));
+  const count = unseenItems.length;
+  list.dataset.unseenCount = String(count);
+  updateNotificationsCountUi(count);
+  if (markSeenButton) {
+    markSeenButton.classList.toggle('hidden', count === 0);
+    markSeenButton.onclick = async () => {
+      if (count === 0) return;
+      const nextSeenIds = getSeenNotificationIds();
+      unseenItems.forEach((item) => nextSeenIds.add(notificationItemId(item)));
+      setSeenNotificationIds([...nextSeenIds]);
+      list.dataset.unseenCount = '0';
+      updateNotificationsCountUi(0);
+      const itemNodes = Array.from(list.querySelectorAll('.notif-item'));
+      await animateNotificationDismissal(itemNodes, { reverse: true, stagger: 70 });
+      loadNotifications();
+    };
+  }
+
+  if (!count) {
+    if (markSeenButton) {
+      markSeenButton.classList.add('hidden');
+    }
+    list.innerHTML = '<div class="px-4 py-6 text-sm text-slate-500 text-center">No tienes notificaciones pendientes</div>';
+    list.dataset.loaded = 'true';
+    return;
+  }
+
+  list.innerHTML = unseenItems.map((item) => {
+    if (item.kind === 'friend') {
+      const user = item.user || {};
+      const userName = getDisplayName(user);
+      const itemId = notificationItemId(item);
+      return `
+        <div class="notif-item" data-notification-id="${escapeHtml(itemId)}">
+          <div class="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style="background:${getFacultyColor(user.faculty || getCareerLabel(user) || '')}">${initials(userName)}</div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-3">
+              <span class="notif-pill friend">Amistad</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[11px] text-slate-400 font-medium">${timeAgo(item.createdAt)}</span>
+                <button type="button" data-notif-seen-id="${escapeHtml(itemId)}" class="notif-mark-item-btn" title="Marcar como vista" aria-label="Marcar como vista">
+                  <span class="material-symbols-outlined">done</span>
+                </button>
+              </div>
+            </div>
+            <p class="text-sm text-slate-800 mt-2"><span class="font-bold">${userName || 'Usuario'}</span> te envio una solicitud de amistad</p>
+            <div class="mt-3 flex items-center gap-2">
+              <button onclick="acceptFriendRequest(${item.requestId})" class="px-3 py-1.5 rounded-lg bg-[#1B2A6B] hover:bg-[#142052] text-white text-[12px] font-bold transition-colors">Aceptar</button>
+              <button onclick="rejectFriendRequest(${item.requestId})" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-bold transition-colors">Rechazar</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    const itemId = notificationItemId(item);
+    return `
+      <div class="notif-item" data-notification-id="${escapeHtml(itemId)}">
+        <div class="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0" style="background:${getFacultyColor(item.faculty || item.career || item.groupName || '')}">${initials(item.name)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-3">
+            <span class="notif-pill group">Grupo</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] text-slate-400 font-medium">${timeAgo(item.createdAt)}</span>
+              <button type="button" data-notif-seen-id="${escapeHtml(itemId)}" class="notif-mark-item-btn" title="Marcar como vista" aria-label="Marcar como vista">
+                <span class="material-symbols-outlined">done</span>
+              </button>
+            </div>
+          </div>
+          <p class="text-sm text-slate-800 mt-2"><span class="font-bold">${item.name || 'Usuario'}</span> quiere unirse a tu grupo <span class="font-bold">${item.groupName}</span></p>
+        </div>
+      </div>
+    `;
+  }).join('');
+  list.dataset.loaded = 'true';
+  } catch (error) {
+    console.error('No se pudieron cargar las notificaciones:', error);
+    updateNotificationsCountUi(0);
+    if (markSeenButton) {
+      markSeenButton.classList.add('hidden');
+    }
+    list.dataset.loaded = 'false';
+    list.innerHTML = '<div class="px-4 py-6 text-sm text-slate-500 text-center">No se pudieron cargar las notificaciones.</div>';
   }
 }
 
@@ -754,9 +932,6 @@ async function rejectFriendRequest(id) {
 /* Auto-check pending requests on page load */
 document.addEventListener('DOMContentLoaded', async () => {
   if (isLoggedIn() && document.getElementById('notif-badge')) {
-    const result = await SocialAPI.getPendingRequests();
-    if (getList(result).length > 0) {
-      document.getElementById('notif-badge').classList.remove('hidden');
-    }
+    loadNotifications().catch(() => {});
   }
 });

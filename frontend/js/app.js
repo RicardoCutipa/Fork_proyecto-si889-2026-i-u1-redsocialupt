@@ -61,82 +61,348 @@
 
   startPresenceHeartbeat();
 
-  const shared = window.UPTAppShared;
-  if (!shared) {
-    throw new Error('No se cargaron las utilidades compartidas de la app');
-  }
-
-  const liveMedia = window.UPTLiveMedia;
-  if (!liveMedia) {
-    throw new Error('No se cargaron las utilidades de media live');
-  }
-
-  const realtime = window.UPTRealtime || {
-    buildCollectionSignature(items, fields) {
-      if (!Array.isArray(items) || !Array.isArray(fields)) return '';
-      return items.map((item) => fields.map((field) => {
-        const value = typeof field === 'function' ? field(item) : item?.[field];
-        if (value === null || value === undefined) return '';
-        if (typeof value === 'object') {
-          try {
-            return JSON.stringify(value);
-          } catch (_error) {
-            return '';
-          }
-        }
-        return String(value);
-      }).join(':')).join('|');
-    },
+  const ROUTE_ALIASES = {
+    '': 'feed',
+    '/': 'feed',
+    'admin_publicaciones': 'admin-posts',
+    'admin-publicaciones': 'admin-posts',
   };
 
-  const {
-    ROUTE_ALIASES,
-    REACTION_META,
-    escapeHtml,
-    nl2br,
-    safeUrl,
-    getVisibilityMeta,
-    displayName,
-    careerLabel,
-    cycleLabel,
-    userColor,
-    timeAgo,
-    formatBlockedUntilLabel,
-    formatClock,
-    isUserOnline,
-    presenceLabel,
-    setBackgroundMedia,
-    setAvatarElement,
-    renderAvatar,
-    numericId,
-    getUserTypeLabel,
-    reactionCountSummary,
-    buildHash,
-    parseRoute,
-    setDocumentTitle,
-    getLivestreamEngineHost,
-    buildLivestreamHlsUrl,
-    buildLivestreamProbeUrl,
-    normalizeLivestreamPlaybackUrl,
-    buildLivestreamPublishUrl,
-    buildLivestreamStreamKey,
-    isDesktopClient,
-    isMobileDevice,
-    loadExternalScript,
-    loadExternalStyle,
-    ensureLivestreamLibraries,
-  } = shared;
+  const EMOJI_DATA = {
+    '😀': ['😀', '😁', '😂', '🤣', '😊', '😍', '😎', '🤩', '🤔', '😴', '😭', '😡', '🥳', '🤯', '😇', '🙌'],
+    '👍': ['👍', '👎', '👏', '🙌', '🤝', '🙏', '✌️', '🤘', '💪', '👀', '🔥', '✨', '🎉', '💯', '📚', '🎓'],
+    '❤️': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🤍', '🤎', '💔', '💕', '💞', '💓', '💗', '💖', '💘', '💝'],
+    '🐶': ['🐶', '🐱', '🐼', '🦊', '🐯', '🦁', '🐵', '🐸', '🐧', '🦄', '🐝', '🦋', '🌱', '🌸', '🌞', '🌙'],
+    '🍕': ['🍕', '🍔', '🌮', '🍜', '🍣', '🍩', '🍪', '🍫', '☕', '🍵', '🥤', '🍎', '🍓', '🥑', '🍿', '🎂'],
+    '⚽': ['⚽', '🏀', '🏐', '🎾', '🏓', '🥊', '🏃', '🏊', '🚴', '🎮', '🎧', '🎤', '🎸', '🎬', '📷', '💻'],
+  };
 
-  const {
-    getLiveAudioConstraints,
-    getLiveVideoConstraints,
-    applyLiveTrackHints,
-    createMixedAudioTrack,
-  } = liveMedia;
+  const REACTION_META = {
+    me_gusta: { emoji: '👍', label: 'Me gusta' },
+    me_encanta: { emoji: '❤️', label: 'Me encanta' },
+    me_divierte: { emoji: '😂', label: 'Me divierte' },
+    me_sorprende: { emoji: '😮', label: 'Me sorprende' },
+    me_enoja: { emoji: '😡', label: 'Me enoja' },
+  };
 
-  const {
-    buildCollectionSignature,
-  } = realtime;
+  const REACTION_ASSETS = {
+    me_gusta: '/assets/reactions/me-gusta.webp',
+    me_encanta: '/assets/reactions/me-encanta.webp',
+    me_divierte: '/assets/reactions/me-divierte.webp',
+    me_sorprende: '/assets/reactions/me-sorprende.webp',
+    me_enoja: '/assets/reactions/me-enoja.webp',
+  };
+
+  const FACULTY_CAREERS = {
+    Todos: ['Todos'],
+    FAING: ['Todos', 'Ingenieria de Sistemas', 'Ingenieria Civil', 'Ingenieria Electronica', 'Ingenieria Industrial', 'Ingenieria Mecanica'],
+    FACEM: ['Todos', 'Medicina Humana', 'Odontologia'],
+    FAEDCOH: ['Todos', 'Educacion', 'Ciencias de la Comunicacion', 'Humanidades'],
+    FADE: ['Todos', 'Administracion', 'Contabilidad', 'Derecho'],
+    FACSA: ['Todos', 'Enfermeria', 'Psicologia'],
+    FAU: ['Todos', 'Arquitectura'],
+  };
+
+  let confirmModalPromiseResolver = null;
+  let reactionPickerState = null;
+  let mobileSidebarCleanup = null;
+  let notificationsState = {
+    lastIds: [],
+    polling: null,
+  };
+  const NOTIFICATION_SEEN_KEY = 'upt-notifications-seen-v1';
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      '\'': '&#39;',
+    }[char]));
+  }
+
+  function nl2br(value) {
+    return escapeHtml(value).replace(/\n/g, '<br>');
+  }
+
+  function safeUrl(url) {
+    return String(url || '').replace(/'/g, '%27');
+  }
+
+  function reactionAsset(type) {
+    return REACTION_ASSETS[type] || REACTION_ASSETS.me_gusta;
+  }
+
+  function renderReactionAsset(type, extraClass = '') {
+    const meta = REACTION_META[type] || REACTION_META.me_gusta;
+    const className = `reaction-asset ${extraClass}`.trim().replace(/\s+/g, ' ');
+    return `<img src="${reactionAsset(type)}" alt="${escapeHtml(meta.label)}" class="${className}" />`;
+  }
+
+  function getFacultyCareerOptions(faculty = 'Todos') {
+    return FACULTY_CAREERS[faculty] || FACULTY_CAREERS.Todos;
+  }
+
+  function renderSkeletonLines(widths = ['100%', '84%', '58%']) {
+    return widths.map((width) => `<div class="skeleton skeleton-text" style="width:${width}"></div>`).join('');
+  }
+
+  function renderCardSkeleton({ lines = ['100%', '88%', '56%'], avatar = true, media = false } = {}) {
+    return `
+      <div class="skeleton-card">
+        <div class="flex items-start gap-3">
+          ${avatar ? '<div class="skeleton skeleton-avatar shrink-0"></div>' : ''}
+          <div class="flex-1 space-y-2">
+            ${renderSkeletonLines(lines)}
+          </div>
+        </div>
+        ${media ? '<div class="skeleton rounded-[18px] h-48 mt-4"></div>' : ''}
+      </div>
+    `;
+  }
+
+  function renderListSkeleton(count = 3, options = {}) {
+    return Array.from({ length: count }, () => renderCardSkeleton(options)).join('');
+  }
+
+  function ensureGlobalUiShell() {
+    if (!document.getElementById('global-confirm-modal')) {
+      const shell = document.createElement('div');
+      shell.innerHTML = `
+        <div id="global-confirm-modal" class="fixed inset-0 z-[160] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm px-4 py-6">
+          <div class="w-full max-w-md rounded-[28px] border border-slate-200 bg-white shadow-2xl overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100">
+              <p id="global-confirm-kicker" class="text-[11px] uppercase tracking-[0.18em] font-black text-slate-400">Confirmacion</p>
+              <h3 id="global-confirm-title" class="text-xl font-black text-slate-900 mt-1">Continuar</h3>
+              <p id="global-confirm-copy" class="text-sm text-slate-500 mt-2">Esta accion necesita confirmacion.</p>
+            </div>
+            <div class="px-6 py-5 flex items-center justify-end gap-3">
+              <button id="global-confirm-cancel" type="button" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancelar</button>
+              <button id="global-confirm-ok" type="button" class="px-5 py-2.5 rounded-xl bg-[#1B2A6B] text-white text-sm font-semibold hover:bg-[#152259] transition-colors">Aceptar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(shell.firstElementChild);
+    }
+  }
+
+  function closeConfirmModal(answer = false) {
+    const modal = document.getElementById('global-confirm-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    const resolver = confirmModalPromiseResolver;
+    confirmModalPromiseResolver = null;
+    if (resolver) resolver(answer);
+  }
+
+  function confirmAction({
+    title = 'Confirmar accion',
+    copy = 'Esta accion no se puede deshacer.',
+    acceptLabel = 'Aceptar',
+    tone = 'primary',
+  } = {}) {
+    ensureGlobalUiShell();
+    const modal = document.getElementById('global-confirm-modal');
+    const titleNode = document.getElementById('global-confirm-title');
+    const copyNode = document.getElementById('global-confirm-copy');
+    const okButton = document.getElementById('global-confirm-ok');
+    const cancelButton = document.getElementById('global-confirm-cancel');
+    titleNode.textContent = title;
+    copyNode.textContent = copy;
+    okButton.textContent = acceptLabel;
+    okButton.className = `px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors ${tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#1B2A6B] hover:bg-[#152259]'}`;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    return new Promise((resolve) => {
+      confirmModalPromiseResolver = resolve;
+      const cleanup = () => {
+        okButton.removeEventListener('click', onOk);
+        cancelButton.removeEventListener('click', onCancel);
+        modal.removeEventListener('click', onBackdrop);
+      };
+      const onOk = () => {
+        cleanup();
+        closeConfirmModal(true);
+      };
+      const onCancel = () => {
+        cleanup();
+        closeConfirmModal(false);
+      };
+      const onBackdrop = (event) => {
+        if (event.target !== modal) return;
+        cleanup();
+        closeConfirmModal(false);
+      };
+      okButton.addEventListener('click', onOk);
+      cancelButton.addEventListener('click', onCancel);
+      modal.addEventListener('click', onBackdrop);
+    });
+  }
+
+  function getVisibilityMeta(visibility) {
+    switch (visibility) {
+      case 'friends':
+        return {
+          icon: 'group',
+          label: 'Solo amigos',
+          tone: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+        };
+      case 'faculty':
+        return {
+          icon: 'school',
+          label: 'Solo mi facultad',
+          tone: 'bg-amber-50 text-amber-700 border border-amber-200',
+        };
+      default:
+        return {
+          icon: 'public',
+          label: 'Toda la UPT',
+          tone: 'bg-slate-100 text-slate-600 border border-slate-200',
+        };
+    }
+  }
+
+  function displayName(user) {
+    return window.getDisplayName ? window.getDisplayName(user) : (user?.full_name || user?.name || 'Usuario');
+  }
+
+  function careerLabel(user) {
+    return window.getCareerLabel ? window.getCareerLabel(user) : (user?.school || user?.career || user?.area || user?.position_title || '');
+  }
+
+  function cycleLabel(value, short = false) {
+    return window.formatAcademicCycle ? window.formatAcademicCycle(value, short) : String(value || '');
+  }
+
+  function userColor(userOrLabel) {
+    if (typeof userOrLabel === 'string') return getFacultyColor(userOrLabel);
+    return getFacultyColor(userOrLabel?.faculty || userOrLabel?.school || userOrLabel?.career || '');
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.max(0, (Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return 'ahora';
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+    return `hace ${Math.floor(diff / 86400)} d`;
+  }
+
+  function formatBlockedUntilLabel(blockedUntil, isIndefinite = false) {
+    if (isIndefinite || !blockedUntil) {
+      return 'Bloqueo indefinido';
+    }
+
+    const date = new Date(blockedUntil);
+    if (Number.isNaN(date.getTime())) {
+      return 'Bloqueo temporal activo';
+    }
+
+    return `Hasta ${date.toLocaleString('es-PE', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })}`;
+  }
+
+  function formatClock(dateStr) {
+    if (!dateStr) return '';
+    try {
+      return new Date(dateStr).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function isUserOnline(user) {
+    if (typeof user?.is_online === 'boolean') {
+      return user.is_online;
+    }
+
+    if (!user?.last_seen_at) {
+      return false;
+    }
+
+    const lastSeen = new Date(user.last_seen_at).getTime();
+    if (Number.isNaN(lastSeen)) {
+      return false;
+    }
+
+    return (Date.now() - lastSeen) <= PRESENCE_ONLINE_WINDOW_MS;
+  }
+
+  function presenceLabel(user) {
+    if (isUserOnline(user)) {
+      return 'En linea';
+    }
+
+    if (user?.last_seen_at) {
+      return `Activo ${timeAgo(user.last_seen_at)}`;
+    }
+
+    return 'Inactivo';
+  }
+
+  function setBackgroundMedia(element, url, fallbackColor) {
+    if (!element) return;
+    if (url) {
+      element.style.backgroundImage = `url('${safeUrl(url)}')`;
+      element.style.backgroundSize = 'cover';
+      element.style.backgroundPosition = 'center';
+      if (fallbackColor) element.style.backgroundColor = fallbackColor;
+      return;
+    }
+    element.style.backgroundImage = '';
+    if (fallbackColor) element.style.backgroundColor = fallbackColor;
+  }
+
+  function setAvatarElement(element, user) {
+    if (!element) return;
+    const name = displayName(user);
+    const color = userColor(user);
+    if (user?.avatar_url) {
+      element.textContent = '';
+      setBackgroundMedia(element, user.avatar_url, color);
+    } else {
+      element.textContent = initials(name);
+      element.style.backgroundImage = '';
+      element.style.backgroundColor = color;
+    }
+  }
+
+  function renderAvatar(user, options = {}) {
+    const sizeClass = options.sizeClass || 'w-10 h-10';
+    const textClass = options.textClass || 'text-white font-bold';
+    const extraClass = options.extraClass || '';
+    const showOnline = options.showOnline && isUserOnline(user)
+      ? '<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>'
+      : '';
+    const name = displayName(user);
+    const color = userColor(user);
+
+    if (user?.avatar_url) {
+      return `
+        <div class="${sizeClass} ${extraClass} rounded-full shrink-0 relative bg-cover bg-center" style="background-image:url('${safeUrl(user.avatar_url)}'); background-color:${color}">
+          ${showOnline}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="${sizeClass} ${extraClass} rounded-full shrink-0 relative flex items-center justify-center ${textClass}" style="background:${color}">
+        ${escapeHtml(initials(name))}
+        ${showOnline}
+      </div>
+    `;
+  }
+
+  function numericId(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
 
   async function ensurePublicUsersLoaded(force = false) {
     if (publicUsersState.loaded && !force) return publicUsersState.map;
@@ -203,125 +469,146 @@
     return requests.find((request) => numericId(request?.sender_id || request?.sender?.id || request?.sender?.user_id) === targetId) || null;
   }
 
-  const REACTION_ASSETS = {
-    me_gusta: '/assets/reactions/me-gusta.webp',
-    me_encanta: '/assets/reactions/me-encanta.webp',
-    me_divierte: '/assets/reactions/me-divierte.webp',
-    me_sorprende: '/assets/reactions/me-sorprende.webp',
-    me_enoja: '/assets/reactions/me-enoja.webp',
-  };
-
-  function renderReactionAsset(type, meta, className = 'reaction-asset') {
-    const src = REACTION_ASSETS[type];
-    if (!src) {
-      return `<span class="${className}">${meta.emoji}</span>`;
+  function getUserTypeLabel(userType) {
+    switch (userType) {
+      case 'teacher':
+        return 'Docente';
+      case 'administrativo':
+        return 'Administrativo';
+      default:
+        return 'Estudiante';
     }
-
-    return `<img class="${className}" src="${src}" alt="${escapeHtml(meta.label)}" loading="lazy" decoding="async"/>`;
   }
 
-  function renderReactionButtons(targetType, targetId, currentReaction, interactive = true) {
-    const activeMeta = REACTION_META[currentReaction] || REACTION_META.me_gusta;
-    const activeReaction = currentReaction || 'me_gusta';
+  function getAdminUserTypeLabel(listedUser) {
+    return getUserTypeLabel(String(listedUser?.user_type || 'student'));
+  }
 
-    if (!interactive) {
-      return `<span class="reaction-trigger is-readonly" title="${escapeHtml(activeMeta.label)}">${renderReactionAsset(currentReaction || 'me_gusta', activeMeta, 'reaction-trigger-asset')}</span>`;
-    }
-
-    const options = Object.entries(REACTION_META).map(([type, meta], index) => `
-      <button type="button" data-action="react-${targetType}" data-${targetType}-id="${targetId}" data-reaction="${type}" class="reaction-option ${type === currentReaction ? 'is-active' : ''}" title="${escapeHtml(meta.label)}" style="--reaction-index:${index}">
-        ${renderReactionAsset(type, meta, 'reaction-option-asset')}
-        <span class="reaction-option-label">${escapeHtml(meta.label)}</span>
-      </button>
-    `).join('');
-
+  function renderAdminRoleBadges(listedUser) {
+    const typeLabel = getAdminUserTypeLabel(listedUser);
+    const typeTone = {
+      Estudiante: 'bg-sky-50 text-sky-700 border-sky-200',
+      Docente: 'bg-violet-50 text-violet-700 border-violet-200',
+      Administrativo: 'bg-amber-50 text-amber-700 border-amber-200',
+    }[typeLabel] || 'bg-slate-100 text-slate-700 border-slate-200';
+    const adminBadge = listedUser?.role === 'admin'
+      ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-[#1B2A6B] bg-[#E8EDFF] border border-[#C7D2FE]"><span class="w-1.5 h-1.5 rounded-full bg-[#1B2A6B]"></span> Admin</span>'
+      : '';
     return `
-      <span class="reaction-picker-wrap" data-reaction-picker>
-        <button type="button" data-reaction-trigger data-action="react-${targetType}" data-${targetType}-id="${targetId}" data-reaction="${activeReaction}" class="reaction-trigger ${currentReaction ? 'is-active' : ''}" title="Mantén presionado para elegir reacción">
-          ${renderReactionAsset(currentReaction || 'me_gusta', activeMeta, 'reaction-trigger-asset')}
-          <span class="reaction-trigger-label">${escapeHtml(currentReaction ? activeMeta.label : 'Reaccionar')}</span>
-        </button>
-        <span class="reaction-picker" role="menu" aria-label="Elegir reacción">
-          ${options}
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold border ${typeTone}">
+          <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>${typeLabel}
         </span>
+        ${adminBadge}
+      </div>
+    `;
+  }
+
+  function renderAdminStatsSkeleton(count = 4) {
+    return Array.from({ length: count }, () => `
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
+        <div class="skeleton w-12 h-12 rounded-lg shrink-0"></div>
+        <div class="flex-1 space-y-2">
+          <div class="skeleton skeleton-text" style="width:36%"></div>
+          <div class="skeleton skeleton-text" style="width:72%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderAdminTableSkeleton(columns = 6, rows = 5) {
+    return Array.from({ length: rows }, () => `
+      <tr>
+        <td colspan="${columns}" class="py-3 px-5">
+          <div class="flex items-center gap-4">
+            <div class="skeleton w-10 h-10 rounded-full shrink-0"></div>
+            <div class="flex-1 space-y-2">
+              <div class="skeleton skeleton-text" style="width:38%"></div>
+              <div class="skeleton skeleton-text" style="width:64%"></div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function reactionCountSummary(reactionsCount = {}) {
+    return Object.entries(REACTION_META)
+      .map(([type, meta]) => ({ type, meta, total: Number(reactionsCount?.[type] || 0) }))
+      .filter((entry) => entry.total > 0);
+  }
+
+  function getSeenNotificationIds() {
+    try {
+      const raw = window.localStorage.getItem(NOTIFICATION_SEEN_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch (error) {
+      return new Set();
+    }
+  }
+
+  function setSeenNotificationIds(ids) {
+    try {
+      window.localStorage.setItem(NOTIFICATION_SEEN_KEY, JSON.stringify(Array.from(new Set(ids.map(String)))));
+    } catch (error) {
+      console.warn('No se pudo guardar el estado de notificaciones vistas:', error);
+    }
+  }
+
+  function renderReactionSummary(reactionsCount = {}, fallbackTotal = 0) {
+    const entries = reactionCountSummary(reactionsCount);
+    const topEntries = entries
+      .sort((left, right) => right.total - left.total)
+      .slice(0, 3);
+    const total = entries.reduce((sum, entry) => sum + entry.total, 0) || Number(fallbackTotal || 0);
+    if (!total) {
+      return '<span class="social-reaction-count">Se el primero en reaccionar</span>';
+    }
+    return `
+      <span class="social-reaction-summary">
+        <span class="social-reaction-icons">
+          ${topEntries.map((entry) => `<span class="social-reaction-icon">${renderReactionAsset(entry.type)}</span>`).join('')}
+        </span>
+        <span class="social-reaction-count">${total}</span>
       </span>
     `;
   }
 
-  const reactionPickerBoundRoots = new WeakSet();
-
-  function closeReactionPickers(root = document) {
-    root.querySelectorAll?.('.reaction-picker-wrap.is-open').forEach((picker) => {
-      picker.classList.remove('is-open');
-    });
+  function renderReactionTrigger(targetType, targetId, currentReaction, interactive = true) {
+    const hasReaction = Boolean(currentReaction && REACTION_META[currentReaction]);
+    const activeType = hasReaction ? currentReaction : 'me_gusta';
+    const meta = REACTION_META[activeType];
+    if (!interactive) {
+      return `
+        <span class="social-reaction-trigger ${currentReaction ? 'is-active' : ''}">
+          ${hasReaction ? renderReactionAsset(activeType) : '<span class="material-symbols-outlined">thumb_up</span>'}
+          <span>${escapeHtml(currentReaction ? meta.label : 'Reaccionar')}</span>
+        </span>
+      `;
+    }
+    return `
+      <button
+        type="button"
+        data-action="open-reaction-picker"
+        data-target-type="${targetType}"
+        data-target-id="${targetId}"
+        data-current-reaction="${currentReaction || ''}"
+        class="social-reaction-trigger ${currentReaction ? 'is-active' : ''}"
+      >
+        ${hasReaction ? renderReactionAsset(activeType) : '<span class="material-symbols-outlined">thumb_up</span>'}
+        <span>${escapeHtml(currentReaction ? meta.label : 'Reaccionar')}</span>
+      </button>
+    `;
   }
-
-  function bindReactionPickerInteractions(root) {
-    if (!root || reactionPickerBoundRoots.has(root)) return;
-    reactionPickerBoundRoots.add(root);
-
-    let longPressTimer = null;
-    let longPressOpened = false;
-
-    root.addEventListener('pointerdown', (event) => {
-      const trigger = event.target.closest('[data-reaction-trigger]');
-      if (!trigger || !root.contains(trigger)) return;
-
-      longPressOpened = false;
-      clearTimeout(longPressTimer);
-      longPressTimer = window.setTimeout(() => {
-        const picker = trigger.closest('[data-reaction-picker]');
-        if (!picker) return;
-        closeReactionPickers();
-        picker.classList.add('is-open');
-        longPressOpened = true;
-      }, 360);
-    });
-
-    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
-      root.addEventListener(eventName, () => {
-        clearTimeout(longPressTimer);
-      });
-    });
-
-    root.addEventListener('click', (event) => {
-      const option = event.target.closest('.reaction-option');
-      if (option) {
-        closeReactionPickers();
-        return;
-      }
-
-      const trigger = event.target.closest('[data-reaction-trigger]');
-      if (trigger && longPressOpened) {
-        event.preventDefault();
-        event.stopPropagation();
-        longPressOpened = false;
-      }
-    }, true);
-  }
-
-  document.addEventListener('click', (event) => {
-    if (!event.target.closest('[data-reaction-picker]')) {
-      closeReactionPickers();
-    }
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeReactionPickers();
-    }
-  });
-
-  document.addEventListener('pointerdown', (event) => {
-    if (!event.target.closest('[data-reaction-picker]')) {
-      closeReactionPickers();
-    }
-  });
-
-  bindReactionPickerInteractions(document);
 
   async function reportContent(kind, id) {
-    const confirmed = window.confirm(`Quieres reportar esta ${kind}?`);
+    const confirmed = await confirmAction({
+      title: `Reportar ${kind}`,
+      copy: `Esta accion enviara el reporte para revision del equipo.`,
+      acceptLabel: 'Reportar',
+      tone: 'danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -337,6 +624,82 @@
     }
 
     showToast(result?.data?.error || 'No se pudo enviar el reporte', 'error');
+  }
+
+  let reactionPickerCloseTimer = null;
+
+  function clearReactionPickerCloseTimer() {
+    if (reactionPickerCloseTimer) {
+      clearTimeout(reactionPickerCloseTimer);
+      reactionPickerCloseTimer = null;
+    }
+  }
+
+  function pointerWithinReactionZone(nextTarget, trigger = reactionPickerState?.trigger) {
+    if (!nextTarget || !trigger) return false;
+    if (trigger.contains(nextTarget)) return true;
+    return Boolean(
+      reactionPickerState?.element
+      && reactionPickerState.trigger === trigger
+      && reactionPickerState.element.contains(nextTarget)
+    );
+  }
+
+  function scheduleReactionPickerClose() {
+    clearReactionPickerCloseTimer();
+    reactionPickerCloseTimer = window.setTimeout(() => closeReactionPicker(), 240);
+  }
+
+  function closeReactionPicker() {
+    clearReactionPickerCloseTimer();
+    if (!reactionPickerState?.element) return;
+    reactionPickerState.element.remove();
+    document.removeEventListener('click', reactionPickerState.outsideHandler, true);
+    reactionPickerState = null;
+  }
+
+  function openReactionPicker(trigger, { targetType, targetId, currentReaction, onSelect }) {
+    if (reactionPickerState?.element && reactionPickerState.trigger === trigger) {
+      clearReactionPickerCloseTimer();
+      return;
+    }
+    closeReactionPicker();
+    const rect = trigger.getBoundingClientRect();
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+    picker.innerHTML = Object.entries(REACTION_META).map(([type, meta]) => `
+      <button type="button" class="reaction-picker-option ${currentReaction === type ? 'is-active' : ''}" data-picker-reaction="${type}" title="${escapeHtml(meta.label)}">
+        ${renderReactionAsset(type)}
+      </button>
+    `).join('');
+    document.body.appendChild(picker);
+    const pickerRect = picker.getBoundingClientRect();
+    picker.style.left = `${Math.max(12, rect.left + (rect.width / 2) - (pickerRect.width / 2))}px`;
+    picker.style.top = `${Math.max(12, rect.top - pickerRect.height - 10)}px`;
+
+    const handleSelect = async (event) => {
+      const button = event.target.closest('[data-picker-reaction]');
+      if (!button) return;
+      event.preventDefault();
+      const reaction = button.dataset.pickerReaction;
+      closeReactionPicker();
+      await onSelect(reaction);
+    };
+    const outsideHandler = (event) => {
+      if (picker.contains(event.target) || trigger.contains(event.target)) return;
+      closeReactionPicker();
+    };
+    picker.addEventListener('pointerdown', handleSelect);
+    picker.addEventListener('mouseenter', clearReactionPickerCloseTimer);
+    picker.addEventListener('mouseleave', (event) => {
+      if (pointerWithinReactionZone(event.relatedTarget, trigger)) {
+        clearReactionPickerCloseTimer();
+        return;
+      }
+      scheduleReactionPickerClose();
+    });
+    setTimeout(() => document.addEventListener('click', outsideHandler, true), 0);
+    reactionPickerState = { element: picker, outsideHandler, trigger };
   }
 
   function renderCommentCard(comment, options = {}) {
@@ -366,10 +729,10 @@
             </div>
             <p class="content-break text-[13px] text-slate-700 ${compact ? 'leading-5' : 'leading-6'}">${nl2br(comment.content || '')}</p>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <div class="flex items-center gap-2">
-                ${renderReactionButtons('comment', comment.id, comment.current_reaction, interactive)}
+              <div class="social-reaction-bar">
+                ${renderReactionTrigger('comment', comment.id, comment.current_reaction, interactive)}
               </div>
-              <span class="font-medium text-slate-600">${escapeHtml(reactionCountSummary(comment.reactions_count)) || `${comment.reactions_total || 0} reacciones`}</span>
+              ${renderReactionSummary(comment.reactions_count, comment.reactions_total)}
               ${interactive ? `
                 <button type="button" data-action="report-comment" data-comment-id="${comment.id}" class="ml-auto text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
                   Reportar
@@ -442,6 +805,125 @@
     document.addEventListener('visibilitychange', pingNow);
   }
 
+  function buildHash(route, params = {}) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.set(key, value);
+      }
+    });
+    const query = searchParams.toString();
+    return `#${route}${query ? `?${query}` : ''}`;
+  }
+
+  function parseRoute() {
+    const rawHash = window.location.hash.replace(/^#/, '');
+    const [rawRoute, queryString = ''] = (rawHash || 'feed').split('?');
+    const normalized = (rawRoute || 'feed').replace(/^\/+|\/+$/g, '');
+    const route = ROUTE_ALIASES[normalized] || normalized || 'feed';
+    const params = Object.fromEntries(new URLSearchParams(queryString));
+    return { route, params };
+  }
+
+  function setDocumentTitle(title) {
+    document.title = title ? `${title} - UPT Connect` : 'UPT Connect';
+  }
+
+  function getLivestreamEngineHost() {
+    return window.location.hostname || 'localhost';
+  }
+
+  function buildLivestreamHlsUrl(streamKey, revision = '') {
+    const baseUrl = `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+    if (!revision) {
+      return baseUrl;
+    }
+    return `${baseUrl}?v=${encodeURIComponent(revision)}`;
+  }
+
+  function buildLivestreamProbeUrl(streamKey, revision = '') {
+    const baseUrl = `${window.location.origin}/ome-ready/app/${encodeURIComponent(streamKey)}/master.m3u8`;
+    if (!revision) {
+      return baseUrl;
+    }
+    return `${baseUrl}?v=${encodeURIComponent(revision)}`;
+  }
+
+  function normalizeLivestreamPlaybackUrl(streamKey, _playbackUrl, revision = '') {
+    // Always rebuild from stream_key to ensure the viewer uses the frontend proxy
+    return buildLivestreamHlsUrl(streamKey, revision);
+  }
+
+  function buildLivestreamPublishUrl(streamKey) {
+    return `${window.location.origin}/ome/app/${encodeURIComponent(streamKey)}?direction=whip&transport=tcp`;
+  }
+
+  function buildLivestreamStreamKey(userId) {
+    return `upt-live-${userId}-${Date.now().toString(36)}`;
+  }
+
+  function isDesktopClient() {
+    // Real device detection: UA + pointer + touch — NOT viewport size
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
+    const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+    const isTouchOnly = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && !hasFinePointer;
+    // Desktop = not a mobile UA, has a fine pointer (mouse), and is not touch-only
+    if (isMobileUA || (hasCoarsePointer && !hasFinePointer) || isTouchOnly) return false;
+    return true;
+  }
+
+  function isMobileDevice() {
+    return !isDesktopClient();
+  }
+
+  function loadExternalScript(src, globalName) {
+    if (globalName && window[globalName]) {
+      return Promise.resolve(window[globalName]);
+    }
+
+    const existing = document.querySelector(`script[data-external-src="${src}"]`);
+    if (existing) {
+      return new Promise((resolve, reject) => {
+        if (globalName && window[globalName]) {
+          resolve(window[globalName]);
+          return;
+        }
+
+        existing.addEventListener('load', () => resolve(globalName ? window[globalName] : true), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`No se pudo cargar ${src}`)), { once: true });
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.externalSrc = src;
+      script.onload = () => resolve(globalName ? window[globalName] : true);
+      script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  function loadExternalStyle(href) {
+    if (document.querySelector(`link[data-external-style="${href}"]`)) {
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.externalStyle = href;
+    document.head.appendChild(link);
+  }
+
+  async function ensureLivestreamLibraries() {
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/hls.js@latest', 'Hls');
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/ovenlivekit@latest/dist/OvenLiveKit.min.js', 'OvenLiveKit');
+  }
+
   function renderLivestreamCard(post, currentUserId, options = {}) {
     const author = resolveProfileData({
       id: post.user_id,
@@ -453,6 +935,7 @@
     const isLive = post.live_status === 'live';
     const canDelete = options.canDelete ?? Number(post.user_id) === Number(currentUserId);
     const badgeTone = isLive ? 'bg-[#ff0b53] text-white' : 'bg-slate-200 text-slate-700';
+    const canReport = Number(post.user_id) !== Number(currentUserId);
 
     return `
       <article class="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm overflow-hidden">
@@ -473,7 +956,7 @@
             </button>
           ` : ''}
         </div>
-        <button type="button" data-action="open-livestream" data-live-id="${post.id}" class="block w-full text-left">
+        <div role="button" tabindex="0" data-action="open-livestream" data-live-id="${post.id}" class="block w-full text-left cursor-pointer">
           <div class="rounded-[28px] overflow-hidden relative min-h-[280px] bg-[radial-gradient(circle_at_top_left,_#6d28d9,_#0f172a_55%,_#020617)]">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,132,0,0.26),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(236,72,153,0.20),_transparent_26%)]"></div>
             <div class="absolute top-4 left-4 right-4 flex items-center justify-between gap-3 z-10">
@@ -491,17 +974,22 @@
               <p class="text-sm text-white/80 mt-2 max-w-[80%]">${escapeHtml((post.content || '').slice(0, 140) || 'Transmision en vivo de la comunidad UPT')}</p>
               <div class="mt-5 flex items-center gap-3">
                 <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 bg-white/12 text-xs font-semibold">
-                  <span class="material-symbols-outlined text-[14px]">favorite</span>
-                  ${escapeHtml(reactionCountSummary(post.reactions_count)) || `${post.reactions_total || 0} reacciones`}
+                  ${renderReactionSummary(post.reactions_count, post.reactions_total)}
                 </span>
                 <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 bg-white/12 text-xs font-semibold">
                   <span class="material-symbols-outlined text-[14px]">chat</span>
                   ${Number(post.comments_count || 0)} comentarios
                 </span>
+                ${canReport ? `
+                  <button type="button" data-action="report-post" data-post-id="${post.id}" class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 bg-white/12 text-white text-xs font-semibold hover:bg-white/18 transition-colors">
+                    <span class="material-symbols-outlined text-[14px]">flag</span>
+                    Reportar
+                  </button>
+                ` : ''}
               </div>
             </div>
           </div>
-        </button>
+        </div>
       </article>
     `;
   }
@@ -564,18 +1052,24 @@
           <div class="text-sm text-slate-800 mb-4"><p class="content-break">${nl2br(post.content || '')}</p></div>
           ${post.image_url ? `<div class="w-full ${mediaHeightClass} bg-slate-100 overflow-hidden rounded-xl mb-3"><img alt="Imagen de la publicacion" class="w-full h-full object-cover" src="${safeUrl(post.image_url)}" onerror="this.parentElement.style.display='none'"/></div>` : ''}
         ${interactive ? `
-          <div class="pt-3 border-t border-slate-100 flex flex-wrap justify-start gap-3 items-center text-slate-500">
-            <div class="flex items-center gap-2">
-              ${renderReactionButtons('post', post.id, post.current_reaction, true)}
+          <div class="pt-3 border-t border-slate-100 space-y-3 text-slate-500">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              ${renderReactionSummary(post.reactions_count, post.reactions_total)}
+              <button type="button" data-action="comment-post" data-post-id="${post.id}" class="text-sm font-medium hover:text-slate-700 transition-colors">
+                ${post.comments_count || 0} comentarios
+              </button>
             </div>
-            <span class="text-sm font-medium text-slate-600">${escapeHtml(reactionCountSummary(post.reactions_count)) || `${post.reactions_total || 0} reacciones`}</span>
-            <button type="button" data-action="comment-post" data-post-id="${post.id}" class="flex items-center gap-1.5 hover:text-slate-700 transition-colors">
-              <span class="material-symbols-outlined text-[18px]">chat_bubble_outline</span>
-              <span class="text-sm">${post.comments_count || 0} Comentarios</span>
-            </button>
-            <button type="button" data-action="report-post" data-post-id="${post.id}" class="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">
-              Reportar
-            </button>
+            <div class="social-post-actions social-post-actions--three">
+              ${renderReactionTrigger('post', post.id, post.current_reaction, true)}
+              <button type="button" data-action="comment-post" data-post-id="${post.id}" class="social-post-action">
+                <span class="material-symbols-outlined text-[18px]">chat_bubble_outline</span>
+                <span>Comentar</span>
+              </button>
+              <button type="button" data-action="report-post" data-post-id="${post.id}" class="social-post-action">
+                <span class="material-symbols-outlined text-[18px]">flag</span>
+                <span>Reportar</span>
+              </button>
+            </div>
           </div>
         ` : ''}
       </article>
@@ -873,6 +1367,51 @@
       document.removeEventListener('click', handleDocumentClick);
       document.removeEventListener('keydown', handleKeydown);
       closeMenus();
+    };
+  };
+
+  window.setupMobileSidebar = function setupMobileSidebar() {
+    const toggle = document.getElementById('mobile-sidebar-toggle');
+    const drawer = document.getElementById('mobile-sidebar-drawer');
+    const backdrop = document.getElementById('mobile-sidebar-backdrop');
+    const closeButton = document.getElementById('mobile-sidebar-close');
+    const navLinks = Array.from(document.querySelectorAll('[data-mobile-nav-link="true"]'));
+    if (!toggle || !drawer || !backdrop || !closeButton) return;
+
+    if (mobileSidebarCleanup) {
+      mobileSidebarCleanup();
+      mobileSidebarCleanup = null;
+    }
+
+    function setOpen(isOpen) {
+      drawer.classList.toggle('is-open', isOpen);
+      backdrop.classList.toggle('hidden', !isOpen);
+      document.body.classList.toggle('overflow-hidden', isOpen);
+    }
+
+    const open = (event) => {
+      event?.preventDefault?.();
+      setOpen(true);
+    };
+    const close = (event) => {
+      event?.preventDefault?.();
+      setOpen(false);
+    };
+    const closeAfterNavigate = () => {
+      window.requestAnimationFrame(() => setOpen(false));
+    };
+
+    toggle.addEventListener('click', open);
+    closeButton.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+    navLinks.forEach((link) => link.addEventListener('click', closeAfterNavigate));
+
+    mobileSidebarCleanup = () => {
+      toggle.removeEventListener('click', open);
+      closeButton.removeEventListener('click', close);
+      backdrop.removeEventListener('click', close);
+      navLinks.forEach((link) => link.removeEventListener('click', closeAfterNavigate));
+      setOpen(false);
     };
   };
 
@@ -2824,19 +3363,23 @@
                   </div>
                 </div>
               </div>
-              <div id="feed-refresh-banner" class="hidden sticky top-20 z-20 flex justify-center">
-                <button id="feed-refresh-btn" type="button" class="inline-flex items-center gap-2 rounded-full bg-[#1B2A6B] px-4 py-2 text-sm font-bold text-white shadow-lg hover:bg-[#263a82] transition">
-                  <span class="material-symbols-outlined text-[18px]">sync</span>
-                  <span id="feed-refresh-text">Nuevas publicaciones</span>
+              <div id="feed-new-posts-banner" class="hidden feed-fresh-toast" role="button" tabindex="0" aria-label="Ver nuevas publicaciones">
+                <div>
+                  <div class="text-sm font-bold">Hay nuevas publicaciones</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Actualiza sin perder el contexto del feed.</div>
+                </div>
+                <button id="feed-apply-new-posts-btn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1B2A6B] text-white text-sm font-semibold hover:bg-[#152259] transition-colors">
+                  <span class="material-symbols-outlined text-[18px]">autorenew</span>
+                  <span>Recargar</span>
                 </button>
               </div>
               <div id="feed-posts" class="flex flex-col gap-6">
-                <p class="text-center text-slate-500 py-8">Cargando publicaciones...</p>
+                ${renderListSkeleton(3, { lines: ['100%', '92%', '54%'], avatar: true, media: true })}
               </div>
             </main>
             <aside class="md:col-span-3 hidden md:flex flex-col gap-6">
               <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-                <h3 class="font-bold text-sm text-slate-900 mb-4">Companeros en linea</h3>
+                <h3 class="font-bold text-sm text-slate-900 mb-4">Compañeros en linea</h3>
                 <div id="online-friends" class="flex flex-col gap-4">
                   <p class="text-sm text-slate-400">Cargando...</p>
                 </div>
@@ -2952,20 +3495,14 @@
         let pendingCommentId = null;
         let currentCommentSort = 'newest';
         let feedPosts = [];
-        let currentFeedSignature = '';
-        let pendingFeedPosts = null;
-        let pendingFeedSignature = '';
+        let pendingFeedPosts = [];
         let feedRefreshTimer = null;
-        let feedRefreshInFlight = false;
-        let commentsRefreshTimer = null;
-        let commentsRefreshInFlight = false;
-        let currentCommentsSignature = '';
+        let commentPollTimer = null;
 
         const composerAvatar = container.querySelector('#composer-avatar');
-        const feedRefreshBanner = container.querySelector('#feed-refresh-banner');
-        const feedRefreshButton = container.querySelector('#feed-refresh-btn');
-        const feedRefreshText = container.querySelector('#feed-refresh-text');
         const postsContainer = container.querySelector('#feed-posts');
+        const newPostsBanner = container.querySelector('#feed-new-posts-banner');
+        const applyNewPostsButton = container.querySelector('#feed-apply-new-posts-btn');
         const onlineFriends = container.querySelector('#online-friends');
         const fileInput = container.querySelector('#file-input');
         const previewWrap = container.querySelector('#img-preview-wrap');
@@ -3030,87 +3567,6 @@
           return feedPosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
-        function buildFeedSignature(posts) {
-          return buildCollectionSignature(posts, [
-            'id',
-            (post) => post.updated_at || post.created_at,
-            'live_status',
-            'live_source',
-            'current_reaction',
-            'comments_count',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
-        function buildCommentsSignature(comments) {
-          return buildCollectionSignature(comments, [
-            'id',
-            (comment) => comment.updated_at || comment.created_at,
-            'current_reaction',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
-        function hasNewerFeedItems(nextPosts) {
-          if (!feedPosts.length || !nextPosts.length) return false;
-          const currentFirstId = Number(feedPosts[0]?.id);
-          if (!Number.isFinite(currentFirstId)) return false;
-          const currentFirstIndex = nextPosts.findIndex((post) => Number(post.id) === currentFirstId);
-          return currentFirstIndex > 0 || currentFirstIndex === -1;
-        }
-
-        function isNearFeedTop() {
-          return window.scrollY < 260;
-        }
-
-        function setPendingFeed(posts, signature) {
-          pendingFeedPosts = posts;
-          pendingFeedSignature = signature;
-          const newCount = feedPosts.length
-            ? posts.findIndex((post) => Number(post.id) === Number(feedPosts[0]?.id))
-            : posts.length;
-          const labelCount = newCount > 0 ? Math.min(newCount, posts.length) : posts.length;
-          if (feedRefreshText) {
-            feedRefreshText.textContent = labelCount === 1 ? '1 publicacion nueva' : `${labelCount} publicaciones nuevas`;
-          }
-          feedRefreshBanner?.classList.remove('hidden');
-        }
-
-        function clearPendingFeed() {
-          pendingFeedPosts = null;
-          pendingFeedSignature = '';
-          feedRefreshBanner?.classList.add('hidden');
-        }
-
-        function renderFeedPosts(posts, options = {}) {
-          const previousScrollY = window.scrollY;
-          feedPosts = posts;
-          currentFeedSignature = options.signature || buildFeedSignature(posts);
-
-          if (!posts.length) {
-            postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No hay publicaciones todavia. Se el primero.</p>';
-          } else {
-            postsContainer.innerHTML = posts.map((post) => renderPostCard(post, user.id)).join('');
-          }
-
-          if (pendingCommentId) {
-            renderCommentModalPost(pendingCommentId);
-          }
-
-          if (options.preserveScroll) {
-            window.scrollTo({ top: previousScrollY });
-          }
-        }
-
-        function applyPendingFeed() {
-          if (!pendingFeedPosts) return;
-          renderFeedPosts(pendingFeedPosts, { signature: pendingFeedSignature });
-          clearPendingFeed();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
         function renderCommentModalPost(postId = pendingCommentId) {
           commentPostPreview.innerHTML = renderPostModalPreview(findFeedPost(postId), user.id);
         }
@@ -3124,12 +3580,22 @@
           commentModal.classList.add('flex');
           renderCommentModalPost(pendingCommentId);
           loadComments(pendingCommentId, currentCommentSort);
+          if (commentPollTimer) {
+            window.clearInterval(commentPollTimer);
+          }
+          commentPollTimer = window.setInterval(() => {
+            if (!pendingCommentId || document.hidden) return;
+            loadComments(pendingCommentId, currentCommentSort, { preserveScroll: true }).catch(() => {});
+          }, 2500);
           setTimeout(() => commentInput.focus(), 60);
         }
 
         function closeCommentModal() {
           pendingCommentId = null;
-          currentCommentsSignature = '';
+          if (commentPollTimer) {
+            window.clearInterval(commentPollTimer);
+            commentPollTimer = null;
+          }
           commentPostPreview.innerHTML = '';
           commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
           commentModal.classList.add('hidden');
@@ -3165,12 +3631,12 @@
           livestreamModal.classList.remove('flex');
         }
 
-        async function loadComments(postId = pendingCommentId, sort = currentCommentSort, options = {}) {
+        async function loadComments(postId = pendingCommentId, sort = currentCommentSort, { preserveScroll = true } = {}) {
           if (!postId) return;
 
           currentCommentSort = sort;
           commentSort.value = sort;
-          if (!options.silent) {
+          if (!preserveScroll) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
           }
 
@@ -3179,74 +3645,59 @@
           const comments = getList(result);
 
           if (!result?.ok) {
-            if (!options.silent) {
-              commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
-            }
+            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
             return;
           }
-
-          const nextSignature = buildCommentsSignature(comments);
-          if (options.silent && nextSignature === currentCommentsSignature) {
-            return;
-          }
-          currentCommentsSignature = nextSignature;
 
           if (!comments.length) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Todavia no hay comentarios en esta publicacion.</p>';
             return;
           }
 
+          const previousScroll = commentList.scrollTop;
           commentList.innerHTML = comments.map((comment) => renderCommentCard(comment)).join('');
-        }
-
-        async function refreshOpenComments() {
-          if (!pendingCommentId || document.hidden || commentsRefreshInFlight) return;
-          commentsRefreshInFlight = true;
-          try {
-            await loadComments(pendingCommentId, currentCommentSort, { silent: true });
-          } finally {
-            commentsRefreshInFlight = false;
+          if (preserveScroll) {
+            commentList.scrollTop = previousScroll;
           }
         }
 
-        async function loadFeed(options = {}) {
-          if (feedRefreshInFlight) return;
-          if (options.silent && document.hidden) return;
-
-          feedRefreshInFlight = true;
-          const silent = !!options.silent;
-          const forceFriendRefresh = !!options.forceFriendRefresh;
-
-          try {
-            await ensurePublicUsersLoaded();
-            const result = await PostsAPI.getFeed(1, { forceFriendRefresh });
-            const posts = getList(result);
-
-            if (!result?.ok) {
-              if (!silent) {
-                postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No se pudo cargar el feed.</p>';
-              }
-              return;
-            }
-
-            const nextSignature = buildFeedSignature(posts);
-            if (currentFeedSignature && nextSignature === currentFeedSignature) {
-              return;
-            }
-
-            if (currentFeedSignature && silent && hasNewerFeedItems(posts) && !isNearFeedTop()) {
-              setPendingFeed(posts, nextSignature);
-              return;
-            }
-
-            renderFeedPosts(posts, {
-              signature: nextSignature,
-              preserveScroll: !!currentFeedSignature && silent && !isNearFeedTop(),
-            });
-            clearPendingFeed();
-          } finally {
-            feedRefreshInFlight = false;
+        function applyFeedPosts(posts) {
+          feedPosts = posts;
+          if (!posts.length) {
+            postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No hay publicaciones todavia. Se el primero.</p>';
+            return;
           }
+
+          postsContainer.innerHTML = posts.map((post) => renderPostCard(post, user.id)).join('');
+          if (pendingCommentId) {
+            renderCommentModalPost(pendingCommentId);
+          }
+        }
+
+        async function loadFeed({ passive = false } = {}) {
+          await ensurePublicUsersLoaded();
+          const result = await PostsAPI.getFeed();
+          const posts = getList(result);
+
+          if (!result?.ok) {
+            if (!passive) {
+              postsContainer.innerHTML = '<p class="text-center text-slate-400 py-8">No se pudo cargar el feed.</p>';
+            }
+            return;
+          }
+
+          if (!passive || !feedPosts.length) {
+            pendingFeedPosts = [];
+            newPostsBanner?.classList.add('hidden');
+            applyFeedPosts(posts);
+            return;
+          }
+
+          const currentIds = new Set(feedPosts.map((post) => Number(post.id)));
+          const hasNewPosts = posts.some((post) => !currentIds.has(Number(post.id)));
+          if (!hasNewPosts) return;
+          pendingFeedPosts = posts;
+          newPostsBanner?.classList.remove('hidden');
         }
 
         async function loadFriends() {
@@ -3418,20 +3869,6 @@
           }
         };
 
-        const handleFeedVisibilityRefresh = () => {
-          if (document.visibilityState === 'visible') {
-            loadFeed({ silent: true });
-            loadFriends();
-            refreshOpenComments();
-          }
-        };
-
-        const handleFeedFocusRefresh = () => {
-          loadFeed({ silent: true });
-          loadFriends();
-          refreshOpenComments();
-        };
-
         container.querySelector('#pick-image-btn').addEventListener('click', () => fileInput.click());
         container.querySelector('#clear-image-btn').addEventListener('click', clearImage);
         postVisibilityTrigger?.addEventListener('click', toggleVisibilityMenu);
@@ -3439,7 +3876,6 @@
         container.querySelector('#confirm-delete-btn').addEventListener('click', confirmDelete);
         container.querySelector('#close-comment-top-btn').addEventListener('click', closeCommentModal);
         container.querySelector('#confirm-comment-btn').addEventListener('click', confirmComment);
-        feedRefreshButton?.addEventListener('click', applyPendingFeed);
         openLiveModalButton?.addEventListener('click', openLivestreamModal);
         container.querySelector('#close-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
         container.querySelector('#cancel-live-modal-btn')?.addEventListener('click', closeLivestreamModal);
@@ -3493,6 +3929,28 @@
               loadFeed();
               return;
             }
+            if (actionTarget.dataset.action === 'open-reaction-picker') {
+              openReactionPicker(actionTarget, {
+                targetType: 'post',
+                targetId: Number(actionTarget.dataset.targetId),
+                currentReaction: actionTarget.dataset.currentReaction || '',
+                onSelect: async (reaction) => {
+                  actionTarget.dataset.currentReaction = reaction;
+                  actionTarget.classList.add('is-active');
+                  actionTarget.innerHTML = `${renderReactionAsset(reaction)}<span>${escapeHtml(REACTION_META[reaction]?.label || 'Reaccionar')}</span>`;
+                  closeReactionPicker();
+
+                  const result = await PostsAPI.reactPost(Number(actionTarget.dataset.targetId), reaction);
+                  if (!result?.ok) {
+                    showToast(result?.data?.error || 'No se pudo reaccionar', 'error');
+                    await loadFeed();
+                    return;
+                  }
+                  loadFeed({ passive: true }).catch(() => {});
+                },
+              });
+              return;
+            }
             if (actionTarget.dataset.action === 'comment-post') {
               openCommentModal(postId);
               return;
@@ -3517,9 +3975,65 @@
           }
         });
 
+        postsContainer.addEventListener('mouseover', (event) => {
+          const trigger = event.target.closest('[data-action="open-reaction-picker"]');
+          if (!trigger || !isDesktopClient()) return;
+          if (pointerWithinReactionZone(event.relatedTarget, trigger)) return;
+          clearReactionPickerCloseTimer();
+          openReactionPicker(trigger, {
+            targetType: 'post',
+            targetId: Number(trigger.dataset.targetId),
+            currentReaction: trigger.dataset.currentReaction || '',
+            onSelect: async (reaction) => {
+              trigger.dataset.currentReaction = reaction;
+              trigger.classList.add('is-active');
+              trigger.innerHTML = `${renderReactionAsset(reaction)}<span>${escapeHtml(REACTION_META[reaction]?.label || 'Reaccionar')}</span>`;
+              closeReactionPicker();
+
+              const result = await PostsAPI.reactPost(Number(trigger.dataset.targetId), reaction);
+              if (!result?.ok) {
+                showToast(result?.data?.error || 'No se pudo reaccionar', 'error');
+                await loadFeed();
+                return;
+              }
+              loadFeed({ passive: true }).catch(() => {});
+            },
+          });
+        });
+
+        postsContainer.addEventListener('mouseout', (event) => {
+          const trigger = event.target.closest('[data-action="open-reaction-picker"]');
+          if (!trigger || !isDesktopClient()) return;
+          if (pointerWithinReactionZone(event.relatedTarget, trigger)) return;
+          scheduleReactionPickerClose();
+        });
+
         commentList.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-action]');
           if (!button || !pendingCommentId) return;
+
+          if (button.dataset.action === 'open-reaction-picker') {
+            openReactionPicker(button, {
+              targetType: 'comment',
+              targetId: Number(button.dataset.targetId),
+              currentReaction: button.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                button.dataset.currentReaction = reaction;
+                button.classList.add('is-active');
+                button.innerHTML = `${renderReactionAsset(reaction)}<span>${escapeHtml(REACTION_META[reaction]?.label || 'Reaccionar')}</span>`;
+                closeReactionPicker();
+
+                const result = await PostsAPI.reactComment(Number(button.dataset.targetId), reaction);
+                if (!result?.ok) {
+                  showToast(result?.data?.error || 'No se pudo reaccionar al comentario', 'error');
+                  await loadComments(pendingCommentId, currentCommentSort, { preserveScroll: true });
+                  return;
+                }
+                loadComments(pendingCommentId, currentCommentSort, { preserveScroll: true }).catch(() => {});
+              },
+            });
+            return;
+          }
 
           if (button.dataset.action === 'react-comment') {
             const result = await PostsAPI.reactComment(button.dataset.commentId, button.dataset.reaction);
@@ -3535,6 +4049,39 @@
           if (button.dataset.action === 'report-comment') {
             await reportContent('comentario', Number(button.dataset.commentId));
           }
+        });
+
+        commentList.addEventListener('mouseover', (event) => {
+          const trigger = event.target.closest('[data-action="open-reaction-picker"]');
+          if (!trigger || !isDesktopClient() || !pendingCommentId) return;
+          if (pointerWithinReactionZone(event.relatedTarget, trigger)) return;
+          clearReactionPickerCloseTimer();
+          openReactionPicker(trigger, {
+            targetType: 'comment',
+            targetId: Number(trigger.dataset.targetId),
+            currentReaction: trigger.dataset.currentReaction || '',
+            onSelect: async (reaction) => {
+              trigger.dataset.currentReaction = reaction;
+              trigger.classList.add('is-active');
+              trigger.innerHTML = `${renderReactionAsset(reaction)}<span>${escapeHtml(REACTION_META[reaction]?.label || 'Reaccionar')}</span>`;
+              closeReactionPicker();
+
+              const result = await PostsAPI.reactComment(Number(trigger.dataset.targetId), reaction);
+              if (!result?.ok) {
+                showToast(result?.data?.error || 'No se pudo reaccionar al comentario', 'error');
+                await loadComments(pendingCommentId, currentCommentSort, { preserveScroll: true });
+                return;
+              }
+              loadComments(pendingCommentId, currentCommentSort, { preserveScroll: true }).catch(() => {});
+            },
+          });
+        });
+
+        commentList.addEventListener('mouseout', (event) => {
+          const trigger = event.target.closest('[data-action="open-reaction-picker"]');
+          if (!trigger || !isDesktopClient()) return;
+          if (pointerWithinReactionZone(event.relatedTarget, trigger)) return;
+          scheduleReactionPickerClose();
         });
 
         commentPostPreview.addEventListener('click', (event) => {
@@ -3558,35 +4105,61 @@
         });
 
         setPostVisibility(postVisibility?.value || 'all');
+        const applyNewFeedToast = () => {
+          if (!pendingFeedPosts.length) return;
+          newPostsBanner?.classList.add('hidden');
+          applyFeedPosts(pendingFeedPosts);
+          pendingFeedPosts = [];
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        applyNewPostsButton?.addEventListener('click', (event) => {
+          event.stopPropagation();
+          applyNewFeedToast();
+        });
+        newPostsBanner?.addEventListener('click', applyNewFeedToast);
+        newPostsBanner?.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            applyNewFeedToast();
+          }
+        });
         document.addEventListener('click', onDocumentClick);
+        // Intentionally no auto-apply of new posts; the user chooses via the toast.
           async function handleBlocksChanged() {
-            PostsAPI.clearFeedContextCache?.();
             await Promise.all([
-              loadFeed({ forceFriendRefresh: true }),
+              loadFeed(),
               loadFriends(),
             ]);
           }
 
           window.addEventListener('presence:updated', loadFriends);
-          window.addEventListener('friendship:changed', handleBlocksChanged);
           window.addEventListener('blocks:changed', handleBlocksChanged);
-          document.addEventListener('visibilitychange', handleFeedVisibilityRefresh);
-          window.addEventListener('focus', handleFeedFocusRefresh);
+          window.addEventListener('focus', handleBlocksChanged);
+          document.addEventListener('visibilitychange', handleBlocksChanged);
 
-          loadFeed({ forceFriendRefresh: true });
+          loadFeed();
           loadFriends();
-          feedRefreshTimer = window.setInterval(() => loadFeed({ silent: true }), 8000);
-          commentsRefreshTimer = window.setInterval(refreshOpenComments, 6500);
+          feedRefreshTimer = window.setInterval(() => {
+            if (document.hidden) return;
+            loadFeed({ passive: true });
+          }, 3000);
 
           return () => {
-            if (feedRefreshTimer) window.clearInterval(feedRefreshTimer);
-            if (commentsRefreshTimer) window.clearInterval(commentsRefreshTimer);
             document.removeEventListener('click', onDocumentClick);
             window.removeEventListener('presence:updated', loadFriends);
-            window.removeEventListener('friendship:changed', handleBlocksChanged);
             window.removeEventListener('blocks:changed', handleBlocksChanged);
-            document.removeEventListener('visibilitychange', handleFeedVisibilityRefresh);
-            window.removeEventListener('focus', handleFeedFocusRefresh);
+            window.removeEventListener('focus', handleBlocksChanged);
+            document.removeEventListener('visibilitychange', handleBlocksChanged);
+            if (feedRefreshTimer) {
+              window.clearInterval(feedRefreshTimer);
+              feedRefreshTimer = null;
+            }
+            if (commentPollTimer) {
+              window.clearInterval(commentPollTimer);
+              commentPollTimer = null;
+            }
+            closeReactionPicker();
           };
         },
       },
@@ -3680,8 +4253,9 @@
 
                   <!-- ═══ MOBILE CONTENT: title + comments + input (BELOW video, not overlaid) ═══ -->
                   <div id="live-mobile-overlay" class="live-mobile-content live-mobile-only">
-                    <div class="px-4 pb-1 pt-3">
+                    <div class="px-4 pb-1 pt-3 flex items-center justify-between gap-3">
                       <h2 id="live-title-mobile" class="text-lg font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
+                      <button id="live-report-btn-mobile" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0">REPORTAR</button>
                     </div>
                     <div id="live-comments-mobile" class="live-mobile-comments custom-scrollbar" style="overflow-y:auto;touch-action:pan-y;"></div>
                     <div class="live-mobile-input-row">
@@ -3711,8 +4285,13 @@
                 <!-- ═══ CHAT PANEL (desktop only) ═══ -->
                 <aside class="live-chat-col live-desktop-only live-desktop-flex">
                   <div class="px-5 py-4 border-b border-white/10">
-                    <p class="text-xs uppercase tracking-[0.24em] text-white/45 font-black">Chat en vivo</p>
-                    <h3 class="font-black text-xl mt-1">Comentarios</h3>
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs uppercase tracking-[0.24em] text-white/45 font-black">Chat en vivo</p>
+                        <h3 class="font-black text-xl mt-1">Comentarios</h3>
+                      </div>
+                      <button id="live-report-btn" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0">REPORTAR</button>
+                    </div>
                   </div>
                   <div id="live-comments" class="custom-scrollbar flex-1 h-0 min-h-[220px] overflow-y-auto px-5 py-4 space-y-4">
                     <p class="text-sm text-white/55">Cargando comentarios...</p>
@@ -3767,6 +4346,8 @@
         const liveCommentsMobile = container.querySelector('#live-comments-mobile');
         const liveCommentInputMobile = container.querySelector('#live-comment-input-mobile');
         const liveTitleMobile = container.querySelector('#live-title-mobile');
+        const liveReportButton = container.querySelector('#live-report-btn');
+        const liveReportButtonMobile = container.querySelector('#live-report-btn-mobile');
         const floatingReactions = container.querySelector('#live-floating-reactions');
         const liveSourceTransitionMask = container.querySelector('#live-source-transition-mask');
         const hostEndButton = container.querySelector('#live-host-end-btn');
@@ -4577,15 +5158,13 @@
 
             if (window.Hls && window.Hls.isSupported()) {
               const hls = new window.Hls({
-                lowLatencyMode: true,
+                lowLatencyMode: false,
                 liveDurationInfinity: true,
-                capLevelToPlayerSize: false,
-                abrEwmaDefaultEstimate: isDesktopClient() ? 8000000 : 2500000,
-                backBufferLength: 4,
-                maxBufferLength: 6,
-                liveSyncDuration: 4,
-                liveMaxLatencyDuration: 10,
-                maxLiveSyncPlaybackRate: 1.2,
+                backBufferLength: 8,
+                maxBufferLength: 12,
+                liveSyncDurationCount: 2,
+                liveMaxLatencyDurationCount: 5,
+                maxLiveSyncPlaybackRate: 1.05,
                 startFragPrefetch: true,
               });
               viewerHls = hls;
@@ -4594,11 +5173,6 @@
               hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
                 if (viewerHls !== hls || viewerVideo !== video) {
                   return;
-                }
-                if (isDesktopClient() && hls.levels?.length > 1) {
-                  const highestLevel = hls.levels.length - 1;
-                  hls.startLevel = highestLevel;
-                  hls.nextLevel = highestLevel;
                 }
                 syncViewerToLiveEdge(true);
                 video.play().catch(() => {});
@@ -4714,6 +5288,115 @@
             || videoInputs.find((device) => facingPattern.test(device.label || ''))
             || videoInputs[0]
           );
+        }
+
+        function getLiveAudioConstraints() {
+          return {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true },
+            channelCount: { ideal: 1 },
+            sampleRate: { ideal: 48000 },
+            sampleSize: { ideal: 16 },
+          };
+        }
+
+        function getLiveVideoConstraints(source, overrides = {}) {
+          const desktop = isDesktopClient();
+          const base = source === 'screen'
+            ? {
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 60, max: 60 },
+              }
+            : desktop
+              ? {
+                  width: { ideal: 1280, max: 1920 },
+                  height: { ideal: 720, max: 1080 },
+                  frameRate: { ideal: 30, max: 30 },
+                  aspectRatio: { ideal: 16 / 9 },
+                }
+              : {
+                  width: { ideal: 1280, max: 1280 },
+                  height: { ideal: 720, max: 720 },
+                  frameRate: { ideal: 24, max: 30 },
+                };
+
+          return { ...base, ...overrides };
+        }
+
+        function applyLiveTrackHints(stream, source) {
+          if (!stream?.getTracks) {
+            return;
+          }
+
+          stream.getVideoTracks().forEach((track) => {
+            try {
+              track.contentHint = source === 'screen' ? 'detail' : 'motion';
+            } catch (_error) {}
+          });
+
+          stream.getAudioTracks().forEach((track) => {
+            try {
+              track.contentHint = 'speech';
+            } catch (_error) {}
+          });
+        }
+
+        function createMixedAudioTrack(displayAudioTrack, micAudioTrack) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass || !displayAudioTrack || !micAudioTrack) {
+            return null;
+          }
+
+          try {
+            let audioContext;
+            try {
+              audioContext = new AudioContextClass({ sampleRate: 48000 });
+            } catch (_error) {
+              audioContext = new AudioContextClass();
+            }
+
+            const destination = audioContext.createMediaStreamDestination();
+            const compressor = audioContext.createDynamicsCompressor();
+            compressor.threshold.value = -18;
+            compressor.knee.value = 24;
+            compressor.ratio.value = 4;
+            compressor.attack.value = 0.003;
+            compressor.release.value = 0.25;
+
+            const displaySource = audioContext.createMediaStreamSource(new MediaStream([displayAudioTrack]));
+            const micSource = audioContext.createMediaStreamSource(new MediaStream([micAudioTrack]));
+            const systemGainNode = audioContext.createGain();
+            const micGainNode = audioContext.createGain();
+            systemGainNode.gain.value = 0.85;
+            micGainNode.gain.value = 1;
+
+            displaySource.connect(systemGainNode).connect(compressor);
+            micSource.connect(micGainNode).connect(compressor);
+            compressor.connect(destination);
+
+            const mixedTrack = destination.stream.getAudioTracks()[0] || null;
+            if (mixedTrack) {
+              try {
+                mixedTrack.contentHint = 'speech';
+              } catch (_error) {}
+            }
+
+            if (audioContext.state === 'suspended') {
+              audioContext.resume().catch(() => {});
+            }
+
+            return {
+              audioContext,
+              systemGainNode,
+              micGainNode,
+              mixedTrack,
+            };
+          } catch (error) {
+            console.warn('No se pudo crear la mezcla optimizada de audio:', error);
+            return null;
+          }
         }
 
         async function buildHostInputStream(source) {
@@ -4886,18 +5569,6 @@
           }
         }
 
-        function normalizeOvenLivekitResourceUrl(targetLivekit) {
-          if (!targetLivekit || typeof targetLivekit.resourceUrl !== 'string') {
-            return '';
-          }
-
-          const normalizedUrl = normalizeWhipResourceUrl(targetLivekit.resourceUrl);
-          if (normalizedUrl && normalizedUrl !== targetLivekit.resourceUrl) {
-            targetLivekit.resourceUrl = normalizedUrl;
-          }
-          return normalizedUrl;
-        }
-
         async function disposeOvenLivekit(targetLivekit = ovenLivekit, options = {}) {
           const clearCurrent = options.clearCurrent !== false;
 
@@ -4912,10 +5583,8 @@
 
           const isCurrentLivekit = targetLivekit === ovenLivekit;
           let stoppedCleanly = false;
-          normalizeOvenLivekitResourceUrl(targetLivekit);
           if (typeof targetLivekit.stopStreaming === 'function') {
             try {
-              normalizeOvenLivekitResourceUrl(targetLivekit);
               await Promise.resolve(targetLivekit.stopStreaming());
               stoppedCleanly = true;
             } catch (error) {
@@ -4924,7 +5593,7 @@
           }
 
           if (!stoppedCleanly) {
-            const directDeleteUrl = normalizeOvenLivekitResourceUrl(targetLivekit);
+            const directDeleteUrl = normalizeWhipResourceUrl(targetLivekit.resourceUrl);
             if (directDeleteUrl) {
               try {
                 const deleteResponse = await fetch(directDeleteUrl, { method: 'DELETE' });
@@ -4937,7 +5606,6 @@
 
           if (!stoppedCleanly && typeof targetLivekit.remove === 'function') {
             try {
-              normalizeOvenLivekitResourceUrl(targetLivekit);
               targetLivekit.remove();
             } catch (error) {
               console.warn('No se pudo limpiar OvenLiveKit antes de reiniciar la fuente:', error);
@@ -4965,7 +5633,13 @@
           await hostPreviewVideo.play().catch(() => {});
 
           await livekit.startStreaming(buildLivestreamPublishUrl(streamKey));
-          normalizeOvenLivekitResourceUrl(livekit);
+          if (
+            window.location.protocol === 'https:'
+            && typeof livekit.resourceUrl === 'string'
+            && livekit.resourceUrl.startsWith('http://')
+          ) {
+            livekit.resourceUrl = livekit.resourceUrl.replace(/^http:\/\//i, 'https://');
+          }
         }
 
         async function publishHostBundle(bundle, source, streamKey) {
@@ -5158,6 +5832,11 @@
           hostEndButton.classList.toggle('hidden', !isOwner);
           hostTools.classList.toggle('hidden', !isOwner);
           hostTools.classList.toggle('flex', isOwner);
+          [liveReportButton, liveReportButtonMobile].forEach((button) => {
+            if (!button) return;
+            button.classList.toggle('hidden', isOwner);
+            button.classList.toggle('inline-flex', !isOwner);
+          });
 
           refreshHostAudioButtons();
 
@@ -5409,7 +6088,6 @@
           endedByHost = true;
           if (ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
-              normalizeOvenLivekitResourceUrl(ovenLivekit);
               ovenLivekit.stopStreaming();
             } catch (error) {
               console.warn('No se pudo detener OvenLiveKit al finalizar:', error);
@@ -5820,6 +6498,12 @@
 
         // ─── Host buttons ───
         hostEndButton.addEventListener('click', endLivestream);
+        [liveReportButton, liveReportButtonMobile].forEach((button) => {
+          if (!button) return;
+          button.addEventListener('click', async () => {
+            await reportContent('publicacion', liveId);
+          });
+        });
         const toggleMicHandler = () => {
           hostMicMuted = !hostMicMuted;
           applyHostAudioState();
@@ -5908,7 +6592,6 @@
           }
           if (!endedByHost && ovenLivekit && typeof ovenLivekit.stopStreaming === 'function') {
             try {
-              normalizeOvenLivekitResourceUrl(ovenLivekit);
               ovenLivekit.stopStreaming();
             } catch (error) {
               console.warn('No se pudo detener la transmision al salir del live:', error);
@@ -5917,7 +6600,6 @@
           hostPublishing = false;
           hostPublishedSource = null;
           if (ovenLivekit && typeof ovenLivekit.remove === 'function') {
-            normalizeOvenLivekitResourceUrl(ovenLivekit);
             ovenLivekit.remove();
           }
           ovenLivekit = null;
@@ -5959,22 +6641,22 @@
       },
     },
     companions: {
-      title: 'Companeros',
+      title: 'Compañeros',
       activeNav: 'companions',
       render() {
         return `
           <div class="flex flex-col gap-6 w-full">
             <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div class="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
+              <div class="mb-6 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
                 <div>
-                  <h1 class="text-slate-900 mb-2 font-bold tracking-tight text-[28px]">Companeros</h1>
+                  <h1 class="text-slate-900 mb-2 font-bold tracking-tight text-[28px]">Compañeros</h1>
                   <p class="text-slate-500 text-[16px]">Gestiona el directorio social y las personas que bloqueaste.</p>
                 </div>
                 <div id="companions-directory-filters" class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                   <div class="flex-1 sm:w-48">
                     <label class="block text-xs text-slate-500 mb-1 font-medium" for="filter-faculty">Facultad</label>
                     <select id="filter-faculty" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none">
-                      <option value="">Todas las facultades</option>
+                      <option value="Todos">Todos</option>
                       <option value="FAING">FAING</option>
                       <option value="FACEM">FACEM</option>
                       <option value="FAEDCOH">FAEDCOH</option>
@@ -5982,17 +6664,22 @@
                       <option value="FACSA">FACSA</option>
                       <option value="FAU">FAU</option>
                     </select>
-                    </div>
+                  </div>
+                  <div class="flex-1 sm:w-56">
+                    <label class="block text-xs text-slate-500 mb-1 font-medium" for="filter-career">Carrera</label>
+                    <select id="filter-career" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                      <option value="Todos">Todos</option>
+                    </select>
                   </div>
                 </div>
-                <div class="flex items-center bg-[#E5E7EB] rounded-full p-1 w-max mb-6">
-                  <button type="button" data-companions-tab="directory" class="companions-tab-btn px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Directorio</button>
-                  <button type="button" data-companions-tab="blocked" class="companions-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Bloqueados</button>
-                </div>
-                <div id="companions-empty-state" class="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-400"></div>
-                <div id="directory-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  <p class="text-slate-400 text-sm col-span-3 text-center py-8">Cargando companeros...</p>
-                </div>
+              </div>
+              <div class="flex items-center bg-[#E5E7EB] rounded-full p-1 w-max mb-6">
+                <button type="button" data-companions-tab="directory" class="companions-tab-btn px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Directorio</button>
+                <button type="button" data-companions-tab="blocked" class="companions-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Bloqueados</button>
+              </div>
+              <div id="companions-empty-state" class="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-400"></div>
+              <div id="directory-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                <p class="text-slate-400 text-sm col-span-3 text-center py-8">Cargando companeros...</p>
               </div>
             </div>
           `;
@@ -6000,6 +6687,7 @@
         mount({ container, router, user }) {
           const grid = container.querySelector('#directory-grid');
           const filterFaculty = container.querySelector('#filter-faculty');
+          const filterCareer = container.querySelector('#filter-career');
           const emptyState = container.querySelector('#companions-empty-state');
           const filtersWrap = container.querySelector('#companions-directory-filters');
           const tabButtons = Array.from(container.querySelectorAll('[data-companions-tab]'));
@@ -6019,6 +6707,16 @@
             filtersWrap.classList.toggle('hidden', tab !== 'directory');
           }
 
+          function syncCareerOptions() {
+            const faculty = filterFaculty.value || 'Todos';
+            const careers = getFacultyCareerOptions(faculty);
+            const previous = filterCareer.value;
+            filterCareer.innerHTML = careers.map((career) => `<option value="${escapeHtml(career)}">${escapeHtml(career)}</option>`).join('');
+            if (careers.includes(previous)) {
+              filterCareer.value = previous;
+            }
+          }
+
           function renderCards(users, options = {}) {
             const {
               emptyMessage = 'No hay usuarios para mostrar.',
@@ -6034,13 +6732,14 @@
 
             emptyState.classList.add('hidden');
             grid.innerHTML = users.map((directoryUser) => `
-              <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col items-center text-center hover:shadow-md transition-shadow relative">
+              <div class="bg-white rounded-[24px] border border-slate-200 p-5 flex flex-col items-center text-center hover:shadow-md transition-shadow relative">
                 <div class="absolute top-3 right-3">
                   <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white" style="background:${userColor(directoryUser)}">${escapeHtml(directoryUser.faculty || 'UPT')}</span>
                 </div>
                 ${renderAvatar(directoryUser, { sizeClass: 'w-20 h-20', textClass: 'text-white font-bold text-2xl', extraClass: 'mb-3 border-2 border-slate-100' })}
                 <h3 class="font-bold text-[16px] leading-tight text-slate-900 mb-1">${escapeHtml(displayName(directoryUser))}</h3>
                 <p class="text-[13px] text-slate-500 mb-4">${escapeHtml(careerLabel(directoryUser) || getUserTypeLabel(directoryUser.user_type || 'student'))}</p>
+                ${blocked ? '<div class="mb-4 inline-flex items-center gap-1.5 rounded-full bg-red-50 text-red-600 border border-red-200 px-3 py-1 text-[11px] font-bold">Usuario bloqueado</div>' : ''}
                 <div class="w-full mt-auto flex flex-col gap-2">
                   <button type="button" data-view-profile="${directoryUser.id}" class="w-full py-1.5 px-4 rounded-lg border border-[#1B2A6B] text-[#1B2A6B] font-medium text-sm hover:bg-[#1B2A6B] hover:text-white transition-colors">Ver perfil</button>
                   ${blocked ? `
@@ -6053,7 +6752,11 @@
 
           async function loadDirectory() {
             const faculty = filterFaculty.value;
-            const params = faculty ? `faculty=${faculty}` : '';
+            const career = filterCareer.value;
+            const query = new URLSearchParams();
+            if (faculty && faculty !== 'Todos') query.set('faculty', faculty);
+            if (career && career !== 'Todos') query.set('career', career);
+            const params = query.toString();
             const result = await SocialAPI.getDirectory(params);
             const users = getList(result).filter((directoryUser) => Number(directoryUser.id) !== Number(user.id));
 
@@ -6102,7 +6805,13 @@
             await loadActiveTab();
           }
 
-          filterFaculty.addEventListener('change', loadActiveTab);
+          filterFaculty.value = 'Todos';
+          syncCareerOptions();
+          filterFaculty.addEventListener('change', async () => {
+            syncCareerOptions();
+            await loadActiveTab();
+          });
+          filterCareer.addEventListener('change', loadActiveTab);
           tabButtons.forEach((button) => {
             button.addEventListener('click', async () => {
               setCompanionsTab(button.dataset.companionsTab);
@@ -6162,10 +6871,20 @@
                 <button type="button" data-groups-tab="mine" class="groups-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Mis grupos</button>
                 <button type="button" data-groups-tab="create" class="groups-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Crear grupo</button>
               </div>
+              <div id="groups-discover-toolbar" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                <p class="text-sm text-slate-500">Explora grupos y detecta de inmediato si ya formas parte de ellos.</p>
+                <label class="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <span>Mostrar</span>
+                  <select id="groups-membership-filter" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="all">Todos</option>
+                    <option value="without-mine">Sin mis grupos</option>
+                  </select>
+                </label>
+              </div>
               <div id="groups-list-section">
                 <div id="groups-empty-state" class="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-400"></div>
                 <div id="groups-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <p class="text-slate-400 text-sm col-span-2 text-center py-8">Cargando grupos...</p>
+                  ${renderListSkeleton(4, { lines: ['72%', '100%', '88%'], media: true, avatar: false })}
                 </div>
               </div>
               <div id="groups-create-section" class="hidden">
@@ -6249,6 +6968,8 @@
         const grid = container.querySelector('#groups-grid');
         const emptyState = container.querySelector('#groups-empty-state');
         const searchInput = container.querySelector('#groups-search');
+        const membershipFilter = container.querySelector('#groups-membership-filter');
+        const discoverToolbar = container.querySelector('#groups-discover-toolbar');
         const listSection = container.querySelector('#groups-list-section');
         const createSection = container.querySelector('#groups-create-section');
         const form = container.querySelector('#create-group-form');
@@ -6270,6 +6991,7 @@
         let activeTab = 'discover';
         let searchTimer = null;
         let selectedCoverFile = null;
+        let selectedCoverPreviewUrl = '';
         const cropState = {
           file: null,
           objectUrl: '',
@@ -6296,6 +7018,12 @@
           if (!cropState.objectUrl) return;
           URL.revokeObjectURL(cropState.objectUrl);
           cropState.objectUrl = '';
+        }
+
+        function releaseCreateCoverPreviewUrl() {
+          if (!selectedCoverPreviewUrl) return;
+          URL.revokeObjectURL(selectedCoverPreviewUrl);
+          selectedCoverPreviewUrl = '';
         }
 
         function resetCropState(clearInput = false) {
@@ -6423,14 +7151,15 @@
 
         function updateCreateCoverPreview(file = null) {
           if (file) {
-            const previewUrl = URL.createObjectURL(file);
-            coverPreview.style.backgroundImage = `url('${safeUrl(previewUrl)}')`;
+            releaseCreateCoverPreviewUrl();
+            selectedCoverPreviewUrl = URL.createObjectURL(file);
+            coverPreview.style.backgroundImage = `url('${safeUrl(selectedCoverPreviewUrl)}')`;
             coverPreview.style.backgroundSize = 'cover';
             coverPreview.style.backgroundPosition = 'center';
             clearCoverButton.classList.remove('hidden');
-            setTimeout(() => URL.revokeObjectURL(previewUrl), 0);
             return;
           }
+          releaseCreateCoverPreviewUrl();
           coverPreview.style.backgroundImage = '';
           coverPreview.style.background = 'linear-gradient(135deg,#1B2A6B 0%,#3C4D91 100%)';
           clearCoverButton.classList.add('hidden');
@@ -6452,11 +7181,12 @@
           listSection.classList.toggle('hidden', showCreate);
           createSection.classList.toggle('hidden', !showCreate);
           searchInput.closest('div').classList.toggle('hidden', showCreate);
+          discoverToolbar.classList.toggle('hidden', showCreate || tab !== 'discover');
         }
 
         function renderGroupCard(group) {
           const membershipLabel = group.is_member
-            ? 'Miembro'
+            ? 'Ya pertenezco'
             : group.current_membership_status === 'pending'
               ? 'Solicitud enviada'
               : group.privacy === 'public'
@@ -6464,14 +7194,17 @@
                 : 'Privado';
 
           return `
-            <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+            <article class="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
               <button type="button" data-open-group="${group.id}" class="w-full text-left">
                 <div class="h-40 bg-slate-200 bg-cover bg-center" style="${group.cover_url ? `background-image:url('${safeUrl(group.cover_url)}')` : 'background:linear-gradient(135deg,#1B2A6B 0%,#3C4D91 100%)'}"></div>
                 <div class="p-5">
                   <div class="flex items-start justify-between gap-4 mb-3">
                     <div>
                       <h3 class="text-lg font-bold text-slate-900 leading-tight">${escapeHtml(group.name)}</h3>
-                      <p class="text-xs text-slate-500 mt-1">${escapeHtml(group.member_count || 0)} miembros</p>
+                      <div class="flex items-center gap-2 flex-wrap mt-1">
+                        <p class="text-xs text-slate-500">${escapeHtml(group.member_count || 0)} miembros</p>
+                        ${group.is_member ? '<span class="inline-flex items-center rounded-full bg-slate-900 text-white px-2 py-0.5 text-[10px] font-bold">Ya pertenezco</span>' : ''}
+                      </div>
                     </div>
                     <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${group.privacy === 'private' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">
                       <span class="material-symbols-outlined text-[14px]">${group.privacy === 'private' ? 'lock' : 'public'}</span>
@@ -6509,7 +7242,7 @@
         }
 
         async function loadDiscover() {
-          grid.innerHTML = '<p class="text-slate-400 text-sm col-span-2 text-center py-8">Cargando grupos...</p>';
+          grid.innerHTML = renderListSkeleton(4, { lines: ['72%', '100%', '88%'], media: true, avatar: false });
           emptyState.classList.add('hidden');
           const result = await SocialAPI.discoverGroups(searchInput.value.trim());
           if (!result?.ok) {
@@ -6517,12 +7250,12 @@
             return;
           }
 
-          const discoverableGroups = getList(result).filter((group) => !group.is_member);
+          const discoverableGroups = getList(result).filter((group) => membershipFilter.value !== 'without-mine' || !group.is_member);
           renderList(discoverableGroups, 'No se encontraron grupos con esos criterios.');
         }
 
         async function loadMine() {
-          grid.innerHTML = '<p class="text-slate-400 text-sm col-span-2 text-center py-8">Cargando grupos...</p>';
+          grid.innerHTML = renderListSkeleton(4, { lines: ['72%', '100%', '88%'], media: true, avatar: false });
           emptyState.classList.add('hidden');
           const result = await SocialAPI.getMyGroups();
           if (!result?.ok) {
@@ -6549,6 +7282,10 @@
           searchTimer = setTimeout(() => {
             loadDiscover();
           }, 280);
+        });
+        membershipFilter.addEventListener('change', () => {
+          if (activeTab !== 'discover') return;
+          loadDiscover();
         });
 
         tabButtons.forEach((button) => {
@@ -6902,12 +7639,6 @@
         let selectedEditCoverFile = null;
         let pendingCommentPostId = null;
         let currentCommentSort = 'newest';
-        let groupPostsSignature = '';
-        let groupCommentsSignature = '';
-        let groupPostsRefreshTimer = null;
-        let groupPostsRefreshInFlight = false;
-        let groupCommentsRefreshTimer = null;
-        let groupCommentsRefreshInFlight = false;
         const editCropState = {
           file: null,
           objectUrl: '',
@@ -7128,27 +7859,6 @@
           return groupPosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
-        function buildGroupPostsSignature(posts) {
-          return buildCollectionSignature(posts, [
-            'id',
-            (post) => post.updated_at || post.created_at,
-            'current_reaction',
-            'comments_count',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
-        function buildGroupCommentsSignature(comments) {
-          return buildCollectionSignature(comments, [
-            'id',
-            (comment) => comment.updated_at || comment.created_at,
-            'current_reaction',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
         function renderHeader() {
           if (!groupData) return;
           title.textContent = groupData.name;
@@ -7265,35 +7975,24 @@
 
         function closeCommentModal() {
           pendingCommentPostId = null;
-          groupCommentsSignature = '';
           commentModal.classList.add('hidden');
           commentModal.classList.remove('flex');
           commentPostPreview.innerHTML = '';
           commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
         }
 
-        async function loadComments(postId = pendingCommentPostId, sort = currentCommentSort, options = {}) {
+        async function loadComments(postId = pendingCommentPostId, sort = currentCommentSort) {
           if (!postId) return;
           currentCommentSort = sort;
           commentSort.value = sort;
-          if (!options.silent) {
-            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
-          }
+          commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
           const result = await PostsAPI.getComments(postId, sort);
           if (!result?.ok) {
-            if (!options.silent) {
-              commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
-            }
+            commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
             return;
           }
 
           const comments = getList(result);
-          const nextSignature = buildGroupCommentsSignature(comments);
-          if (options.silent && nextSignature === groupCommentsSignature) {
-            return;
-          }
-          groupCommentsSignature = nextSignature;
-
           if (!comments.length) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No hay comentarios todavia.</p>';
             return;
@@ -7313,15 +8012,6 @@
         }
 
         async function loadConversation() {
-          if (groupPostsRefreshTimer) {
-            window.clearInterval(groupPostsRefreshTimer);
-            groupPostsRefreshTimer = null;
-          }
-          if (groupCommentsRefreshTimer) {
-            window.clearInterval(groupCommentsRefreshTimer);
-            groupCommentsRefreshTimer = null;
-          }
-
           renderConversationTabSkeleton();
           if (!groupData?.can_view_conversation) return;
 
@@ -7353,44 +8043,17 @@
             })).join('');
           }
 
-          async function reloadPosts(options = {}) {
-            if (groupPostsRefreshInFlight) return;
-            if (options.silent && (document.hidden || currentTab !== 'conversation')) return;
-
-            groupPostsRefreshInFlight = true;
-            try {
-              const result = await PostsAPI.getGroupPosts(groupId);
-              if (!result?.ok) {
-                if (!options.silent) {
-                  postsList.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center text-sm text-slate-400">No se pudieron cargar las publicaciones del grupo.</div>';
-                }
-                return;
-              }
-
-              const nextPosts = getList(result);
-              const nextSignature = buildGroupPostsSignature(nextPosts);
-              if (options.silent && nextSignature === groupPostsSignature) {
-                return;
-              }
-
-              groupPosts = nextPosts;
-              groupPostsSignature = nextSignature;
-              renderPosts();
-              if (pendingCommentPostId) {
-                commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(pendingCommentPostId), user.id);
-              }
-            } finally {
-              groupPostsRefreshInFlight = false;
+          async function reloadPosts() {
+            const result = await PostsAPI.getGroupPosts(groupId);
+            if (!result?.ok) {
+              postsList.innerHTML = '<div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center text-sm text-slate-400">No se pudieron cargar las publicaciones del grupo.</div>';
+              return;
             }
-          }
 
-          async function refreshGroupComments() {
-            if (!pendingCommentPostId || document.hidden || currentTab !== 'conversation' || groupCommentsRefreshInFlight) return;
-            groupCommentsRefreshInFlight = true;
-            try {
-              await loadComments(pendingCommentPostId, currentCommentSort, { silent: true });
-            } finally {
-              groupCommentsRefreshInFlight = false;
+            groupPosts = getList(result);
+            renderPosts();
+            if (pendingCommentPostId) {
+              commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(pendingCommentPostId), user.id);
             }
           }
 
@@ -7441,7 +8104,12 @@
 
             const deleteButton = event.target.closest('[data-action="delete-post"]');
             if (deleteButton) {
-              const confirmed = window.confirm('Deseas eliminar esta publicacion del grupo?');
+              const confirmed = await confirmAction({
+                title: 'Eliminar publicacion',
+                copy: 'Esta publicacion del grupo se eliminara de forma permanente.',
+                acceptLabel: 'Eliminar',
+                tone: 'danger',
+              });
               if (!confirmed) return;
 
               const result = await PostsAPI.deletePost(deleteButton.dataset.postId);
@@ -7486,8 +8154,6 @@
           });
 
           await reloadPosts();
-          groupPostsRefreshTimer = window.setInterval(() => reloadPosts({ silent: true }), 9000);
-          groupCommentsRefreshTimer = window.setInterval(refreshGroupComments, 7000);
         }
 
         async function renderPeopleTab() {
@@ -7587,7 +8253,12 @@
 
             const removeButton = event.target.closest('[data-remove-group-member]');
             if (removeButton) {
-              const confirmed = window.confirm('Deseas expulsar a este miembro del grupo?');
+              const confirmed = await confirmAction({
+                title: 'Expulsar miembro',
+                copy: 'La persona sera retirada del grupo y tendra que volver a solicitar acceso si quiere regresar.',
+                acceptLabel: 'Expulsar',
+                tone: 'danger',
+              });
               if (!confirmed) return;
               const result = await SocialAPI.removeGroupMember(groupId, removeButton.dataset.removeGroupMember);
               if (result?.ok) {
@@ -7692,7 +8363,12 @@
 
           const leaveButton = event.target.closest('[data-leave-group]');
           if (leaveButton) {
-            const confirmed = window.confirm('Deseas salir de este grupo?');
+            const confirmed = await confirmAction({
+              title: 'Salir del grupo',
+              copy: 'Perderas acceso al contenido privado y a tu participacion actual en este grupo.',
+              acceptLabel: 'Salir',
+              tone: 'danger',
+            });
             if (!confirmed) return;
             const result = await SocialAPI.leaveGroup(groupId);
             if (result?.ok) {
@@ -7872,6 +8548,25 @@
             return;
           }
 
+          const pickerButton = event.target.closest('[data-action="open-reaction-picker"]');
+          if (pickerButton) {
+            openReactionPicker(pickerButton, {
+              targetType: 'comment',
+              targetId: Number(pickerButton.dataset.targetId),
+              currentReaction: pickerButton.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                const result = await PostsAPI.reactComment(Number(pickerButton.dataset.targetId), reaction);
+                if (result?.ok) {
+                  await loadComments(pendingCommentPostId, currentCommentSort);
+                  await loadConversation();
+                } else {
+                  showToast(result?.data?.error || 'No se pudo reaccionar', 'error');
+                }
+              },
+            });
+            return;
+          }
+
           const reactionButton = event.target.closest('[data-action="react-comment"]');
           if (reactionButton) {
             const result = await PostsAPI.reactComment(reactionButton.dataset.commentId, reactionButton.dataset.reaction);
@@ -7889,10 +8584,7 @@
           if (!ok) return null;
           setTab('info');
           renderInfoTab();
-          return () => {
-            if (groupPostsRefreshTimer) window.clearInterval(groupPostsRefreshTimer);
-            if (groupCommentsRefreshTimer) window.clearInterval(groupCommentsRefreshTimer);
-          };
+          return () => {};
         })();
       },
     },
@@ -7977,9 +8669,7 @@
             <div>
               <h2 class="text-xl font-bold text-black mb-4">Publicaciones recientes</h2>
               <div id="profile-posts-list" class="space-y-4">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
-                  <p class="text-gray-500 text-sm">Cargando publicaciones...</p>
-                </div>
+                ${renderListSkeleton(2, { lines: ['100%', '92%', '54%'], avatar: true, media: true })}
               </div>
             </div>
           </div>
@@ -8140,12 +8830,6 @@
         let profilePosts = [];
         let pendingProfileCommentId = null;
         let currentProfileCommentSort = 'newest';
-        let profilePostsSignature = '';
-        let profileCommentsSignature = '';
-        let profilePostsRefreshTimer = null;
-        let profilePostsRefreshInFlight = false;
-        let profileCommentsRefreshTimer = null;
-        let profileCommentsRefreshInFlight = false;
         const cropConfigs = {
           avatar: {
             field: 'avatar',
@@ -8535,27 +9219,6 @@
           return profilePosts.find((post) => Number(post.id) === Number(postId)) || null;
         }
 
-        function buildProfilePostsSignature(posts) {
-          return buildCollectionSignature(posts, [
-            'id',
-            (post) => post.updated_at || post.created_at,
-            'current_reaction',
-            'comments_count',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
-        function buildProfileCommentsSignature(comments) {
-          return buildCollectionSignature(comments, [
-            'id',
-            (comment) => comment.updated_at || comment.created_at,
-            'current_reaction',
-            'reactions_total',
-            'reactions_count',
-          ]);
-        }
-
         function renderProfileCommentModalPost(postId = pendingProfileCommentId) {
           profileCommentPostPreview.innerHTML = renderPostModalPreview(findProfilePost(postId), user.id);
         }
@@ -8574,38 +9237,27 @@
 
         function closeProfileCommentModal() {
           pendingProfileCommentId = null;
-          profileCommentsSignature = '';
           profileCommentPostPreview.innerHTML = '';
           profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Selecciona una publicacion para ver sus comentarios.</p>';
           profileCommentModal.classList.add('hidden');
           profileCommentModal.classList.remove('flex');
         }
 
-        async function loadProfileComments(postId = pendingProfileCommentId, sort = currentProfileCommentSort, options = {}) {
+        async function loadProfileComments(postId = pendingProfileCommentId, sort = currentProfileCommentSort) {
           if (!postId) return;
 
           currentProfileCommentSort = sort;
           profileCommentSort.value = sort;
-          if (!options.silent) {
-            profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
-          }
+          profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
 
           await ensurePublicUsersLoaded();
           const result = await PostsAPI.getComments(postId, sort);
           const comments = getList(result);
 
           if (!result?.ok) {
-            if (!options.silent) {
-              profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
-            }
+            profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">No se pudieron cargar los comentarios.</p>';
             return;
           }
-
-          const nextSignature = buildProfileCommentsSignature(comments);
-          if (options.silent && nextSignature === profileCommentsSignature) {
-            return;
-          }
-          profileCommentsSignature = nextSignature;
 
           if (!comments.length) {
             profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Todavia no hay comentarios en esta publicacion.</p>';
@@ -8631,59 +9283,33 @@
           showToast(result?.data?.error || 'Error al comentar', 'error');
         }
 
-        async function refreshProfileComments() {
-          if (!pendingProfileCommentId || document.hidden || profileCommentsRefreshInFlight) return;
-          profileCommentsRefreshInFlight = true;
-          try {
-            await loadProfileComments(pendingProfileCommentId, currentProfileCommentSort, { silent: true });
-          } finally {
-            profileCommentsRefreshInFlight = false;
+        async function loadPosts(targetUserId) {
+          await ensurePublicUsersLoaded();
+          const result = await PostsAPI.getFeed();
+          if (!result?.ok) {
+            postsList.innerHTML = `
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
+                <p class="text-gray-500 text-sm">No se pudieron cargar las publicaciones.</p>
+              </div>
+            `;
+            return;
           }
-        }
 
-        async function loadPosts(targetUserId, options = {}) {
-          if (profilePostsRefreshInFlight) return;
-          if (options.silent && document.hidden) return;
+          const posts = getList(result).filter((post) => Number(post.user_id) === Number(targetUserId));
+          profilePosts = posts;
 
-          profilePostsRefreshInFlight = true;
-          try {
-            await ensurePublicUsersLoaded();
-            const result = await PostsAPI.getFeed();
-            if (!result?.ok) {
-              if (!options.silent) {
-                postsList.innerHTML = `
-                  <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
-                    <p class="text-gray-500 text-sm">No se pudieron cargar las publicaciones.</p>
-                  </div>
-                `;
-              }
-              return;
-            }
+          if (!posts.length) {
+            postsList.innerHTML = `
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
+                <p class="text-gray-500 text-sm">No hay publicaciones todavia.</p>
+              </div>
+            `;
+            return;
+          }
 
-            const posts = getList(result).filter((post) => Number(post.user_id) === Number(targetUserId));
-            const nextSignature = buildProfilePostsSignature(posts);
-            if (options.silent && nextSignature === profilePostsSignature) {
-              return;
-            }
-
-            profilePosts = posts;
-            profilePostsSignature = nextSignature;
-
-            if (!posts.length) {
-              postsList.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 profile-posts-empty flex items-center justify-center">
-                  <p class="text-gray-500 text-sm">No hay publicaciones todavia.</p>
-                </div>
-              `;
-              return;
-            }
-
-            postsList.innerHTML = posts.map((post) => renderPostCard(post, user.id, { canDelete: false })).join('');
-            if (pendingProfileCommentId) {
-              renderProfileCommentModalPost(pendingProfileCommentId);
-            }
-          } finally {
-            profilePostsRefreshInFlight = false;
+          postsList.innerHTML = posts.map((post) => renderPostCard(post, user.id, { canDelete: false })).join('');
+          if (pendingProfileCommentId) {
+            renderProfileCommentModalPost(pendingProfileCommentId);
           }
         }
 
@@ -8836,7 +9462,12 @@
             }
 
             if (button.dataset.profileAction === 'block-user') {
-              const confirmed = window.confirm('Quieres bloquear a este usuario? Se cortara la amistad, el chat y las interacciones sociales entre ambos.');
+              const confirmed = await confirmAction({
+                title: 'Bloquear usuario',
+                copy: 'Se cortara la amistad, el chat y las interacciones sociales entre ambos.',
+                acceptLabel: 'Bloquear',
+                tone: 'danger',
+              });
               if (!confirmed) return;
 
               const result = await SocialAPI.blockUser(profileData.id);
@@ -8930,6 +9561,23 @@
         profileCommentList.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-action]');
           if (!button || !pendingProfileCommentId) return;
+
+          if (button.dataset.action === 'open-reaction-picker') {
+            openReactionPicker(button, {
+              targetType: 'comment',
+              targetId: Number(button.dataset.targetId),
+              currentReaction: button.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                const result = await PostsAPI.reactComment(Number(button.dataset.targetId), reaction);
+                if (result?.ok) {
+                  await loadProfileComments(pendingProfileCommentId, currentProfileCommentSort);
+                  return;
+                }
+                showToast(result?.data?.error || 'No se pudo reaccionar al comentario', 'error');
+              },
+            });
+            return;
+          }
 
           if (button.dataset.action === 'react-comment') {
             const result = await PostsAPI.reactComment(button.dataset.commentId, button.dataset.reaction);
@@ -9058,17 +9706,6 @@
         });
 
         loadProfile();
-        profilePostsRefreshTimer = window.setInterval(() => {
-          if (profileData?.id) {
-            loadPosts(profileData.id, { silent: true });
-          }
-        }, 10000);
-        profileCommentsRefreshTimer = window.setInterval(refreshProfileComments, 7000);
-
-        return () => {
-          if (profilePostsRefreshTimer) window.clearInterval(profilePostsRefreshTimer);
-          if (profileCommentsRefreshTimer) window.clearInterval(profileCommentsRefreshTimer);
-        };
       },
     },
     admin: {
@@ -9087,17 +9724,40 @@
                 ACCESO ADMIN
               </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="admin-user-stats"></div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="admin-user-stats">
+              ${renderAdminStatsSkeleton(4)}
+            </div>
             <div class="flex items-center bg-[#E5E7EB] rounded-full p-1 w-max mb-6">
               <button type="button" class="px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Usuarios</button>
               <button id="go-admin-posts-btn" type="button" class="px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Publicaciones</button>
               <button id="go-admin-reports-btn" type="button" class="px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Reportes</button>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div class="p-4 border-b border-slate-200">
-                <div class="relative max-w-md">
+              <div class="p-4 border-b border-slate-200 space-y-4">
+                <div class="relative max-w-2xl">
                   <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
                   <input id="admin-user-search" class="w-full bg-slate-50 border border-slate-200 rounded-full py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none" placeholder="Buscar usuario..." type="text"/>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <select id="admin-user-faculty-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="Todos">Facultad: Todos</option>
+                    <option value="FAING">FAING</option>
+                    <option value="FACEM">FACEM</option>
+                    <option value="FAEDCOH">FAEDCOH</option>
+                    <option value="FADE">FADE</option>
+                    <option value="FACSA">FACSA</option>
+                    <option value="FAU">FAU</option>
+                  </select>
+                  <select id="admin-user-career-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="Todos">Carrera: Todos</option>
+                  </select>
+                  <select id="admin-user-role-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="Todos">Rol: Todos</option>
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Docente</option>
+                    <option value="administrativo">Administrativo</option>
+                    <option value="student">Estudiante</option>
+                  </select>
                 </div>
               </div>
               <div class="overflow-x-auto">
@@ -9113,7 +9773,7 @@
                     </tr>
                   </thead>
                   <tbody id="users-tbody" class="divide-y divide-slate-100">
-                    <tr><td colspan="6" class="py-8 text-center text-slate-400">Cargando usuarios...</td></tr>
+                    ${renderAdminTableSkeleton(6, 5)}
                   </tbody>
                 </table>
               </div>
@@ -9242,6 +9902,9 @@
         const stats = container.querySelector('#admin-user-stats');
         const tbody = container.querySelector('#users-tbody');
         const searchInput = container.querySelector('#admin-user-search');
+        const facultyFilter = container.querySelector('#admin-user-faculty-filter');
+        const careerFilter = container.querySelector('#admin-user-career-filter');
+        const roleFilter = container.querySelector('#admin-user-role-filter');
         const editModal = container.querySelector('#edit-user-modal');
         const editForm = container.querySelector('#edit-user-form');
         const blockModal = container.querySelector('#block-user-modal');
@@ -9288,6 +9951,17 @@
           container.querySelector('#edit-user-area-group').style.display = isStudent ? 'none' : 'flex';
           container.querySelector('#edit-user-position-group').style.display = isStudent ? 'none' : 'flex';
           container.querySelector('#edit-user-faculty-label').textContent = isAdministrative ? 'Dependencia / facultad' : 'Facultad';
+        }
+
+        function syncAdminFilterAvailability() {
+          const selectedRole = String(roleFilter.value || 'Todos');
+          const shouldDisableCareer = ['teacher', 'administrativo'].includes(selectedRole);
+          careerFilter.disabled = shouldDisableCareer;
+          careerFilter.classList.toggle('opacity-60', shouldDisableCareer);
+          careerFilter.classList.toggle('cursor-not-allowed', shouldDisableCareer);
+          if (shouldDisableCareer) {
+            careerFilter.value = 'Todos';
+          }
         }
 
         function openModal() {
@@ -9375,10 +10049,7 @@
                   }
                 </td>
                 <td class="py-3 px-5">
-                  ${isAdmin
-                    ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-[#1B2A6B] bg-[#E8EDFF]"><span class="w-1.5 h-1.5 rounded-full bg-[#1B2A6B]"></span> Admin</span>'
-                    : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold text-slate-600 bg-slate-100"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Usuario</span>'
-                  }
+                  ${renderAdminRoleBadges(listedUser)}
                 </td>
                 <td class="py-3 px-5">
                   <div class="flex justify-end gap-2 flex-wrap">
@@ -9398,6 +10069,34 @@
           }).join('');
         }
 
+        function syncAdminCareerFilter() {
+          const faculty = facultyFilter.value || 'Todos';
+          const careers = getFacultyCareerOptions(faculty);
+          const previous = careerFilter.value;
+          careerFilter.innerHTML = careers.map((career, index) => `<option value="${escapeHtml(career)}">${escapeHtml(index === 0 ? 'Carrera: Todos' : career)}</option>`).join('');
+          if (careers.includes(previous)) {
+            careerFilter.value = previous;
+          }
+        }
+
+        function applyAdminUserFilters() {
+          const query = searchInput.value.trim().toLowerCase();
+          const faculty = facultyFilter.value;
+          const career = careerFilter.value;
+          const role = roleFilter.value;
+          const filtered = allUsers.filter((listedUser) => {
+            const name = displayName(listedUser).toLowerCase();
+            const email = String(listedUser.email || '').toLowerCase();
+            const matchesQuery = !query || name.includes(query) || email.includes(query);
+            const matchesFaculty = !faculty || faculty === 'Todos' || String(listedUser.faculty || '') === faculty;
+            const matchesCareer = !career || career === 'Todos' || String(careerLabel(listedUser) || '') === career;
+            const matchesRole = !role || role === 'Todos'
+              || (role === 'admin' ? String(listedUser.role || 'user') === 'admin' : String(listedUser.user_type || 'student') === role);
+            return matchesQuery && matchesFaculty && matchesCareer && matchesRole;
+          });
+          renderUsers(filtered);
+        }
+
         async function loadUsers() {
           const result = await AuthAPI.listAdminUsers();
           if (!result?.ok) {
@@ -9406,17 +10105,19 @@
           }
           allUsers = getList(result);
           renderStats(allUsers);
-          renderUsers(allUsers);
+          syncAdminCareerFilter();
+          applyAdminUserFilters();
         }
 
-        searchInput.addEventListener('input', () => {
-          const query = searchInput.value.trim().toLowerCase();
-          const filtered = allUsers.filter((listedUser) => {
-            const name = displayName(listedUser).toLowerCase();
-            const email = String(listedUser.email || '').toLowerCase();
-            return name.includes(query) || email.includes(query);
-          });
-          renderUsers(filtered);
+        searchInput.addEventListener('input', applyAdminUserFilters);
+        facultyFilter.addEventListener('change', () => {
+          syncAdminCareerFilter();
+          applyAdminUserFilters();
+        });
+        careerFilter.addEventListener('change', applyAdminUserFilters);
+        roleFilter.addEventListener('change', () => {
+          syncAdminFilterAvailability();
+          applyAdminUserFilters();
         });
 
         tbody.addEventListener('click', async (event) => {
@@ -9543,6 +10244,7 @@
           showToast(result?.data?.error || 'No se pudo bloquear la cuenta', 'error');
         });
 
+        syncAdminFilterAvailability();
         loadUsers();
       },
     },
@@ -9568,9 +10270,22 @@
               <button type="button" class="px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Reportes</button>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div class="p-4 border-b border-slate-200">
+              <div class="p-4 border-b border-slate-200 space-y-4">
                 <h2 class="text-sm font-bold text-slate-900">Bandeja de reportes</h2>
                 <p class="text-xs text-slate-500 mt-1">Los casos se retiran de esta lista cuando se descartan o se sancionan.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <select id="admin-report-type-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="Todos">Tipo: Todos</option>
+                    <option value="post">Publicacion</option>
+                    <option value="livestream">Stream</option>
+                    <option value="comment">Comentario</option>
+                    <option value="message">Mensaje</option>
+                  </select>
+                  <select id="admin-report-order-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                    <option value="newest">Mas recientes primero</option>
+                    <option value="oldest">Mas antiguos primero</option>
+                  </select>
+                </div>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[980px]">
@@ -9584,7 +10299,7 @@
                     </tr>
                   </thead>
                   <tbody id="admin-reports-tbody" class="divide-y divide-slate-100">
-                    <tr><td colspan="5" class="py-8 text-center text-slate-400">Cargando reportes...</td></tr>
+                    ${renderAdminTableSkeleton(5, 5)}
                   </tbody>
                 </table>
               </div>
@@ -9689,6 +10404,8 @@
       },
       mount({ container, router }) {
         const tbody = container.querySelector('#admin-reports-tbody');
+        const typeFilter = container.querySelector('#admin-report-type-filter');
+        const orderFilter = container.querySelector('#admin-report-order-filter');
         const reviewModal = container.querySelector('#review-report-modal');
         const sanctionModal = container.querySelector('#sanction-report-modal');
         const sanctionForm = container.querySelector('#sanction-report-form');
@@ -9700,8 +10417,21 @@
         }
 
         function formatReportType(report) {
-          if (report.service === 'chat') return 'Mensaje';
-          return report.target_type === 'comment' ? 'Comentario' : 'Publicacion';
+          if (report.service === 'chat') return 'message';
+          if (report.target_type === 'comment') return 'comment';
+          if ((report.post_type || '').toLowerCase() === 'livestream') return 'livestream';
+          return 'post';
+        }
+
+        function renderReportTypeBadge(report) {
+          const type = formatReportType(report);
+          const meta = {
+            post: { label: 'Publicacion', classes: 'bg-sky-50 text-sky-700 border-sky-200', icon: 'article' },
+            livestream: { label: 'Stream', classes: 'bg-red-50 text-red-600 border-red-200', icon: 'live_tv' },
+            comment: { label: 'Comentario', classes: 'bg-violet-50 text-violet-700 border-violet-200', icon: 'chat_bubble' },
+            message: { label: 'Mensaje', classes: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'mail' },
+          }[type];
+          return `<span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${meta.classes}"><span class="material-symbols-outlined text-[13px]">${meta.icon}</span>${meta.label}</span>`;
         }
 
         function closeReviewModal() {
@@ -9726,14 +10456,16 @@
         }
 
         function renderSanctionActions(report) {
+          const isLivestreamReport = formatReportType(report) === 'livestream';
           const actions = [`
             <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <input id="sanction-action-block" type="checkbox" class="mt-1 rounded border-slate-300 text-[#1B2A6B] focus:ring-[#1B2A6B]" checked/>
+              <input id="sanction-action-block" type="checkbox" class="mt-1 rounded border-slate-300 text-[#1B2A6B] focus:ring-[#1B2A6B]" checked disabled/>
               <span>
                 <span class="block text-sm font-semibold text-slate-900">Bloquear usuario</span>
-                <span class="block text-xs text-slate-500 mt-1">Aplica bloqueo con la duración y razón definidas en este formulario.</span>
+                <span class="block text-xs text-slate-500 mt-1">La sanción siempre bloquea al usuario con la duración y razón definidas en este formulario.</span>
               </span>
             </label>
+            <input id="sanction-action-block-hidden" type="hidden" value="1"/>
           `];
 
           if (report.service === 'posts' && report.target_type === 'post') {
@@ -9741,8 +10473,8 @@
               <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
                 <input id="sanction-action-delete-post" type="checkbox" class="mt-1 rounded border-slate-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"/>
                 <span>
-                  <span class="block text-sm font-semibold text-slate-900">Eliminar publicacion</span>
-                  <span class="block text-xs text-slate-500 mt-1">Quita la publicación denunciada del feed.</span>
+                  <span class="block text-sm font-semibold text-slate-900">${isLivestreamReport ? 'Eliminar Stream' : 'Eliminar publicacion'}</span>
+                  <span class="block text-xs text-slate-500 mt-1">${isLivestreamReport ? 'Quita el stream denunciado de la plataforma.' : 'Quita la publicación denunciada del feed.'}</span>
                 </span>
               </label>
             `);
@@ -9767,7 +10499,7 @@
           try {
             const details = await fetchReportDetails(report);
             container.querySelector('#review-report-user').textContent = details.reported_user_name || `Usuario #${details.reported_user_id ?? '-'}`;
-            container.querySelector('#review-report-type').textContent = formatReportType(details);
+            container.querySelector('#review-report-type').textContent = renderReportTypeBadge(details).replace(/<[^>]+>/g, '').trim();
             container.querySelector('#review-report-date').textContent = details.created_at
               ? new Date(details.created_at).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' })
               : '-';
@@ -9821,8 +10553,8 @@
                 <div class="font-semibold text-sm text-slate-900">${escapeHtml(report.reported_user_name || `Usuario #${report.reported_user_id ?? '-'}`)}</div>
                 <div class="text-xs text-slate-500">${escapeHtml(report.service === 'chat' ? 'Mensajes' : 'Publicaciones')}</div>
               </td>
-              <td class="py-4 px-5 text-sm text-slate-600">${escapeHtml(formatReportType(report))}</td>
-              <td class="py-4 px-5 text-sm text-slate-700">${escapeHtml(report.content_preview || 'Sin contenido')}</td>
+              <td class="py-4 px-5 text-sm text-slate-600">${renderReportTypeBadge(report)}</td>
+              <td class="py-4 px-5 text-sm text-slate-700">${escapeHtml((formatReportType(report) === 'livestream' ? (report.live_title || report.content_preview) : report.content_preview) || 'Sin contenido')}</td>
               <td class="py-4 px-5 text-sm text-slate-500">${escapeHtml(timeAgo(report.created_at))}</td>
               <td class="py-4 px-5">
                 <div class="flex justify-end gap-2 flex-wrap">
@@ -9833,6 +10565,20 @@
               </td>
             </tr>
           `).join('');
+        }
+
+        function applyAdminReportFilters() {
+          let filtered = [...reportRows];
+          const type = typeFilter.value;
+          const order = orderFilter.value;
+          if (type && type !== 'Todos') {
+            filtered = filtered.filter((report) => formatReportType(report) === type);
+          }
+          filtered.sort((left, right) => {
+            const delta = new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+            return order === 'oldest' ? -delta : delta;
+          });
+          formatReportRows(filtered);
         }
 
         async function loadReports() {
@@ -9859,11 +10605,13 @@
 
           reports.sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime());
           reportRows = reports;
-          formatReportRows(reports);
+          applyAdminReportFilters();
         }
 
         container.querySelector('#go-admin-users-btn').addEventListener('click', () => router.navigate('admin'));
         container.querySelector('#go-admin-posts-btn').addEventListener('click', () => router.navigate('admin-posts'));
+        typeFilter.addEventListener('change', applyAdminReportFilters);
+        orderFilter.addEventListener('change', applyAdminReportFilters);
         container.querySelector('#close-review-report-modal-btn').addEventListener('click', closeReviewModal);
         container.querySelector('#close-review-report-footer-btn').addEventListener('click', closeReviewModal);
         container.querySelector('#close-sanction-report-modal-btn').addEventListener('click', closeSanctionModal);
@@ -9923,7 +10671,7 @@
           const customValue = container.querySelector('#sanction-custom-value').value;
           const customUnit = container.querySelector('#sanction-custom-unit').value;
           const sanctionReason = container.querySelector('#sanction-reason').value.trim();
-          const shouldBlock = container.querySelector('#sanction-action-block')?.checked ?? false;
+          const shouldBlock = true;
           const shouldDeletePost = container.querySelector('#sanction-action-delete-post')?.checked ?? false;
           const shouldDeleteComment = container.querySelector('#sanction-action-delete-comment')?.checked ?? false;
 
@@ -10006,13 +10754,27 @@
                 ACCESO ADMIN
               </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="admin-post-stats"></div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="admin-post-stats">
+              ${renderAdminStatsSkeleton(4)}
+            </div>
             <div class="flex items-center bg-[#E5E7EB] rounded-full p-1 w-max mb-6">
               <button id="go-admin-users-btn" type="button" class="px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Usuarios</button>
               <button type="button" class="px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Publicaciones</button>
               <button id="go-admin-reports-btn" type="button" class="px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Reportes</button>
             </div>
             <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div class="p-4 border-b border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select id="admin-post-type-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                  <option value="Todos">Tipo: Todos</option>
+                  <option value="standard">Publicacion</option>
+                  <option value="livestream">Stream</option>
+                </select>
+                <select id="admin-post-order-filter" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:ring-1 focus:ring-[#1B2A6B] outline-none">
+                  <option value="newest">Mas recientes primero</option>
+                  <option value="oldest">Mas antiguas primero</option>
+                  <option value="comments">Mas comentadas</option>
+                </select>
+              </div>
               <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[900px]">
                   <thead>
@@ -10024,7 +10786,7 @@
                     </tr>
                   </thead>
                   <tbody id="admin-posts-tbody" class="divide-y divide-slate-100">
-                    <tr><td colspan="4" class="py-8 text-center text-slate-400">Cargando publicaciones...</td></tr>
+                    ${renderAdminTableSkeleton(4, 5)}
                   </tbody>
                 </table>
               </div>
@@ -10067,6 +10829,8 @@
       mount({ container, router }) {
         const stats = container.querySelector('#admin-post-stats');
         const tbody = container.querySelector('#admin-posts-tbody');
+        const typeFilter = container.querySelector('#admin-post-type-filter');
+        const orderFilter = container.querySelector('#admin-post-order-filter');
         const commentsModal = container.querySelector('#admin-comments-modal');
         const commentPostPreview = container.querySelector('#admin-comment-post-preview');
         const commentsList = container.querySelector('#admin-comments-list');
@@ -10142,8 +10906,11 @@
                   <div class="flex gap-3 items-start">
                       ${post.image_url ? `<img alt="Miniatura" class="w-12 h-12 rounded-lg object-cover" src="${safeUrl(post.image_url)}" onerror="this.style.display='none'"/>` : ''}
                     <div class="min-w-0">
-                      <p class="content-break text-sm text-slate-700 mb-1.5">${escapeHtml((post.content || '').slice(0, 140) || 'Sin contenido')}</p>
-                      ${post.image_url ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] rounded text-[10px] font-medium border border-[#E0E7FF]"><span class="material-symbols-outlined text-[12px]">image</span>Con imagen</span>' : ''}
+                      <p class="content-break text-sm text-slate-700 mb-1.5">${escapeHtml(((post.post_type || 'standard') === 'livestream' ? (post.live_title || 'Directo UPT') : ((post.content || '').slice(0, 140))) || 'Sin contenido')}</p>
+                      <div class="flex flex-wrap gap-2">
+                        <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${(post.post_type || 'standard') === 'livestream' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-sky-50 text-sky-700 border-sky-200'}"><span class="material-symbols-outlined text-[13px]">${(post.post_type || 'standard') === 'livestream' ? 'live_tv' : 'article'}</span>${(post.post_type || 'standard') === 'livestream' ? 'Stream' : 'Publicacion'}</span>
+                        ${post.image_url ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] rounded text-[10px] font-medium border border-[#E0E7FF]"><span class="material-symbols-outlined text-[12px]">image</span>Con imagen</span>' : ''}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -10151,7 +10918,7 @@
                 <td class="py-4 px-5">
                   <div class="flex justify-end gap-2">
                     <button type="button" data-view-comments="${post.id}" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
-                      <span class="material-symbols-outlined text-[16px]">visibility</span> Ver Publicacion <span class="font-semibold ml-1">${post.comments_count || 0}</span>
+                      <span class="material-symbols-outlined text-[16px]">visibility</span> Ver detalles <span class="font-semibold ml-1">${post.comments_count || 0}</span>
                     </button>
                     <button type="button" data-delete-post="${post.id}" class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-[#DC2626] hover:bg-slate-50 transition-colors shadow-sm">
                       <span class="material-symbols-outlined text-[16px]">delete</span> Eliminar
@@ -10161,6 +10928,23 @@
               </tr>
             `;
           }).join('');
+        }
+
+        function applyAdminPostFilters() {
+          let filtered = [...allPosts];
+          const type = typeFilter.value;
+          const order = orderFilter.value;
+          if (type && type !== 'Todos') {
+            filtered = filtered.filter((post) => String(post.post_type || 'standard') === type);
+          }
+          if (order === 'oldest') {
+            filtered.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+          } else if (order === 'comments') {
+            filtered.sort((a, b) => Number(b.comments_count || 0) - Number(a.comments_count || 0));
+          } else {
+            filtered.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+          }
+          renderPosts(filtered);
         }
 
         async function loadPosts() {
@@ -10173,7 +10957,7 @@
 
           allPosts = getList(result);
           renderStats(allPosts);
-          renderPosts(allPosts);
+          applyAdminPostFilters();
         }
 
         async function showComments(postId, sort = commentsSort.value || 'newest') {
@@ -10215,6 +10999,8 @@
 
         container.querySelector('#go-admin-users-btn').addEventListener('click', () => router.navigate('admin'));
         container.querySelector('#go-admin-reports-btn').addEventListener('click', () => router.navigate('admin-reports'));
+        typeFilter.addEventListener('change', applyAdminPostFilters);
+        orderFilter.addEventListener('change', applyAdminPostFilters);
         container.querySelector('#close-comments-modal-btn').addEventListener('click', closeCommentsModal);
         container.querySelector('#close-comments-modal-footer-btn').addEventListener('click', closeCommentsModal);
         commentsSort.addEventListener('change', () => {
@@ -10234,7 +11020,12 @@
 
           const deleteButton = event.target.closest('[data-delete-post]');
           if (!deleteButton) return;
-          const confirmed = window.confirm('Deseas eliminar esta publicacion?');
+          const confirmed = await confirmAction({
+            title: 'Eliminar publicacion',
+            copy: 'La publicacion se eliminara y no podra recuperarse.',
+            acceptLabel: 'Eliminar',
+            tone: 'danger',
+          });
           if (!confirmed) return;
 
           const result = await PostsAPI.adminDeletePost(deleteButton.dataset.deletePost);
@@ -10304,7 +11095,6 @@
       this.currentRoute = parsed;
       appView.innerHTML = view.render({ user: appState.user, params: parsed.params, router: this });
       if (sidebar) sidebar.setAttribute('active-nav', view.activeNav || parsed.route);
-      if (window.closeMobileSidebar) window.closeMobileSidebar();
       if (window.setupLayoutData) window.setupLayoutData(appState.user);
       setDocumentTitle(view.title || parsed.route);
 
@@ -10367,9 +11157,20 @@
     }, GLOBAL_INCOMING_CALL_POLL_INTERVAL_MS);
   }
 
+  function startNotificationsPolling() {
+    if (notificationsState.polling) return;
+    notificationsState.polling = window.setInterval(() => {
+      if (document.hidden) return;
+      if (typeof window.loadNotifications === 'function') {
+        window.loadNotifications();
+      }
+    }, 20000);
+  }
+
   window.AppRouter = AppRouter;
 
   window.addEventListener('hashchange', () => {
+    closeReactionPicker();
     AppRouter.render();
   });
 
@@ -10380,6 +11181,7 @@
   if (window.setupLayoutData) window.setupLayoutData(appState.user);
   bootstrapGlobalCallManager();
   startGlobalIncomingCallWatcher();
+  startNotificationsPolling();
   AppRouter.render();
 })().catch((error) => {
   console.error('App bootstrap error:', error);
