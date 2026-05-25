@@ -4292,7 +4292,10 @@
                   <div id="live-mobile-overlay" class="live-mobile-content live-mobile-only">
                     <div class="px-4 pb-1 pt-3 flex items-center justify-between gap-3">
                       <h2 id="live-title-mobile" class="text-lg font-black leading-tight break-words drop-shadow-lg">Cargando directo...</h2>
-                      <button id="live-report-btn-mobile" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0">REPORTAR</button>
+                      <button id="live-report-btn-mobile" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0 inline-flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[14px] leading-none">flag</span>
+                        <span>REPORTAR</span>
+                      </button>
                     </div>
                     <div id="live-comments-mobile" class="live-mobile-comments custom-scrollbar" style="overflow-y:auto;touch-action:pan-y;"></div>
                     <div class="live-mobile-input-row">
@@ -4331,7 +4334,10 @@
                         <p class="text-xs uppercase tracking-[0.24em] text-white/45 font-black">Chat en vivo</p>
                         <h3 class="font-black text-xl mt-1">Comentarios</h3>
                       </div>
-                      <button id="live-report-btn" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0">REPORTAR</button>
+                      <button id="live-report-btn" type="button" class="hidden rounded-full bg-[#ff0b53] px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-white transition hover:bg-[#e00549] shrink-0 inline-flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[14px] leading-none">flag</span>
+                        <span>REPORTAR</span>
+                      </button>
                     </div>
                   </div>
                   <div id="live-comments" class="custom-scrollbar flex-1 h-0 min-h-[220px] overflow-y-auto px-5 py-4 space-y-4">
@@ -5663,6 +5669,7 @@
 
           // On mobile use facingMode for front/rear camera; on desktop just { video: true }
           let cameraStream = null;
+          let preferredMobileDevice = null;
           if (isDesktopClient()) {
             cameraStream = await navigator.mediaDevices.getUserMedia({
               video: getLiveVideoConstraints('camera'),
@@ -5672,20 +5679,23 @@
             const videoInputs = await navigator.mediaDevices.enumerateDevices()
               .then((devices) => devices.filter((device) => device.kind === 'videoinput'))
               .catch(() => []);
-            const preferredDevice = pickPreferredMobileCameraDevice(videoInputs, currentFacingMode, currentVideoDeviceId);
+            preferredMobileDevice = pickPreferredMobileCameraDevice(videoInputs, currentFacingMode, currentVideoDeviceId);
             const candidateConstraints = [];
 
-            if (preferredDevice?.deviceId) {
+            if (preferredMobileDevice?.deviceId) {
               candidateConstraints.push({
                 ...getLiveVideoConstraints('camera'),
-                deviceId: { exact: preferredDevice.deviceId },
+                deviceId: { exact: preferredMobileDevice.deviceId },
               });
             }
 
             candidateConstraints.push(
+              { facingMode: { exact: currentFacingMode } },
+              { facingMode: { ideal: currentFacingMode } },
               getLiveVideoConstraints('camera', { facingMode: { exact: currentFacingMode } }),
               getLiveVideoConstraints('camera', { facingMode: { ideal: currentFacingMode } }),
-              getLiveVideoConstraints('camera')
+              getLiveVideoConstraints('camera'),
+              true
             );
 
             let lastCameraError = null;
@@ -5713,7 +5723,7 @@
             const looksLandscape = Number(selectedSettings.width || 0) > Number(selectedSettings.height || 0);
             if (looksLandscape) {
               const strictPortraitCandidates = buildStrictPortraitCameraConstraints(
-                preferredDevice?.deviceId || selectedSettings.deviceId || '',
+                preferredMobileDevice?.deviceId || selectedSettings.deviceId || '',
                 currentFacingMode
               );
               let portraitStream = null;
@@ -5855,8 +5865,7 @@
           livekit.attachMedia(hostPreviewVideo);
           await livekit.setMediaStream(bundle.publishedStream);
           hostPreviewVideo.srcObject = bundle.previewStream || bundle.publishedStream;
-          const looksPortrait = Number(bundle?.videoSettings?.height || 0) >= Number(bundle?.videoSettings?.width || 0);
-          hostPreviewVideo.style.objectFit = (!isDesktopClient() && source === 'camera' && looksPortrait) ? 'cover' : 'contain';
+          hostPreviewVideo.style.objectFit = 'contain';
           showHostPreview();
           await hostPreviewVideo.play().catch(() => {});
 

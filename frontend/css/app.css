@@ -2249,13 +2249,13 @@ body {
   padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
 }
 
-/* Viewer gets object-cover for vertical streams — mobile viewers only */
-.live-cam-stream:not(.live-is-desktop) #live-viewer-player video {
-  object-fit: cover !important;
-}
-/* Desktop viewer of portrait stream: always contain (no zoom) */
+/* Viewers preserve the received aspect ratio; black bars are expected when needed. */
+.live-cam-stream:not(.live-is-desktop) #live-viewer-player video,
 .live-cam-stream.live-is-desktop #live-viewer-player video,
-.live-is-desktop #live-viewer-player video {
+.live-is-desktop #live-viewer-player video,
+#live-viewer-player video {
+  width: 100% !important;
+  height: 100% !important;
   object-fit: contain !important;
 }
 
