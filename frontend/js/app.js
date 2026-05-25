@@ -1453,6 +1453,8 @@
   };
 
   function initMessagesView({ container, user, params, callManagerOnly = false }) {
+    const messagesLayout = container.querySelector('#messages-layout');
+    const inboxPane = container.querySelector('#messages-inbox-pane');
     const inboxList = container.querySelector('#inbox-list');
     const chatPanel = container.querySelector('#chat-panel');
     const messagesSummary = container.querySelector('#messages-summary');
@@ -1478,6 +1480,7 @@
     let conversations = [];
     let activeChat = params.user ? Number(params.user) : null;
     let activeUser = null;
+    let mobileChatOpen = Boolean(activeChat);
     let currentMessages = [];
     let activeConversationToken = 0;
     let chatPollTimer = null;
@@ -1553,6 +1556,41 @@
       if (window.__uptGlobalCallRuntime?.id === callRuntimeId) {
         delete window.__uptGlobalCallRuntime;
       }
+    }
+
+    function isMessagesMobileViewport() {
+      return window.innerWidth < 1024;
+    }
+
+    function clearActiveConversationState() {
+      activeConversationToken += 1;
+      activeChat = null;
+      activeUser = null;
+      currentMessages = [];
+      mobileChatOpen = false;
+      stopChatPolling();
+      updateUrlForChat(null);
+    }
+
+    function syncMessagesResponsiveLayout() {
+      if (!messagesLayout || !inboxPane || !chatPanel) {
+        return;
+      }
+
+      const shouldUseMobileStack = isMessagesMobileViewport();
+      const showChatPanel = !shouldUseMobileStack || mobileChatOpen;
+      const showInboxPane = !shouldUseMobileStack || !mobileChatOpen;
+
+      messagesLayout.classList.toggle('lg:flex-row', !shouldUseMobileStack);
+      inboxPane.classList.toggle('hidden', !showInboxPane);
+      chatPanel.classList.toggle('hidden', !showChatPanel);
+    }
+
+    function exitMobileConversationView() {
+      clearActiveConversationState();
+      renderInbox();
+      renderEmptyChatPanel('Selecciona un amigo para empezar a conversar.');
+      syncMessagesResponsiveLayout();
     }
 
     function clampCallWindow(root = ensureCallWindow()) {
@@ -1634,7 +1672,7 @@
       if (!root) {
         root = document.createElement('div');
         root.id = 'floating-call-window';
-        root.className = 'hidden fixed z-[70] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] sm:w-[360px] sm:max-w-[calc(100vw-1rem)] flex-col rounded-[28px] bg-[#1f1f1f] text-white shadow-2xl border border-white/10 overflow-hidden';
+        root.className = 'hidden fixed z-[70] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] sm:w-[360px] sm:max-w-[calc(100vw-1rem)] flex-col rounded-[28px] bg-[#1f1f1f] text-white shadow-2xl border border-white/10 overflow-hidden';
         root.style.top = '96px';
         root.style.right = '24px';
         root.innerHTML = `
@@ -1651,7 +1689,7 @@
             </button>
           </div>
           <div id="call-video-stage" class="px-4 sm:px-5 pt-3 sm:pt-4 shrink min-h-0">
-            <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[170px] sm:min-h-[230px] md:min-h-[280px] flex items-center justify-center">
+            <div class="relative overflow-hidden rounded-3xl bg-[#2b2b2b] min-h-[160px] sm:min-h-[230px] md:min-h-[280px] flex items-center justify-center">
               <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
               <video id="call-remote-video" class="absolute inset-0 w-full h-full object-cover hidden" autoplay playsinline muted></video>
               <div id="call-remote-placeholder" class="absolute inset-0 bg-[linear-gradient(160deg,#21264a_0%,#2f3d8b_60%,#1b2248_100%)] flex flex-col items-center justify-center gap-4">
@@ -1662,7 +1700,7 @@
                 </div>
                 <span id="call-video-placeholder-label" class="text-white/70 text-sm">Camara apagada</span>
               </div>
-              <video id="call-local-video" class="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 w-24 h-16 sm:w-28 sm:h-20 rounded-2xl object-cover bg-black/40 border border-white/20 hidden" autoplay playsinline muted></video>
+              <video id="call-local-video" class="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 w-20 h-14 sm:w-28 sm:h-20 rounded-2xl object-cover bg-black/40 border border-white/20 hidden" autoplay playsinline muted></video>
             </div>
           </div>
           <div id="call-actions-row" class="px-3 sm:px-4 py-3 sm:py-4 mt-auto flex flex-col gap-2 sm:gap-3">
@@ -1907,7 +1945,7 @@
 
       claimCallRuntime();
 
-      root.classList.toggle('w-[390px]', showVideoStage);
+      root.classList.toggle('sm:w-[390px]', showVideoStage);
       root.querySelector('#call-window-name').textContent = displayName(otherUser);
       root.querySelector('#call-window-status').textContent = describeCallStatus(session.status);
       root.querySelector('#call-video-stage').classList.toggle('hidden', callState.minimized || !showVideoStage);
@@ -2979,28 +3017,31 @@
 
       const friendProfile = otherUser ? resolveProfileData(otherUser) : findConversationUser(numericUserId);
       if (!friendProfile?.id) {
-        activeChat = null;
-        activeUser = null;
-        currentMessages = [];
-        updateUrlForChat(null);
+        clearActiveConversationState();
         renderInbox();
         renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
+        syncMessagesResponsiveLayout();
         showToast('Solo puedes chatear con tus amigos', 'error');
         return;
       }
 
       activeChat = numericUserId;
       activeUser = friendProfile;
+      mobileChatOpen = true;
       currentMessages = [];
       updateUrlForChat(numericUserId);
       renderInbox();
+      syncMessagesResponsiveLayout();
 
       chatPanel.innerHTML = `
-        <div class="flex items-center gap-3 p-4 bg-white border-b border-slate-200 shrink-0">
+        <div class="flex items-center gap-3 p-3 sm:p-4 bg-white border-b border-slate-200 shrink-0">
+          <button id="back-to-inbox-btn" type="button" class="lg:hidden w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors flex items-center justify-center text-slate-700 shrink-0" title="Volver a conversaciones">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+          </button>
           ${renderAvatar(friendProfile, { sizeClass: 'w-12 h-12', textClass: 'text-white font-bold', showOnline: true })}
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="font-bold text-slate-900 text-lg leading-tight">${escapeHtml(displayName(friendProfile))}</h2>
+                <h2 class="font-bold text-slate-900 text-base sm:text-lg leading-tight">${escapeHtml(displayName(friendProfile))}</h2>
               ${friendProfile.faculty ? `
                 <span class="text-white text-[10px] font-bold px-2 py-0.5 rounded-full" style="background:${userColor(friendProfile)}">
                   ${escapeHtml(friendProfile.faculty)}
@@ -3023,7 +3064,7 @@
         </div>
         <div class="p-4 bg-white border-t border-slate-200 shrink-0">
           <div class="flex items-end gap-3">
-            <textarea id="msg-input" class="flex-1 bg-slate-100 border border-slate-200 rounded-[1.4rem] px-4 py-3 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none resize-none min-h-[50px] max-h-36" placeholder="Escribe un mensaje para ${escapeHtml(displayName(friendProfile))}..." rows="1"></textarea>
+            <textarea id="msg-input" enterkeyhint="send" class="flex-1 bg-slate-100 border border-slate-200 rounded-[1.4rem] px-4 py-3 text-sm focus:ring-1 focus:ring-[#1B2A6B] outline-none resize-none min-h-[50px] max-h-36" placeholder="Escribe un mensaje para ${escapeHtml(displayName(friendProfile))}..." rows="1"></textarea>
             <button id="send-msg-btn" type="button" class="w-11 h-11 rounded-full bg-[#D4A017] flex items-center justify-center text-white hover:bg-[#b88a14] transition-colors shrink-0 shadow-sm">
               <span class="material-symbols-outlined text-[20px] ml-0.5">send</span>
             </button>
@@ -3032,10 +3073,15 @@
       `;
 
       const area = chatPanel.querySelector('#messages-area');
+      const backToInboxButton = chatPanel.querySelector('#back-to-inbox-btn');
       const input = chatPanel.querySelector('#msg-input');
       const sendButton = chatPanel.querySelector('#send-msg-btn');
       const startAudioCallButton = chatPanel.querySelector('#start-audio-call-btn');
       const startVideoCallButton = chatPanel.querySelector('#start-video-call-btn');
+
+      backToInboxButton?.addEventListener('click', () => {
+        exitMobileConversationView();
+      });
 
       async function sendMessage() {
         const content = input.value.trim();
@@ -3099,12 +3145,10 @@
       }
       if (!result?.ok) {
         if (result?.status === 403) {
-          activeChat = null;
-          activeUser = null;
-          currentMessages = [];
-          updateUrlForChat(null);
+          clearActiveConversationState();
           renderInbox();
           renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
+          syncMessagesResponsiveLayout();
         } else {
           area.innerHTML = '<p class="text-center text-slate-400 text-sm">No se pudo cargar la conversacion.</p>';
         }
@@ -3122,13 +3166,10 @@
       const otherUser = findConversationUser(numericUserId);
       if (!otherUser) {
         showToast('Solo puedes chatear con tus amigos', 'error');
-        activeChat = null;
-        activeUser = null;
-        currentMessages = [];
-        stopChatPolling();
-        updateUrlForChat(null);
+        clearActiveConversationState();
         renderInbox();
         renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
+        syncMessagesResponsiveLayout();
         return;
       }
 
@@ -3148,12 +3189,10 @@
       const result = await ChatAPI.getConversation(activeChat);
       if (!result?.ok) {
         if (result?.status === 403) {
-          activeChat = null;
-          activeUser = null;
-          currentMessages = [];
-          updateUrlForChat(null);
+          clearActiveConversationState();
           renderInbox();
           renderEmptyChatPanel('Solo puedes enviar mensajes a tus amigos.');
+          syncMessagesResponsiveLayout();
         }
         return;
       }
@@ -3220,12 +3259,9 @@
       renderInbox();
 
       if (!friends.length) {
-        activeChat = null;
-        activeUser = null;
-        currentMessages = [];
-        stopChatPolling();
-        updateUrlForChat(null);
+        clearActiveConversationState();
         renderEmptyChatPanel('Aun no tienes amigos aceptados para conversar.');
+        syncMessagesResponsiveLayout();
         return;
       }
 
@@ -3241,16 +3277,13 @@
           return;
         }
 
-        activeChat = null;
-        activeUser = null;
-        currentMessages = [];
-        stopChatPolling();
-        updateUrlForChat(null);
+        clearActiveConversationState();
         showToast('Ese chat solo esta disponible para amigos aceptados', 'error');
       }
 
       stopChatPolling();
       renderEmptyChatPanel('Selecciona un amigo para empezar a conversar.');
+      syncMessagesResponsiveLayout();
     }
 
       async function handleFriendshipChanged() {
@@ -3285,6 +3318,13 @@
       endCallOnPageLeave();
     }
 
+    function handleMessagesViewportResize() {
+      if (isMessagesMobileViewport() && activeChat) {
+        mobileChatOpen = true;
+      }
+      syncMessagesResponsiveLayout();
+    }
+
     function detachCallRouteLifecycle() {
       window.removeEventListener('hashchange', handleCallRouteChange);
       window.removeEventListener('pagehide', handleCallPageLeave);
@@ -3310,6 +3350,7 @@
     window.addEventListener('friendship:changed', handleFriendshipChanged);
     window.addEventListener('blocks:changed', handleBlocksChanged);
     window.addEventListener('presence:updated', handlePresenceUpdated);
+    window.addEventListener('resize', handleMessagesViewportResize);
     document.addEventListener('visibilitychange', handleMessagesVisibilityChange);
     if (ownsCallLifecycle) {
       window.addEventListener('hashchange', handleCallRouteChange);
@@ -3319,6 +3360,7 @@
       startIncomingCallPolling();
     }
     loadInbox(Boolean(activeChat));
+    syncMessagesResponsiveLayout();
 
     return () => {
       stopChatPolling();
@@ -3329,6 +3371,7 @@
       window.removeEventListener('friendship:changed', handleFriendshipChanged);
       window.removeEventListener('blocks:changed', handleBlocksChanged);
       window.removeEventListener('presence:updated', handlePresenceUpdated);
+      window.removeEventListener('resize', handleMessagesViewportResize);
       document.removeEventListener('visibilitychange', handleMessagesVisibilityChange);
       if (ownsCallLifecycle && !callState.session) {
         detachCallRouteLifecycle();
@@ -3462,7 +3505,7 @@
                 </div>
                 <div class="post-comments-compose">
                   <div class="post-comments-compose-row">
-                    <textarea id="comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
+                    <textarea id="comment-input" enterkeyhint="send" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
                     <button id="confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario">
                       <span class="material-symbols-outlined text-[18px]">send</span>
                     </button>
@@ -4314,7 +4357,7 @@
                       <button id="live-toggle-torch-mobile-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition shrink-0" title="Encender linterna">
                         <span class="material-symbols-outlined text-[20px]">flashlight_on</span>
                       </button>
-                      <textarea id="live-comment-input-mobile" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
+                      <textarea id="live-comment-input-mobile" enterkeyhint="send" rows="1" class="live-mobile-input" placeholder="Escribe algo..."></textarea>
                       <div class="relative">
                         <button id="live-reaction-trigger" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
                         <div id="live-reaction-selector" class="hidden absolute bottom-[120%] right-0 glass rounded-2xl px-1.5 py-2 flex flex-col items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
@@ -4348,7 +4391,7 @@
                   </div>
                   <div class="px-5 py-4 border-t border-white/10">
                     <div class="flex items-end gap-3">
-                      <textarea id="live-comment-input" rows="1" class="flex-1 min-h-[48px] max-h-28 rounded-[22px] bg-slate-950/70 border border-white/10 focus:border-[#ec4899]/40 px-4 py-3 text-sm text-white caret-[#ec4899] outline-none resize-none placeholder:text-white/35 transition" style="-webkit-text-fill-color:#fff;" placeholder="Escribe algo..."></textarea>
+                      <textarea id="live-comment-input" enterkeyhint="send" rows="1" class="flex-1 min-h-[48px] max-h-28 rounded-[22px] bg-slate-950/70 border border-white/10 focus:border-[#ec4899]/40 px-4 py-3 text-sm text-white caret-[#ec4899] outline-none resize-none placeholder:text-white/35 transition" style="-webkit-text-fill-color:#fff;" placeholder="Escribe algo..."></textarea>
                       <div class="relative">
                         <button id="live-reaction-trigger-desktop" type="button" class="w-12 h-12 rounded-full gradient-live shadow-glow hover:brightness-110 flex items-center justify-center text-xl shrink-0 transition-transform active:scale-90 select-none" title="Mantén presionado para elegir reacción">❤️</button>
                         <div id="live-reaction-selector-desktop" class="hidden absolute bottom-[120%] right-0 glass rounded-2xl px-1.5 py-2 flex flex-col items-center gap-1 shadow-xl z-50" style="animation:live-selector-pop 0.2s ease-out both;">
@@ -6971,8 +7014,8 @@
       activeNav: 'messages',
       render() {
         return `
-          <main class="flex flex-col lg:flex-row bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm min-w-0" style="height:calc(100vh - 7rem);">
-            <div class="w-full lg:w-[340px] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-white flex-shrink-0">
+          <main id="messages-layout" class="flex flex-col lg:flex-row bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm min-w-0" style="height:calc(100dvh - 7rem);">
+            <div id="messages-inbox-pane" class="w-full lg:w-[340px] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-white flex-shrink-0 min-h-0">
               <div class="p-4 border-b border-slate-100">
                 <div class="flex items-center justify-between gap-3">
                   <div>
@@ -7224,10 +7267,12 @@
                   <input id="groups-search" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] outline-none" placeholder="Nombre o descripcion"/>
                 </div>
               </div>
-              <div class="flex flex-wrap items-center bg-[#E5E7EB] rounded-full p-1 w-max mb-6">
-                <button type="button" data-groups-tab="discover" class="groups-tab-btn px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Descubrir</button>
-                <button type="button" data-groups-tab="mine" class="groups-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Mis grupos</button>
-                <button type="button" data-groups-tab="create" class="groups-tab-btn px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Crear grupo</button>
+              <div class="w-full overflow-x-auto pb-1 mb-6 custom-scrollbar">
+                <div class="inline-flex min-w-max items-center bg-[#E5E7EB] rounded-full p-1">
+                  <button type="button" data-groups-tab="discover" class="groups-tab-btn whitespace-nowrap px-5 py-1.5 bg-white rounded-full text-sm font-semibold text-slate-900 shadow-sm">Descubrir</button>
+                  <button type="button" data-groups-tab="mine" class="groups-tab-btn whitespace-nowrap px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Mis grupos</button>
+                  <button type="button" data-groups-tab="create" class="groups-tab-btn whitespace-nowrap px-5 py-1.5 rounded-full text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Crear grupo</button>
+                </div>
               </div>
               <div id="groups-discover-toolbar" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                 <p class="text-sm text-slate-500">Explora grupos y detecta de inmediato si ya formas parte de ellos.</p>
@@ -7938,7 +7983,7 @@
                   </div>
                   <div class="post-comments-compose">
                     <div class="post-comments-compose-row">
-                      <textarea id="group-comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
+                      <textarea id="group-comment-input" enterkeyhint="send" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
                       <button id="group-confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario">
                         <span class="material-symbols-outlined text-[18px]">send</span>
                       </button>
@@ -9057,7 +9102,7 @@
                 </div>
                 <div class="post-comments-compose">
                   <div class="post-comments-compose-row">
-                    <textarea id="profile-comment-input" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
+                    <textarea id="profile-comment-input" enterkeyhint="send" class="post-comments-compose-input" rows="1" placeholder="Escribe un comentario..."></textarea>
                     <button id="profile-confirm-comment-btn" type="button" class="post-comments-compose-send" aria-label="Enviar comentario del perfil">
                       <span class="material-symbols-outlined text-[18px]">send</span>
                     </button>
@@ -9188,6 +9233,9 @@
         let profilePosts = [];
         let pendingProfileCommentId = null;
         let currentProfileCommentSort = 'newest';
+        let profileRelationshipPollTimer = null;
+        let profileLoadToken = 0;
+        const PROFILE_RELATIONSHIP_POLL_INTERVAL_MS = 2000;
         const cropConfigs = {
           avatar: {
             field: 'avatar',
@@ -9469,6 +9517,11 @@
         }
 
         async function openCropModal(mode, file) {
+          if (!isOwnProfile) {
+            showToast('Solo puedes editar tu propio perfil', 'error');
+            clearCropInput(mode);
+            return;
+          }
           if (!file) return;
           if (!String(file.type || '').startsWith('image/')) {
             showToast('Selecciona un archivo de imagen valido', 'error');
@@ -9514,6 +9567,10 @@
         }
 
         async function uploadMedia(field, file) {
+          if (!isOwnProfile) {
+            showToast('Solo puedes editar tu propio perfil', 'error');
+            return false;
+          }
           if (!file) return false;
           const formData = new FormData();
           formData.append(field, file);
@@ -9671,11 +9728,45 @@
           }
         }
 
-        async function loadProfile() {
+        function stopProfileRelationshipPolling() {
+          if (profileRelationshipPollTimer) {
+            window.clearInterval(profileRelationshipPollTimer);
+            profileRelationshipPollTimer = null;
+          }
+        }
+
+        function syncProfileRelationshipPolling() {
+          stopProfileRelationshipPolling();
+          if (!profileData || isOwnProfile) {
+            return;
+          }
+
+          profileRelationshipPollTimer = window.setInterval(() => {
+            if (document.hidden) return;
+            loadProfile({ skipPosts: true, silent: true }).catch(() => {});
+          }, PROFILE_RELATIONSHIP_POLL_INTERVAL_MS);
+        }
+
+        async function loadProfile(options = {}) {
+          const {
+            skipPosts = false,
+            silent = false,
+          } = options;
           const targetUserId = params.id ? Number(params.id) : Number(user.id);
+          const loadToken = ++profileLoadToken;
+          isOwnProfile = Number(targetUserId) === Number(appState.user.id);
+          changeAvatarButton.classList.add('hidden');
+          changeAvatarButton.classList.remove('inline-flex');
+          changeBannerButton.classList.add('hidden');
+          changeBannerButton.classList.remove('inline-flex');
+          avatarInput.value = '';
+          bannerInput.value = '';
           const result = await AuthAPI.getProfile(targetUserId);
 
           if (!result?.ok) {
+            if (silent || loadToken !== profileLoadToken) {
+              return;
+            }
             appView.innerHTML = `
               <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
                 <p class="text-slate-500 text-sm">No se pudo cargar el perfil.</p>
@@ -9685,6 +9776,9 @@
           }
 
           await ensurePublicUsersLoaded();
+          if (loadToken !== profileLoadToken) {
+            return;
+          }
           profileData = resolveProfileData(result.data);
           if (profileData.id !== null) {
             publicUsersState.map.set(Number(profileData.id), profileData);
@@ -9752,6 +9846,7 @@
           changeBannerButton.classList.toggle('hidden', !isOwnProfile);
           changeBannerButton.classList.toggle('inline-flex', isOwnProfile);
           updateBioEditorState();
+          syncProfileRelationshipPolling();
 
           if (isOwnProfile) {
             profileActions.innerHTML = '';
@@ -9807,7 +9902,20 @@
               `;
             }
 
-          await loadPosts(profileData.id);
+          if (!skipPosts) {
+            await loadPosts(profileData.id);
+          }
+        }
+
+        function handleProfileFriendshipChanged() {
+          loadProfile({ skipPosts: true, silent: true }).catch(() => {});
+        }
+
+        function handleProfileVisibilityChange() {
+          if (document.hidden) {
+            return;
+          }
+          loadProfile({ skipPosts: true, silent: true }).catch(() => {});
         }
 
         profileActions.addEventListener('click', async (event) => {
@@ -9959,8 +10067,20 @@
           router.navigate('profile', { id: button.dataset.userId });
         });
 
-        changeAvatarButton.addEventListener('click', () => avatarInput.click());
-        changeBannerButton.addEventListener('click', () => bannerInput.click());
+        changeAvatarButton.addEventListener('click', () => {
+          if (!isOwnProfile) {
+            showToast('Solo puedes editar tu propio perfil', 'error');
+            return;
+          }
+          avatarInput.click();
+        });
+        changeBannerButton.addEventListener('click', () => {
+          if (!isOwnProfile) {
+            showToast('Solo puedes editar tu propio perfil', 'error');
+            return;
+          }
+          bannerInput.click();
+        });
         avatarInput.addEventListener('change', (event) => openCropModal('avatar', event.target.files?.[0]));
         bannerInput.addEventListener('change', (event) => openCropModal('banner', event.target.files?.[0]));
         mediaCropZoom.addEventListener('input', (event) => {
@@ -10063,7 +10183,17 @@
           }
         });
 
+        window.addEventListener('friendship:changed', handleProfileFriendshipChanged);
+        window.addEventListener('blocks:changed', handleProfileFriendshipChanged);
+        document.addEventListener('visibilitychange', handleProfileVisibilityChange);
+
         loadProfile();
+        return () => {
+          stopProfileRelationshipPolling();
+          window.removeEventListener('friendship:changed', handleProfileFriendshipChanged);
+          window.removeEventListener('blocks:changed', handleProfileFriendshipChanged);
+          document.removeEventListener('visibilitychange', handleProfileVisibilityChange);
+        };
       },
     },
     admin: {

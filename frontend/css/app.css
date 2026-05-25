@@ -831,6 +831,11 @@ body {
   transition: background .2s ease;
 }
 
+.profile-view .camera-btn.hidden,
+.profile-view #change-banner-btn.hidden {
+  display: none !important;
+}
+
 .profile-view .camera-btn:hover {
   background: #152259;
 }
