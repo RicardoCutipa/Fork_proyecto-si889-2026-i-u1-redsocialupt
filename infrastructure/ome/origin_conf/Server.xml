@@ -261,7 +261,6 @@
 									<Codec>h264</Codec>
 									<Bitrate>8000000</Bitrate>
 									<Framerate>60</Framerate>
-									<Width>1920</Width>
 									<Height>1080</Height>
 									<Preset>faster</Preset>
 								</Video>
@@ -270,7 +269,6 @@
 									<Codec>h264</Codec>
 									<Bitrate>4500000</Bitrate>
 									<Framerate>60</Framerate>
-									<Width>1280</Width>
 									<Height>720</Height>
 									<Preset>faster</Preset>
 								</Video>
@@ -279,7 +277,6 @@
 									<Codec>h264</Codec>
 									<Bitrate>1600000</Bitrate>
 									<Framerate>30</Framerate>
-									<Width>854</Width>
 									<Height>480</Height>
 									<Preset>faster</Preset>
 								</Video>
@@ -288,7 +285,6 @@
 									<Codec>h264</Codec>
 									<Bitrate>900000</Bitrate>
 									<Framerate>30</Framerate>
-									<Width>640</Width>
 									<Height>360</Height>
 									<Preset>faster</Preset>
 								</Video>

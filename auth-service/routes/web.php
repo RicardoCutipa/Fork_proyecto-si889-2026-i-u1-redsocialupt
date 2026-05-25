@@ -14,6 +14,7 @@ $router->group(['prefix' => 'api/auth'], function () use ($router) {
 
     // ── Público ──────────────────────────────────────────────
     $router->post('/google', 'AuthController@googleAuth');
+    $router->post('/dev-login', 'AuthController@devLogin');
 
     // ── Protegido con JWT ────────────────────────────────────
     $router->group(['middleware' => 'jwt'], function () use ($router) {

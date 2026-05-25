@@ -5044,6 +5044,7 @@
           } catch (error) {
             console.warn('No se pudo cambiar el estado de la linterna del directo:', error);
             hostTorchEnabled = false;
+            hostTorchSupported = false;
             return false;
           }
         }

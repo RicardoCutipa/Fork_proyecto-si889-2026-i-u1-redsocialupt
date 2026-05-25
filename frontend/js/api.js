@@ -190,6 +190,9 @@ const AuthAPI = {
   googleLogin: (idToken) => apiFetch(`${API.auth}/auth/google`, {
     method: 'POST', body: JSON.stringify({ id_token: idToken })
   }),
+  devLogin: () => apiFetch(`${API.auth}/auth/dev-login`, {
+    method: 'POST'
+  }),
   completeProfile: (data) => apiFetch(`${API.auth}/auth/complete-profile`, {
     method: 'POST', body: JSON.stringify(data)
   }),

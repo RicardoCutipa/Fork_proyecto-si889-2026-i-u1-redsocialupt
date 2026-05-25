@@ -56,6 +56,26 @@ class AuthController extends BaseController
         }
     }
 
+    public function devLogin(Request $request): JsonResponse
+    {
+        if (!$this->isDevLoginAllowed($request)) {
+            return response()->json(['error' => 'Login de prueba disponible solo en entorno local'], 403);
+        }
+
+        try {
+            return response()->json($this->authService->devLogin(), 200);
+        } catch (\Exception $e) {
+            [$message, $code, $reason, $blockedUntil, $isIndefinite] = $this->normalizeExceptionResponse($e);
+            return response()->json(array_filter([
+                'error' => $message,
+                'code' => $code,
+                'reason' => $reason,
+                'blocked_until' => $blockedUntil,
+                'is_indefinite' => $isIndefinite,
+            ], fn ($value) => $value !== null), is_int($e->getCode()) && $e->getCode() >= 100 && $e->getCode() < 600 ? $e->getCode() : 500);
+        }
+    }
+
     /**
      * POST /api/auth/complete-profile
      * Guarda los datos del formulario de primer acceso (RF-01).
@@ -382,5 +402,15 @@ class AuthController extends BaseController
         }
 
         return [$e->getMessage(), null, null, null, null];
+    }
+
+    private function isDevLoginAllowed(Request $request): bool
+    {
+        if (env('APP_ENV', 'production') !== 'local') {
+            return false;
+        }
+
+        $host = strtolower($request->getHost());
+        return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
     }
 }

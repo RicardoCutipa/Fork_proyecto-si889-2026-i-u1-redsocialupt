@@ -102,6 +102,13 @@
           <div id="google-btn-container" class="w-full max-w-[380px] flex items-center justify-center min-h-[48px]">
             <p class="text-on-surface-variant text-sm">Cargando inicio de sesion...</p>
           </div>
+          <div id="dev-login-section" class="hidden w-full max-w-[380px] mt-4">
+            <button id="dev-login-btn" type="button" class="w-full rounded-2xl bg-[#001256] px-4 py-3 text-sm font-bold text-white shadow-[0_12px_30px_rgba(0,18,86,0.18)] transition-all hover:bg-[#0a1d77] active:scale-[0.99] flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-[19px]">bolt</span>
+              Entrar como usuario prueba
+            </button>
+            <p id="dev-login-message" class="mt-2 hidden text-center text-xs font-medium"></p>
+          </div>
           <div class="mt-6 w-full max-w-[380px] py-2 px-4 bg-[#f0f4ff] border border-dashed border-[#8694db] rounded-xl flex items-center justify-center gap-3">
             <span class="material-symbols-outlined text-upt-blue text-[16px] fill-1">info</span>
             <p class="text-upt-blue text-[11px] font-medium text-center leading-tight">
@@ -208,6 +215,39 @@
       renderedWaveSignature = signature;
     }
 
+    function isLocalDevHost() {
+      return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+    }
+
+    function setupDevLogin() {
+      const section = document.getElementById('dev-login-section');
+      const button = document.getElementById('dev-login-btn');
+      const message = document.getElementById('dev-login-message');
+      if (!section || !button || !isLocalDevHost()) return;
+
+      section.classList.remove('hidden');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.classList.add('opacity-70', 'cursor-wait');
+        message.className = 'mt-2 text-center text-xs font-medium text-on-surface-variant';
+        message.textContent = 'Creando sesion local...';
+        clearBlockedNotice();
+
+        const result = await AuthAPI.devLogin();
+        if (!result || !result.ok) {
+          button.disabled = false;
+          button.classList.remove('opacity-70', 'cursor-wait');
+          message.className = 'mt-2 text-center text-xs font-medium text-red-600';
+          message.textContent = result?.data?.error || 'No se pudo iniciar sesion de prueba';
+          return;
+        }
+
+        const { token, user } = result.data;
+        saveSession(token, user);
+        window.location.href = '/app.html#feed';
+      });
+    }
+
     window.addEventListener('resize', () => {
       if (loginDotWaveResizeTimer) clearTimeout(loginDotWaveResizeTimer);
       loginDotWaveResizeTimer = setTimeout(renderLoginDotWave, 120);
@@ -215,6 +255,7 @@
 
     window.onload = () => {
       renderLoginDotWave();
+      setupDevLogin();
       document.getElementById('blocked-logout-btn')?.addEventListener('click', () => {
         clearBlockedNotice();
         clearSession();

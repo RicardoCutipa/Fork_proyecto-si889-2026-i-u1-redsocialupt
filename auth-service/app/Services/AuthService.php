@@ -88,6 +88,49 @@ class AuthService
         ];
     }
 
+    public function devLogin(): array
+    {
+        $this->releaseExpiredBlocks();
+
+        $payload = [
+            'google_id' => 'dev-local-user',
+            'email' => 'dev.local@virtual.upt.pe',
+            'name' => 'Usuario Prueba Local',
+            'full_name' => 'Usuario Prueba Local',
+            'user_type' => 'student',
+            'faculty' => 'FAING',
+            'career' => 'Ingenieria de Sistemas',
+            'area' => null,
+            'position_title' => null,
+            'academic_cycle' => 'X',
+            'student_code' => '999999',
+            'role' => 'user',
+            'is_active' => true,
+            'is_profile_complete' => true,
+            'blocked_reason' => null,
+            'blocked_until' => null,
+        ];
+
+        $user = User::where('google_id', $payload['google_id'])
+            ->orWhere('email', $payload['email'])
+            ->first();
+
+        if ($user) {
+            $user->forceFill($payload)->save();
+            $user = $user->fresh();
+        } else {
+            $user = User::create($payload);
+        }
+
+        $user = $this->markPresence($user);
+
+        return [
+            'token' => $this->generateJwt($user),
+            'is_profile_complete' => true,
+            'user' => $this->formatUser($user),
+        ];
+    }
+
     /**
      * Completa el perfil en el primer acceso (RF-01).
      */
