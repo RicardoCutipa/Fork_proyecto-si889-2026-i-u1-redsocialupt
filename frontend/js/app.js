@@ -457,14 +457,16 @@
   function setBackgroundMedia(element, url, fallbackColor) {
     if (!element) return;
     if (url) {
-      element.style.backgroundImage = `url('${safeUrl(url)}')`;
-      element.style.backgroundSize = 'cover';
-      element.style.backgroundPosition = 'center';
-      if (fallbackColor) element.style.backgroundColor = fallbackColor;
+      element.style.setProperty('background-image', `url("${safeUrl(url)}")`, 'important');
+      element.style.setProperty('background-size', 'cover', 'important');
+      element.style.setProperty('background-position', 'center', 'important');
+      if (fallbackColor) element.style.setProperty('background-color', fallbackColor, 'important');
       return;
     }
-    element.style.backgroundImage = '';
-    if (fallbackColor) element.style.backgroundColor = fallbackColor;
+    element.style.setProperty('background-image', 'none', 'important');
+    element.style.removeProperty('background-size');
+    element.style.removeProperty('background-position');
+    if (fallbackColor) element.style.setProperty('background-color', fallbackColor, 'important');
   }
 
   function setAvatarElement(element, user) {
@@ -473,11 +475,13 @@
     const color = userColor(user);
     if (user?.avatar_url) {
       element.textContent = '';
+      element.dataset.avatarPhoto = 'true';
       setBackgroundMedia(element, user.avatar_url, color);
     } else {
       element.textContent = initials(name);
-      element.style.backgroundImage = '';
-      element.style.backgroundColor = color;
+      element.dataset.avatarPhoto = 'false';
+      element.style.setProperty('background-image', 'none', 'important');
+      element.style.setProperty('background-color', color, 'important');
     }
   }
 
@@ -849,27 +853,34 @@
     });
 
     return `
-      <article class="rounded-[18px] border border-slate-200 bg-slate-50 ${compact ? 'p-3' : 'p-4'}">
-        <div class="flex items-start ${compact ? 'gap-2.5' : 'gap-3'}">
+      <article class="post-comment-card ${compact ? 'post-comment-card--compact' : ''}">
+        <div class="post-comment-card__inner ${compact ? 'gap-2.5' : 'gap-3'}">
           ${renderAvatar(author, { sizeClass: compact ? 'w-8 h-8 md:w-9 md:h-9' : 'w-10 h-10', textClass: 'text-white font-bold text-sm' })}
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-1.5 mb-1">
-              <span class="font-semibold text-[13px] text-slate-900">${escapeHtml(displayName(author))}</span>
-              ${author.faculty ? `
-                <span class="text-[9px] font-bold text-white px-1.5 py-0.5 rounded-full" style="background:${userColor(author)}">
-                  ${escapeHtml(author.faculty)}
-                </span>
-              ` : ''}
-              <span class="text-[11px] text-slate-500">${escapeHtml(timeAgo(comment.created_at))}</span>
-            </div>
-            <p class="content-break text-[13px] text-slate-700 ${compact ? 'leading-5' : 'leading-6'}">${nl2br(comment.content || '')}</p>
-            <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <div class="social-reaction-bar">
-                ${renderReactionTrigger('comment', comment.id, comment.current_reaction, interactive)}
+          <div class="post-comment-card__thread min-w-0 flex-1">
+            <div class="post-comment-card__bubble">
+              <div class="post-comment-card__meta">
+                <div class="post-comment-card__meta-main">
+                  <span class="post-comment-card__name">${escapeHtml(displayName(author))}</span>
+                  ${author.faculty ? `
+                    <span class="post-comment-card__faculty" style="background:${userColor(author)}">
+                      ${escapeHtml(author.faculty)}
+                    </span>
+                  ` : ''}
+                </div>
+                <span class="post-comment-card__time">${escapeHtml(timeAgo(comment.created_at))}</span>
               </div>
-              ${renderReactionSummary(comment.reactions_count, comment.reactions_total)}
+              <p class="post-comment-card__text content-break ${compact ? 'leading-5' : 'leading-6'}">${nl2br(comment.content || '')}</p>
+            </div>
+            <div class="post-comment-card__actions">
+              <div class="post-comment-card__actions-left">
+                <div class="social-reaction-bar">
+                  ${renderReactionTrigger('comment', comment.id, comment.current_reaction, interactive)}
+                </div>
+                ${renderReactionSummary(comment.reactions_count, comment.reactions_total)}
+              </div>
               ${interactive ? `
-                <button type="button" data-action="report-comment" data-comment-id="${comment.id}" class="ml-auto text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+                <button type="button" data-action="report-comment" data-comment-id="${comment.id}" class="post-comment-card__report">
+                  <span class="material-symbols-outlined text-[14px]">flag</span>
                   Reportar
                 </button>
               ` : ''}
@@ -879,6 +890,87 @@
         </div>
       </article>
     `;
+  }
+
+  function bindCommentSortChips(root, select, onSelect) {
+    const buttons = Array.from(root?.querySelectorAll('[data-comment-sort-option]') || []);
+    const sync = (value = select?.value || 'newest') => {
+      buttons.forEach((button) => {
+        const isActive = button.dataset.commentSortOption === value;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+      });
+    };
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextValue = button.dataset.commentSortOption || 'newest';
+        if (select) select.value = nextValue;
+        sync(nextValue);
+        onSelect?.(nextValue);
+      });
+    });
+
+    sync();
+    return sync;
+  }
+
+  function ensurePostImageLightbox() {
+    let root = document.getElementById('post-image-lightbox');
+    if (root) {
+      return root;
+    }
+
+    root = document.createElement('div');
+    root.id = 'post-image-lightbox';
+    root.className = 'post-image-lightbox hidden fixed inset-0 z-[120] items-center justify-center p-4';
+    root.innerHTML = `
+      <div class="post-image-lightbox__backdrop absolute inset-0"></div>
+      <button type="button" class="post-image-lightbox__close" aria-label="Cerrar imagen ampliada">
+        <span class="material-symbols-outlined text-[22px]">close</span>
+      </button>
+      <div class="post-image-lightbox__content relative z-[1]">
+        <img id="post-image-lightbox-img" class="post-image-lightbox__img" alt="Imagen ampliada de la publicacion"/>
+      </div>
+    `;
+    document.body.appendChild(root);
+
+    const close = () => {
+      root.classList.add('hidden');
+      root.classList.remove('flex');
+      document.body.classList.remove('overflow-hidden');
+      const img = root.querySelector('#post-image-lightbox-img');
+      if (img) {
+        img.removeAttribute('src');
+      }
+    };
+
+    root.querySelector('.post-image-lightbox__backdrop')?.addEventListener('click', close);
+    root.querySelector('.post-image-lightbox__close')?.addEventListener('click', close);
+    root.addEventListener('click', (event) => {
+      if (event.target === root) close();
+    });
+    root.__closeLightbox = close;
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !root.classList.contains('hidden')) {
+        close();
+      }
+    });
+
+    return root;
+  }
+
+  function openPostImageLightbox(imageUrl, alt = 'Imagen ampliada de la publicacion') {
+    if (!imageUrl) return;
+    const root = ensurePostImageLightbox();
+    const img = root.querySelector('#post-image-lightbox-img');
+    if (img) {
+      img.src = safeUrl(imageUrl);
+      img.alt = alt;
+    }
+    root.classList.remove('hidden');
+    root.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
   }
 
   function syncCurrentUser(payload) {
@@ -1271,56 +1363,77 @@
       });
       const visibilityMeta = getVisibilityMeta(post.visibility);
       const hideAudienceBadge = options.hideAudienceBadge === true || (options.hideGroupBadge === true && Number(post.group_id) > 0);
-      const audienceMarkup = hideAudienceBadge ? '' : post.group_id ? `
-        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-          <span class="material-symbols-outlined text-[14px]">diversity_3</span>
-          ${escapeHtml(post.group_name || 'Grupo')}
-        </span>
-      ` : `
-        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibilityMeta.tone}">
-          <span class="material-symbols-outlined text-[14px]">${visibilityMeta.icon}</span>
-          ${escapeHtml(visibilityMeta.label)}
-        </span>
-      `;
+      const audienceLabel = hideAudienceBadge
+        ? ''
+        : (post.group_id
+          ? escapeHtml(post.group_name || 'Grupo')
+          : escapeHtml(visibilityMeta.label));
+      const audienceIcon = post.group_id ? 'groups' : 'public';
       const authorMeta = [
         careerLabel(author) ? `<span>${escapeHtml(careerLabel(author))}</span>` : '',
         `<span>${escapeHtml(timeAgo(post.created_at))}</span>`,
-      ].filter(Boolean).join('<span>&middot;</span>');
+      ].filter(Boolean).join('<span class="post-modal-preview-author-dot">·</span>');
+      const reactionTotal = Number(post.reactions_total || 0);
+      const commentsTotal = Number(post.comments_count || 0);
+      const imageAlt = post.group_id
+        ? `Imagen de la publicacion del grupo ${post.group_name || ''}`.trim()
+        : 'Imagen de la publicacion';
 
     return `
       <article class="post-modal-preview-card">
         <div class="post-modal-preview-head">
-          <div class="flex items-start gap-2.5">
-            ${renderAvatar(author, { sizeClass: 'w-9 h-9', textClass: 'text-white font-bold text-sm' })}
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="font-bold text-[13px] text-slate-900">${escapeHtml(displayName(author))}</span>
-                <span class="text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full" style="background:${userColor(author)}">
-                  ${escapeHtml(author.faculty || 'UPT')}
-                </span>
+          <div class="post-modal-preview-author-row">
+            <button type="button" class="post-modal-preview-author post-modal-preview-author--button" data-action="open-profile" data-user-id="${post.user_id}">
+              ${renderAvatar(author, { sizeClass: 'w-10 h-10', textClass: 'text-white font-bold text-sm' })}
+              <div class="post-modal-preview-author-copy min-w-0">
+                <div class="post-modal-preview-author-main">
+                  <span class="post-modal-preview-author-name">${escapeHtml(displayName(author))}</span>
+                  <span class="post-modal-preview-author-faculty" style="background:${userColor(author)}">
+                    ${escapeHtml(author.faculty || 'UPT')}
+                  </span>
+                </div>
+                <div class="post-modal-preview-author-meta">${authorMeta}</div>
               </div>
-                <div class="text-[11px] text-slate-500 mt-0.5">${authorMeta}</div>
-              </div>
+            </button>
+            <button type="button" class="post-modal-preview-menu" data-action="report-post" data-post-id="${post.id}" aria-label="Reportar publicacion">
+              <span class="material-symbols-outlined text-[18px]">more_horiz</span>
+            </button>
+          </div>
+          ${audienceLabel ? `
+            <div class="post-modal-preview-audience">
+              <span class="material-symbols-outlined text-[14px]">${audienceIcon}</span>
+              <span>${audienceLabel}</span>
             </div>
-            ${audienceMarkup ? `
-              <div class="mt-3">
-                ${audienceMarkup}
-              </div>
-            ` : ''}
-            ${post.content ? `
-              <div class="post-modal-preview-copy content-break">${nl2br(post.content)}</div>
-            ` : ''}
+          ` : ''}
+          ${post.content ? `
+            <div class="post-modal-preview-copy content-break">${nl2br(post.content)}</div>
+          ` : ''}
         </div>
         ${post.image_url ? `
           <div class="post-modal-preview-media">
-            <img src="${safeUrl(post.image_url)}" alt="Imagen de la publicacion" onerror="this.parentElement.style.display='none'"/>
+            <button type="button" class="post-modal-preview-media-button" data-action="open-post-image" data-image-url="${safeUrl(post.image_url)}" data-image-alt="${escapeHtml(imageAlt)}">
+              <img src="${safeUrl(post.image_url)}" alt="${escapeHtml(imageAlt)}" onerror="this.closest('.post-modal-preview-media').style.display='none'"/>
+            </button>
           </div>
         ` : ''}
         <div class="post-modal-preview-stats">
-          <div class="flex items-center gap-3">
-            <span>${post.reactions_total || 0} Reacciones</span>
-            <span>${post.comments_count || 0} Comentarios</span>
+          <div class="post-modal-preview-stat">
+            ${renderReactionSummary(post.reactions_count, reactionTotal, 'Sin reacciones')}
+            ${reactionTotal ? `<span>${reactionTotal} ${reactionTotal === 1 ? 'reaccion' : 'reacciones'}</span>` : ''}
           </div>
+          <div class="post-modal-preview-stat">
+            <span class="material-symbols-outlined text-[15px]">chat_bubble</span>
+            <span>${commentsTotal} ${commentsTotal === 1 ? 'comentario' : 'comentarios'}</span>
+          </div>
+        </div>
+        <div class="post-modal-preview-actions">
+          <div class="social-reaction-bar">
+            ${renderReactionTrigger('post', post.id, post.current_reaction, true)}
+          </div>
+          <button type="button" class="post-modal-preview-report" data-action="report-post" data-post-id="${post.id}">
+            <span class="material-symbols-outlined text-[15px]">flag</span>
+            <span>Reportar</span>
+          </button>
         </div>
       </article>
     `;
@@ -1667,8 +1780,10 @@
       videoSender: null,
       videoTransceiver: null,
       audioContext: null,
-      audioAnalyser: null,
-      audioMeterData: null,
+      localAudioAnalyser: null,
+      localAudioMeterData: null,
+      remoteAudioAnalyser: null,
+      remoteAudioMeterData: null,
       ringAudio: null,
     };
 
@@ -1782,27 +1897,51 @@
       });
     }
 
+    function renderAudioMeterBars(bars, analyser, meterData, options = {}) {
+      const inactiveScale = options.inactiveScale ?? 0.2;
+      const inactiveOpacity = options.inactiveOpacity ?? 0.35;
+      if (!bars.length) {
+        return;
+      }
+
+      if (!analyser || !meterData || options.disabled) {
+        bars.forEach((bar) => {
+          bar.style.transform = `scaleY(${inactiveScale})`;
+          bar.style.opacity = String(inactiveOpacity);
+        });
+        return;
+      }
+
+      analyser.getByteFrequencyData(meterData);
+      const chunk = Math.max(1, Math.floor(meterData.length / bars.length));
+      bars.forEach((bar, index) => {
+        const slice = meterData.slice(index * chunk, (index + 1) * chunk);
+        const avg = slice.reduce((sum, value) => sum + value, 0) / Math.max(1, slice.length);
+        const scale = Math.max(0.2, Math.min(1, avg / 90));
+        bar.style.transform = `scaleY(${scale})`;
+        bar.style.opacity = String(Math.max(0.35, scale));
+      });
+    }
+
     function startAudioMeter() {
       stopAudioMeter();
-      if (!callState.audioAnalyser || !callState.audioMeterData || callState.isMuted) return;
-      const bars = Array.from(document.querySelectorAll('[data-audio-meter-bar]'));
-      if (!bars.length) return;
+      const localBars = Array.from(document.querySelectorAll('[data-audio-meter-group="local"]'));
+      const remoteBars = Array.from(document.querySelectorAll('[data-audio-meter-group="remote"]'));
+      if (!localBars.length && !remoteBars.length) return;
 
       const tick = () => {
-        if (!callState.audioAnalyser || !callState.audioMeterData || callState.isMuted) {
+        if (
+          !callState.localAudioAnalyser
+          && !callState.remoteAudioAnalyser
+          && !callState.localAudioMeterData
+          && !callState.remoteAudioMeterData
+        ) {
           stopAudioMeter();
           return;
         }
 
-        callState.audioAnalyser.getByteFrequencyData(callState.audioMeterData);
-        const chunk = Math.max(1, Math.floor(callState.audioMeterData.length / bars.length));
-        bars.forEach((bar, index) => {
-          const slice = callState.audioMeterData.slice(index * chunk, (index + 1) * chunk);
-          const avg = slice.reduce((sum, value) => sum + value, 0) / Math.max(1, slice.length);
-          const scale = Math.max(0.2, Math.min(1, avg / 90));
-          bar.style.transform = `scaleY(${scale})`;
-          bar.style.opacity = String(Math.max(0.35, scale));
-        });
+        renderAudioMeterBars(localBars, callState.localAudioAnalyser, callState.localAudioMeterData, { disabled: callState.isMuted });
+        renderAudioMeterBars(remoteBars, callState.remoteAudioAnalyser, callState.remoteAudioMeterData);
 
         callMeterFrame = requestAnimationFrame(tick);
       };
@@ -1810,66 +1949,145 @@
       tick();
     }
 
+    function ensureCallAudioContext() {
+      if (callState.audioContext) {
+        if (callState.audioContext.state === 'suspended') {
+          callState.audioContext.resume().catch(() => {});
+        }
+        return callState.audioContext;
+      }
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return null;
+      }
+
+      callState.audioContext = new AudioContextClass();
+      if (callState.audioContext.state === 'suspended') {
+        callState.audioContext.resume().catch(() => {});
+      }
+      return callState.audioContext;
+    }
+
+    function ensureLocalAudioMeter() {
+      const audioTrack = getLocalAudioTrack();
+      const audioContext = ensureCallAudioContext();
+      if (!audioTrack || !audioContext || callState.localAudioAnalyser) {
+        return;
+      }
+
+      const analyserStream = new MediaStream([audioTrack]);
+      const source = audioContext.createMediaStreamSource(analyserStream);
+      callState.localAudioAnalyser = audioContext.createAnalyser();
+      callState.localAudioAnalyser.fftSize = 64;
+      callState.localAudioMeterData = new Uint8Array(callState.localAudioAnalyser.frequencyBinCount);
+      source.connect(callState.localAudioAnalyser);
+      startAudioMeter();
+    }
+
+    function ensureRemoteAudioMeter() {
+      const remoteAudioTrack = callState.remoteStream?.getAudioTracks()?.find((track) => track.readyState === 'live') || null;
+      const audioContext = ensureCallAudioContext();
+      if (!remoteAudioTrack || !audioContext || callState.remoteAudioAnalyser) {
+        return;
+      }
+
+      const analyserStream = new MediaStream([remoteAudioTrack]);
+      const source = audioContext.createMediaStreamSource(analyserStream);
+      callState.remoteAudioAnalyser = audioContext.createAnalyser();
+      callState.remoteAudioAnalyser.fftSize = 64;
+      callState.remoteAudioMeterData = new Uint8Array(callState.remoteAudioAnalyser.frequencyBinCount);
+      source.connect(callState.remoteAudioAnalyser);
+      startAudioMeter();
+    }
+
     function ensureCallWindow() {
       let root = document.getElementById('floating-call-window');
       if (!root) {
         root = document.createElement('div');
         root.id = 'floating-call-window';
-        root.className = 'call-window hidden fixed z-[70] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] sm:w-[360px] sm:max-w-[calc(100vw-1rem)] flex-col overflow-hidden text-white';
+        root.className = 'call-window hidden fixed z-[70] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] sm:w-[400px] sm:max-w-[calc(100vw-1rem)] flex-col overflow-hidden text-white';
         root.style.top = '96px';
         root.style.right = '24px';
         root.innerHTML = `
           <div class="call-window__header cursor-move select-none" data-call-drag-handle="true">
             <div class="call-window__avatar" id="call-avatar-badge">
-              <span class="material-symbols-outlined text-[28px]">person</span>
+              <span class="material-symbols-outlined text-[22px]">person</span>
             </div>
             <div class="call-window__identity min-w-0 flex-1">
               <h3 id="call-window-name" class="call-window__name truncate">Llamada</h3>
-              <p id="call-window-status" class="call-window__status">Esperando...</p>
+              <div class="call-window__meta">
+                <p id="call-window-status" class="call-window__status">Esperando...</p>
+                <span id="call-mode-badge" class="call-window__mode-badge">VOZ</span>
+              </div>
             </div>
-            <button type="button" id="call-minimize-btn" class="call-window__icon-btn">
-              <span class="material-symbols-outlined text-[20px]">remove</span>
-            </button>
+            <div class="call-window__header-actions">
+              <button type="button" id="call-minimize-btn" class="call-window__icon-btn" aria-label="Minimizar llamada" title="Minimizar">
+                <span class="material-symbols-outlined text-[16px]">remove</span>
+              </button>
+              <button type="button" id="call-close-btn" class="call-window__icon-btn" aria-label="Cerrar llamada" title="Cerrar">
+                <span class="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
           </div>
           <div id="call-video-stage" class="call-window__stage shrink min-h-0">
             <div class="call-window__video-frame relative flex items-center justify-center overflow-hidden">
               <audio id="call-remote-audio" class="hidden" autoplay playsinline></audio>
               <video id="call-remote-video" class="absolute inset-0 hidden h-full w-full object-cover" autoplay playsinline muted></video>
-              <div id="call-remote-placeholder" class="call-window__placeholder absolute inset-0 flex flex-col items-center justify-center gap-4">
+              <div id="call-quality-badge" class="call-window__quality-badge hidden">HD · 1080p</div>
+              <div id="call-remote-placeholder" class="call-window__placeholder absolute inset-0 flex flex-col items-center justify-center gap-2">
                 <div class="call-window__placeholder-avatar">
                   <div id="call-remote-avatar" class="call-window__placeholder-avatar-inner">
-                    <span class="material-symbols-outlined text-[44px]">person</span>
+                    <span class="material-symbols-outlined text-[34px]">person</span>
                   </div>
                 </div>
                 <span id="call-video-placeholder-label" class="call-window__placeholder-label">Camara apagada</span>
+                <div id="call-stage-meter" class="call-window__stage-meter hidden" aria-hidden="true">
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar call-window__meter-bar--medium"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar call-window__meter-bar--tall"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar call-window__meter-bar--taller"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar call-window__meter-bar--tall"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar call-window__meter-bar--medium"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="remote" class="call-window__meter-bar"></span>
+                </div>
               </div>
-              <video id="call-local-video" class="call-window__local-video absolute hidden object-cover" autoplay playsinline muted></video>
+              <div id="call-local-preview-shell" class="call-window__local-preview-shell hidden">
+                <video id="call-local-video" class="call-window__local-video absolute hidden object-cover" autoplay playsinline muted></video>
+                <div id="call-local-preview-placeholder" class="call-window__local-preview-placeholder">
+                  <span class="material-symbols-outlined text-[18px]">videocam_off</span>
+                </div>
+                <span id="call-local-badge" class="call-window__local-badge">Yo</span>
+              </div>
             </div>
           </div>
           <div id="call-actions-row" class="call-window__actions mt-auto">
             <div class="call-window__toolbar">
               <button type="button" id="call-toggle-video-btn" class="call-window__round-btn call-window__round-btn--light">
-                <span class="material-symbols-outlined text-[22px]">videocam_off</span>
+                <span class="material-symbols-outlined text-[20px]">videocam_off</span>
               </button>
               <div class="call-window__pill call-window__pill--meter">
                 <button type="button" id="call-toggle-mic-btn" class="call-window__pill-icon">
-                  <span class="material-symbols-outlined text-[22px]">mic</span>
+                  <span class="material-symbols-outlined text-[20px]">mic</span>
                 </button>
                 <div class="call-window__meter" aria-label="Medidor de sonido">
-                  <span data-audio-meter-bar class="call-window__meter-bar"></span>
-                  <span data-audio-meter-bar class="call-window__meter-bar call-window__meter-bar--medium"></span>
-                  <span data-audio-meter-bar class="call-window__meter-bar call-window__meter-bar--tall"></span>
-                  <span data-audio-meter-bar class="call-window__meter-bar call-window__meter-bar--medium"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar call-window__meter-bar--medium"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar call-window__meter-bar--tall"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar call-window__meter-bar--taller"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar call-window__meter-bar--tall"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar call-window__meter-bar--medium"></span>
+                  <span data-audio-meter-bar data-audio-meter-group="local" class="call-window__meter-bar"></span>
                 </div>
               </div>
-              <div class="call-window__pill call-window__pill--volume">
+              <div id="call-volume-pill" class="call-window__pill call-window__pill--volume">
                 <span class="material-symbols-outlined call-window__volume-icon">volume_down</span>
                 <input id="call-remote-volume" type="range" min="0" max="1" step="0.05" value="1" class="call-window__volume-range" aria-label="Volumen de llamada"/>
               </div>
             </div>
             <div class="call-window__footer">
-              <button type="button" id="call-accept-btn" class="call-window__action-btn call-window__action-btn--accept hidden">Aceptar</button>
-              <button type="button" id="call-reject-btn" class="call-window__action-btn call-window__action-btn--reject hidden">Rechazar</button>
+              <button type="button" id="call-accept-btn" class="call-window__action-btn call-window__action-btn--accept hidden"><span class="material-symbols-outlined text-[18px]">call</span><span>Aceptar</span></button>
+              <button type="button" id="call-reject-btn" class="call-window__action-btn call-window__action-btn--reject hidden"><span class="material-symbols-outlined text-[18px]">close</span><span>Rechazar</span></button>
               <button type="button" id="call-hangup-btn" class="call-window__end-btn">
                 <span class="material-symbols-outlined text-[22px]">call_end</span>
               </button>
@@ -1906,38 +2124,61 @@
 
       const cleanups = [];
       const handle = root.querySelector('[data-call-drag-handle="true"]');
-      const onMouseDown = (event) => {
+      handle.style.touchAction = 'none';
+      const onPointerDown = (event) => {
         if (event.target.closest('button')) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
         const rect = root.getBoundingClientRect();
         callState.drag = {
+          pointerId: event.pointerId,
           offsetX: event.clientX - rect.left,
           offsetY: event.clientY - rect.top,
         };
+        if (typeof handle.setPointerCapture === 'function') {
+          try { handle.setPointerCapture(event.pointerId); } catch (error) {}
+        }
         document.body.classList.add('select-none');
+        event.preventDefault();
       };
-      const onMouseMove = (event) => {
-        if (!callState.drag) return;
+      const onPointerMove = (event) => {
+        if (!callState.drag || callState.drag.pointerId !== event.pointerId) return;
         const nextLeft = Math.min(Math.max(8, event.clientX - callState.drag.offsetX), window.innerWidth - root.offsetWidth - 8);
         const nextTop = Math.min(Math.max(8, event.clientY - callState.drag.offsetY), window.innerHeight - root.offsetHeight - 8);
         root.style.left = `${nextLeft}px`;
         root.style.top = `${nextTop}px`;
         root.style.right = 'auto';
       };
-      const onMouseUp = () => {
+      const onPointerUp = (event) => {
+        if (!callState.drag || callState.drag.pointerId !== event.pointerId) return;
+        if (typeof handle.releasePointerCapture === 'function') {
+          try { handle.releasePointerCapture(event.pointerId); } catch (error) {}
+        }
         callState.drag = null;
         document.body.classList.remove('select-none');
       };
-      handle.addEventListener('mousedown', onMouseDown);
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-      cleanups.push(() => handle.removeEventListener('mousedown', onMouseDown));
-      cleanups.push(() => document.removeEventListener('mousemove', onMouseMove));
-      cleanups.push(() => document.removeEventListener('mouseup', onMouseUp));
+      handle.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+      cleanups.push(() => handle.removeEventListener('pointerdown', onPointerDown));
+      cleanups.push(() => window.removeEventListener('pointermove', onPointerMove));
+      cleanups.push(() => window.removeEventListener('pointerup', onPointerUp));
+      cleanups.push(() => window.removeEventListener('pointercancel', onPointerUp));
 
       const minimizeButton = root.querySelector('#call-minimize-btn');
       const onMinimize = () => {
         callState.minimized = !callState.minimized;
         root.querySelector('#call-video-stage').classList.toggle('hidden', callState.minimized);
+        root.querySelector('#call-actions-row').classList.toggle('hidden', callState.minimized);
+        root.classList.toggle('call-window--minimized', callState.minimized);
+        syncMinimizedCallWindowLayout(root);
+        const icon = minimizeButton.querySelector('.material-symbols-outlined');
+        if (icon) {
+          icon.textContent = callState.minimized ? 'open_in_full' : 'remove';
+        }
+        minimizeButton.setAttribute('aria-label', callState.minimized ? 'Expandir llamada' : 'Minimizar llamada');
+        minimizeButton.setAttribute('title', callState.minimized ? 'Expandir' : 'Minimizar');
+        clampCallWindow(root);
       };
       minimizeButton.addEventListener('click', onMinimize);
       cleanups.push(() => minimizeButton.removeEventListener('click', onMinimize));
@@ -1945,6 +2186,7 @@
       cleanups.push(bindControlClick(root.querySelector('#call-toggle-mic-btn'), toggleMicrophone));
       cleanups.push(bindControlClick(root.querySelector('#call-toggle-video-btn'), toggleCamera));
       cleanups.push(bindControlClick(root.querySelector('#call-hangup-btn'), endActiveCall));
+      cleanups.push(bindControlClick(root.querySelector('#call-close-btn'), endActiveCall));
       cleanups.push(bindControlClick(root.querySelector('#call-accept-btn'), acceptIncomingCall));
       cleanups.push(bindControlClick(root.querySelector('#call-reject-btn'), rejectIncomingCall));
 
@@ -1991,6 +2233,21 @@
       return root;
     }
 
+    function updateCallVolumeSliderVisual(volumeInput = ensureCallWindow().querySelector('#call-remote-volume')) {
+      if (!volumeInput) {
+        return;
+      }
+
+      const safeVolume = Number.isFinite(callState.remoteVolume) ? Math.min(1, Math.max(0, callState.remoteVolume)) : 1;
+      const percent = Math.round(safeVolume * 100);
+      volumeInput.style.setProperty('--call-volume-level', `${percent}%`);
+
+      const volumeIcon = ensureCallWindow().querySelector('.call-window__volume-icon');
+      if (volumeIcon) {
+        volumeIcon.textContent = safeVolume <= 0.001 ? 'volume_off' : (safeVolume < 0.55 ? 'volume_down' : 'volume_up');
+      }
+    }
+
     function syncRemoteMediaVolume() {
       const root = ensureCallWindow();
       const remoteAudio = root.querySelector('#call-remote-audio');
@@ -2000,12 +2257,33 @@
       if (volumeInput && !callState.adjustingVolume) {
         volumeInput.value = String(callState.remoteVolume);
       }
+      updateCallVolumeSliderVisual(volumeInput);
       if (remoteAudio) {
         remoteAudio.volume = callState.remoteVolume;
       }
       if (remoteVideo) {
         remoteVideo.muted = true;
         remoteVideo.volume = 0;
+      }
+    }
+
+    function syncMinimizedCallWindowLayout(root = ensureCallWindow()) {
+      if (!root) return;
+      const stage = root.querySelector('#call-video-stage');
+      const actions = root.querySelector('#call-actions-row');
+
+      if (callState.minimized) {
+        stage?.style.setProperty('display', 'none', 'important');
+        actions?.style.setProperty('display', 'none', 'important');
+        root.style.setProperty('min-height', '0', 'important');
+        root.style.setProperty('height', 'auto', 'important');
+        root.style.setProperty('max-height', 'none', 'important');
+      } else {
+        stage?.style.removeProperty('display');
+        actions?.style.removeProperty('display');
+        root.style.removeProperty('min-height');
+        root.style.removeProperty('height');
+        root.style.removeProperty('max-height');
       }
     }
 
@@ -2076,7 +2354,22 @@
       const session = callState.session;
       const otherUser = callState.otherUser || {};
       const hasRemoteVideo = hasLiveRemoteVideo();
-      const showVideoStage = callState.initialMode === 'video' || callState.localVideoEnabled || hasRemoteVideo;
+      const showVideoStage = true;
+      const isIncomingRinging = session.status === 'ringing' && Number(session.receiver_id) === Number(user.id);
+      const isOutgoingRinging = session.status === 'ringing' && Number(session.caller_id) === Number(user.id);
+      const isVideoMode = callState.initialMode === 'video' || callState.localVideoEnabled || hasRemoteVideo;
+      const showMicControl = session.status === 'accepted' || isOutgoingRinging;
+      const showVideoControl = session.status === 'accepted' || (isOutgoingRinging && callState.initialMode === 'video');
+      const showVolumeControl = session.status === 'accepted';
+      const remoteAvatar = root.querySelector('#call-remote-avatar');
+      const headerAvatar = root.querySelector('#call-avatar-badge');
+      const qualityBadge = root.querySelector('#call-quality-badge');
+      const stageMeter = root.querySelector('#call-stage-meter');
+      const localBadge = root.querySelector('#call-local-badge');
+      const localPreviewShell = root.querySelector('#call-local-preview-shell');
+      const localPreviewPlaceholder = root.querySelector('#call-local-preview-placeholder');
+      const modeBadge = root.querySelector('#call-mode-badge');
+      const volumePill = root.querySelector('#call-volume-pill');
 
       root.classList.toggle('hidden', !session);
       if (!session) {
@@ -2088,30 +2381,54 @@
 
       claimCallRuntime();
 
-      root.classList.toggle('sm:w-[390px]', showVideoStage);
+      root.classList.toggle('sm:w-[360px]', showVideoStage);
+      root.classList.toggle('call-window--video', isVideoMode);
+      root.classList.toggle('call-window--audio', !isVideoMode);
+      root.classList.toggle('call-window--minimized', callState.minimized);
+      root.classList.toggle('call-window--ringing', session.status === 'ringing');
+      root.classList.toggle('call-window--accepted', session.status === 'accepted');
+      root.classList.toggle('call-window--incoming', isIncomingRinging);
+      root.classList.toggle('call-window--outgoing', isOutgoingRinging);
+      syncMinimizedCallWindowLayout(root);
       root.querySelector('#call-window-name').textContent = displayName(otherUser);
       root.querySelector('#call-window-status').textContent = describeCallStatus(session.status);
       root.querySelector('#call-video-stage').classList.toggle('hidden', callState.minimized || !showVideoStage);
-      root.querySelector('#call-accept-btn').classList.toggle('hidden', !(session.status === 'ringing' && Number(session.receiver_id) === Number(user.id)));
-      root.querySelector('#call-reject-btn').classList.toggle('hidden', !(session.status === 'ringing' && Number(session.receiver_id) === Number(user.id)));
-      root.querySelector('#call-toggle-video-btn').classList.toggle('hidden', session.status !== 'accepted');
-      root.querySelector('#call-toggle-mic-btn').classList.toggle('hidden', session.status !== 'accepted');
+      root.querySelector('#call-actions-row').classList.toggle('hidden', callState.minimized);
+      root.querySelector('#call-accept-btn').classList.toggle('hidden', !isIncomingRinging);
+      root.querySelector('#call-reject-btn').classList.toggle('hidden', !isIncomingRinging);
+      root.querySelector('#call-toggle-video-btn').classList.toggle('hidden', !showVideoControl);
+      root.querySelector('#call-toggle-mic-btn').classList.toggle('hidden', !showMicControl);
+      volumePill.classList.toggle('hidden', !showVolumeControl);
       root.querySelector('#call-minimize-btn').classList.toggle('hidden', !showVideoStage);
 
       const micIcon = root.querySelector('#call-toggle-mic-btn .material-symbols-outlined');
       const videoIcon = root.querySelector('#call-toggle-video-btn .material-symbols-outlined');
+      const minimizeIcon = root.querySelector('#call-minimize-btn .material-symbols-outlined');
       micIcon.textContent = callState.isMuted ? 'mic_off' : 'mic';
       videoIcon.textContent = callState.localVideoEnabled ? 'videocam' : 'videocam_off';
+      if (minimizeIcon) {
+        minimizeIcon.textContent = callState.minimized ? 'open_in_full' : 'remove';
+      }
 
       const remoteVideo = root.querySelector('#call-remote-video');
       const localVideo = root.querySelector('#call-local-video');
       const remotePlaceholder = root.querySelector('#call-remote-placeholder');
       const remoteLabel = root.querySelector('#call-video-placeholder-label');
+      if (headerAvatar) setAvatarElement(headerAvatar, otherUser);
+      if (remoteAvatar) setAvatarElement(remoteAvatar, otherUser);
+      if (modeBadge) modeBadge.textContent = isVideoMode ? 'VIDEO' : 'VOZ';
+      if (qualityBadge) qualityBadge.classList.toggle('hidden', !isVideoMode);
+      if (stageMeter) stageMeter.classList.toggle('hidden', !(session.status === 'accepted' && !isVideoMode));
+      if (localPreviewShell) localPreviewShell.classList.toggle('hidden', !isVideoMode);
+      if (localBadge) localBadge.classList.toggle('hidden', !isVideoMode);
+      if (localPreviewPlaceholder) {
+        localPreviewPlaceholder.classList.toggle('hidden', Boolean(callState.localVideoEnabled && callState.localStream));
+      }
 
       remoteVideo.classList.toggle('hidden', !hasRemoteVideo);
       remotePlaceholder.classList.toggle('hidden', hasRemoteVideo);
       localVideo.classList.toggle('hidden', !(callState.localVideoEnabled && callState.localStream));
-      remoteLabel.textContent = hasRemoteVideo ? '' : 'Camara apagada';
+      remoteLabel.textContent = hasRemoteVideo ? '' : describeCallPlaceholderLabel(session.status, isVideoMode);
       if (session.status === 'ringing') {
         playRingTone();
       } else {
@@ -2124,17 +2441,34 @@
     function describeCallStatus(status) {
       if (status === 'ringing') {
         return Number(callState.session?.caller_id) === Number(user.id)
-          ? (callState.initialMode === 'video' ? 'Iniciando videollamada...' : 'Llamando...')
+          ? 'Llamando...'
           : (callState.initialMode === 'video' ? 'Videollamada entrante' : 'Llamada entrante');
       }
       if (status === 'accepted') {
-        return callState.localVideoEnabled || hasLiveRemoteVideo()
-          ? 'En videollamada'
-          : 'En llamada';
+        const duration = formatCallDuration();
+        return `${callState.localVideoEnabled || hasLiveRemoteVideo() ? 'En llamada' : 'En llamada'}${duration ? ` · ${duration}` : ''}`;
       }
       if (status === 'rejected') return 'Llamada rechazada';
       if (status === 'ended') return 'Llamada finalizada';
       return 'Conectando...';
+    }
+
+    function describeCallPlaceholderLabel(status, isVideoMode = false) {
+      if (status === 'ringing') {
+        if (Number(callState.session?.caller_id) === Number(user.id)) {
+          return isVideoMode ? 'Esperando respuesta...' : '';
+        }
+        return isVideoMode ? 'Llamada entrante' : '';
+      }
+      return 'Camara apagada';
+    }
+
+    function formatCallDuration() {
+      if (!callState.startedAt) return '';
+      const totalSeconds = Math.max(0, Math.floor((Date.now() - callState.startedAt) / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
     function stopCallTimers() {
@@ -2189,8 +2523,10 @@
         callState.audioContext.close().catch(() => {});
       }
       callState.audioContext = null;
-      callState.audioAnalyser = null;
-      callState.audioMeterData = null;
+      callState.localAudioAnalyser = null;
+      callState.localAudioMeterData = null;
+      callState.remoteAudioAnalyser = null;
+      callState.remoteAudioMeterData = null;
       stopAudioMeter();
       stopRingTone();
 
@@ -2240,22 +2576,7 @@
 
       callState.localVideoEnabled = Boolean(getLocalVideoTrack());
 
-      if (!callState.audioContext && getLocalAudioTrack()) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (AudioContextClass) {
-          callState.audioContext = new AudioContextClass();
-          const analyserStream = new MediaStream([getLocalAudioTrack()]);
-          const source = callState.audioContext.createMediaStreamSource(analyserStream);
-          callState.audioAnalyser = callState.audioContext.createAnalyser();
-          callState.audioAnalyser.fftSize = 64;
-          callState.audioMeterData = new Uint8Array(callState.audioAnalyser.frequencyBinCount);
-          source.connect(callState.audioAnalyser);
-          if (callState.audioContext.state === 'suspended') {
-            callState.audioContext.resume().catch(() => {});
-          }
-          startAudioMeter();
-        }
-      }
+      ensureLocalAudioMeter();
 
       const root = ensureCallWindow();
       const localVideo = root.querySelector('#call-local-video');
@@ -2293,10 +2614,12 @@
 
         syncMediaElementStream(root.querySelector('#call-remote-audio'), callState.remoteStream);
         syncMediaElementStream(root.querySelector('#call-remote-video'), callState.remoteStream);
+        ensureRemoteAudioMeter();
         syncRemoteMediaVolume();
         tryPlayRemoteMedia();
 
         event.track.onunmute = () => {
+          ensureRemoteAudioMeter();
           tryPlayRemoteMedia();
           updateCallWindow();
         };
@@ -2785,11 +3108,7 @@
       callState.localStream.getAudioTracks().forEach((track) => {
         track.enabled = !callState.isMuted;
       });
-      if (!callState.isMuted) {
-        startAudioMeter();
-      } else {
-        stopAudioMeter();
-      }
+      startAudioMeter();
       updateCallWindow();
     }
 
@@ -3575,6 +3894,10 @@
           friends: 'Solo amigos',
           faculty: 'Solo mi facultad',
         };
+        const syncCommentSortChips = bindCommentSortChips(commentModal, commentSort, (value) => {
+          if (!pendingCommentId) return;
+          loadComments(pendingCommentId, value, { preserveScroll: false });
+        });
 
         setAvatarElement(composerAvatar, user);
 
@@ -3621,6 +3944,7 @@
           commentInput.value = '';
           commentInput.style.height = '';
           commentSort.value = currentCommentSort;
+          syncCommentSortChips(currentCommentSort);
           commentModal.classList.remove('hidden');
           commentModal.classList.add('flex');
           renderCommentModalPost(pendingCommentId);
@@ -3681,6 +4005,7 @@
 
           currentCommentSort = sort;
           commentSort.value = sort;
+          syncCommentSortChips(sort);
           if (!preserveScroll) {
             commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
           }
@@ -3968,6 +4293,7 @@
         confirmLiveCreateButton?.addEventListener('click', createLivestream);
         commentSort.addEventListener('change', () => {
           if (!pendingCommentId) return;
+          syncCommentSortChips(commentSort.value);
           loadComments(pendingCommentId, commentSort.value);
         });
         publishButton.addEventListener('click', publishPost);
@@ -4172,10 +4498,41 @@
           scheduleReactionPickerClose();
         });
 
-        commentPostPreview.addEventListener('click', (event) => {
-          const actionTarget = event.target.closest('[data-action="open-profile"]');
+        commentPostPreview.addEventListener('click', async (event) => {
+          const actionTarget = event.target.closest('[data-action]');
           if (!actionTarget) return;
-          router.navigate('profile', { id: actionTarget.dataset.userId });
+
+          if (actionTarget.dataset.action === 'open-profile') {
+            router.navigate('profile', { id: actionTarget.dataset.userId });
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'open-post-image') {
+            openPostImageLightbox(actionTarget.dataset.imageUrl, actionTarget.dataset.imageAlt || 'Imagen ampliada de la publicacion');
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'report-post') {
+            await reportContent('publicacion', Number(actionTarget.dataset.postId));
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'open-reaction-picker') {
+            openReactionPicker(actionTarget, {
+              targetType: 'post',
+              targetId: Number(actionTarget.dataset.targetId),
+              currentReaction: actionTarget.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                const result = await PostsAPI.reactPost(Number(actionTarget.dataset.targetId), reaction);
+                if (result?.ok) {
+                  await loadFeed({ force: true });
+                  renderCommentModalPost(pendingCommentId);
+                  return;
+                }
+                showToast(result?.data?.error || 'No se pudo reaccionar a la publicacion', 'error');
+              },
+            });
+          }
         });
 
         onlineFriends.addEventListener('click', (event) => {
@@ -7775,6 +8132,10 @@ async function ensureViewerPlayer(forceRestart = false) {
         const commentList = container.querySelector('#group-comment-list');
         const commentSort = container.querySelector('#group-comment-sort');
         const commentInput = container.querySelector('#group-comment-input');
+        const syncCommentSortChips = bindCommentSortChips(commentModal, commentSort, (value) => {
+          if (!pendingCommentPostId) return;
+          loadComments(pendingCommentPostId, value);
+        });
         let groupData = null;
         let groupPosts = [];
         let currentTab = 'info';
@@ -8110,6 +8471,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           pendingCommentPostId = Number(postId);
           commentInput.value = '';
           commentSort.value = currentCommentSort;
+          syncCommentSortChips(currentCommentSort);
           commentModal.classList.remove('hidden');
           commentModal.classList.add('flex');
           commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(postId), user.id, { hideGroupBadge: true });
@@ -8128,6 +8490,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           if (!postId) return;
           currentCommentSort = sort;
           commentSort.value = sort;
+          syncCommentSortChips(sort);
           commentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
           const result = await PostsAPI.getComments(postId, sort);
           if (!result?.ok) {
@@ -8682,7 +9045,48 @@ async function ensureViewerPlayer(forceRestart = false) {
           if (event.target === commentModal) closeCommentModal();
         });
         container.querySelector('#group-close-comment-top-btn').addEventListener('click', closeCommentModal);
-        commentSort.addEventListener('change', () => loadComments(pendingCommentPostId, commentSort.value));
+        commentSort.addEventListener('change', () => {
+          syncCommentSortChips(commentSort.value);
+          loadComments(pendingCommentPostId, commentSort.value);
+        });
+        commentPostPreview.addEventListener('click', async (event) => {
+          const actionTarget = event.target.closest('[data-action]');
+          if (!actionTarget) return;
+
+          if (actionTarget.dataset.action === 'open-profile') {
+            router.navigate('profile', { id: actionTarget.dataset.userId });
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'open-post-image') {
+            openPostImageLightbox(actionTarget.dataset.imageUrl, actionTarget.dataset.imageAlt || 'Imagen ampliada de la publicacion');
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'report-post') {
+            await reportContent('publicacion', Number(actionTarget.dataset.postId));
+            return;
+          }
+
+          if (actionTarget.dataset.action === 'open-reaction-picker') {
+            openReactionPicker(actionTarget, {
+              targetType: 'post',
+              targetId: Number(actionTarget.dataset.targetId),
+              currentReaction: actionTarget.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                const result = await PostsAPI.reactPost(Number(actionTarget.dataset.targetId), reaction);
+                if (result?.ok) {
+                  await loadConversation();
+                  if (pendingCommentPostId) {
+                    commentPostPreview.innerHTML = renderPostModalPreview(findGroupPost(pendingCommentPostId), user.id, { hideGroupBadge: true });
+                  }
+                  return;
+                }
+                showToast(result?.data?.error || 'No se pudo reaccionar a la publicacion', 'error');
+              },
+            });
+          }
+        });
         container.querySelector('#group-confirm-comment-btn').addEventListener('click', async () => {
           const content = commentInput.value.trim();
           if (!pendingCommentPostId || !content) return;
@@ -8789,6 +9193,10 @@ async function ensureViewerPlayer(forceRestart = false) {
         const profileCommentList = container.querySelector('#profile-comment-list');
         const profileCommentSort = container.querySelector('#profile-comment-sort');
         const profileCommentInput = container.querySelector('#profile-comment-input');
+        const syncProfileCommentSortChips = bindCommentSortChips(profileCommentModal, profileCommentSort, (value) => {
+          if (!pendingProfileCommentId) return;
+          loadProfileComments(pendingProfileCommentId, value);
+        });
         const profileBioActionButton = container.querySelector('#profile-bio-action-btn');
         const profileBioActionIcon = container.querySelector('#profile-bio-action-icon');
         const profileBioActionLabel = container.querySelector('#profile-bio-action-label');
@@ -9228,6 +9636,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           profileCommentInput.value = '';
           profileCommentInput.style.height = '';
           profileCommentSort.value = currentProfileCommentSort;
+          syncProfileCommentSortChips(currentProfileCommentSort);
           profileCommentModal.classList.remove('hidden');
           profileCommentModal.classList.add('flex');
           renderProfileCommentModalPost(pendingProfileCommentId);
@@ -9248,6 +9657,7 @@ async function ensureViewerPlayer(forceRestart = false) {
 
           currentProfileCommentSort = sort;
           profileCommentSort.value = sort;
+          syncProfileCommentSortChips(sort);
           profileCommentList.innerHTML = '<p class="text-sm text-slate-400 text-center">Cargando comentarios...</p>';
 
           await ensurePublicUsersLoaded();
@@ -9646,10 +10056,41 @@ async function ensureViewerPlayer(forceRestart = false) {
           }
         });
 
-        profileCommentPostPreview.addEventListener('click', (event) => {
-          const button = event.target.closest('[data-action="open-profile"]');
+        profileCommentPostPreview.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-action]');
           if (!button) return;
-          router.navigate('profile', { id: button.dataset.userId });
+
+          if (button.dataset.action === 'open-profile') {
+            router.navigate('profile', { id: button.dataset.userId });
+            return;
+          }
+
+          if (button.dataset.action === 'open-post-image') {
+            openPostImageLightbox(button.dataset.imageUrl, button.dataset.imageAlt || 'Imagen ampliada de la publicacion');
+            return;
+          }
+
+          if (button.dataset.action === 'report-post') {
+            await reportContent('publicacion', Number(button.dataset.postId));
+            return;
+          }
+
+          if (button.dataset.action === 'open-reaction-picker') {
+            openReactionPicker(button, {
+              targetType: 'post',
+              targetId: Number(button.dataset.targetId),
+              currentReaction: button.dataset.currentReaction || '',
+              onSelect: async (reaction) => {
+                const result = await PostsAPI.reactPost(Number(button.dataset.targetId), reaction);
+                if (result?.ok) {
+                  await loadPosts(profileData.id);
+                  renderProfileCommentModalPost(pendingProfileCommentId);
+                  return;
+                }
+                showToast(result?.data?.error || 'No se pudo reaccionar a la publicacion', 'error');
+              },
+            });
+          }
         });
 
         changeAvatarButton.addEventListener('click', () => {
@@ -9721,6 +10162,7 @@ async function ensureViewerPlayer(forceRestart = false) {
         container.querySelector('#profile-confirm-comment-btn').addEventListener('click', confirmProfileComment);
         profileCommentSort.addEventListener('change', () => {
           if (!pendingProfileCommentId) return;
+          syncProfileCommentSortChips(profileCommentSort.value);
           loadProfileComments(pendingProfileCommentId, profileCommentSort.value);
         });
         profileCommentModal.addEventListener('click', (event) => {

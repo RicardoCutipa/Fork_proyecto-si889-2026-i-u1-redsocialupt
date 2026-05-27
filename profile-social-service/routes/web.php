@@ -36,6 +36,7 @@ $router->group(['prefix' => 'api/social', 'middleware' => 'jwt'], function () us
     $router->post('/groups/{id}/join',                'GroupController@join');
     $router->post('/groups/{id}/leave',               'GroupController@leave');
     $router->put('/groups/{id}',                      'GroupController@update');
+    $router->post('/groups/{id}',                     'GroupController@update');
     $router->get('/groups/{id}/members',              'GroupController@members');
     $router->get('/groups/{id}/requests',             'GroupController@pending');
     $router->put('/groups/{id}/requests/{membershipId}/approve', 'GroupController@approve');

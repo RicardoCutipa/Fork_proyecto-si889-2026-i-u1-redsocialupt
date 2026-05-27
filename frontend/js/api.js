@@ -482,8 +482,9 @@ const SocialAPI = {
       if (name !== undefined) fd.append('name', name);
       if (description !== undefined) fd.append('description', description);
       if (privacy !== undefined) fd.append('privacy', privacy);
+      fd.append('_method', 'PUT');
       fd.append('cover', coverFile);
-      return apiFetchForm(`/api/groups/${groupId}`, fd, { method: 'PUT' });
+      return apiFetchForm(`/api/groups/${groupId}`, fd, { method: 'POST' });
     }
 
     return apiFetch(`/api/groups/${groupId}`, {

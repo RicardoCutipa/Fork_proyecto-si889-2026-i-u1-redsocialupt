@@ -412,6 +412,23 @@ class AuthController extends BaseController
         }
 
         $host = strtolower($request->getHost());
-        return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+        if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return true;
+        }
+
+        if (preg_match('/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/', $host)) {
+            return true;
+        }
+
+        if (preg_match('/^192\.168\.\d{1,3}\.\d{1,3}$/', $host)) {
+            return true;
+        }
+
+        if (preg_match('/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/', $host, $matches)) {
+            $secondOctet = (int) ($matches[1] ?? -1);
+            return $secondOctet >= 16 && $secondOctet <= 31;
+        }
+
+        return false;
     }
 }
