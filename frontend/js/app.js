@@ -1126,15 +1126,6 @@
     if (!Number.isFinite(liveId) || liveId <= 0) {
       return false;
     }
-    if (!isDesktopClient() && document.documentElement?.requestFullscreen && !document.fullscreenElement) {
-      try {
-        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      } catch (_error) {
-        try {
-          await document.documentElement.requestFullscreen();
-        } catch (__error) {}
-      }
-    }
     router.navigate('live', { id: String(liveId), ...extraParams });
     return true;
   }
@@ -4652,6 +4643,7 @@
         const liveFallbackCopy = container.querySelector('#live-fallback-copy');
         const liveTitle = container.querySelector('#live-title');
         const liveViewerCount = container.querySelector('#live-viewer-count');
+        const livePlayerViewerCount = container.querySelector('#live-player-viewer-count');
         const liveStatusChip = container.querySelector('#live-status-chip');
         const liveStatusDot = container.querySelector('#live-status-dot');
         const liveStatusBadge = container.querySelector('#live-status-badge');
@@ -4867,14 +4859,6 @@
             }
 
             restoreViewerShellLayout();
-
-            if (!shouldUseFullscreenOnlyImmersive && document.fullscreenElement !== liveShell) {
-              requestLiveShellFullscreen().then((entered) => {
-                if (!entered) {
-                  restoreViewerShellLayout();
-                }
-              });
-            }
           }, 0);
         }
 
@@ -4913,6 +4897,28 @@
             });
             video.dataset.liveViewerFullscreenGuardAttached = '1';
           }
+        }
+
+        function guardViewerPlayerTap(event) {
+          if (isDesktopClient() || isHostOnMobile || !viewerPlayerRoot) {
+            return;
+          }
+          if (isVideoFullscreenActive()) {
+            return;
+          }
+          const target = event.target;
+          if (!(target instanceof Element)) {
+            return;
+          }
+          if (!viewerPlayerRoot.contains(target)) {
+            return;
+          }
+          if (target.closest('button, input, textarea')) {
+            return;
+          }
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          toggleOverlay();
         }
 
         function observeViewerPlayerMedia(player, sourceUrl, readyAt) {
@@ -6731,6 +6737,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           if (liveTitleMobile) liveTitleMobile.textContent = titleText;
           const viewCount = String(liveData.live_status === 'live' ? Number(liveData.viewer_count || 0) : 0);
           liveViewerCount.textContent = viewCount;
+          if (livePlayerViewerCount) livePlayerViewerCount.textContent = viewCount;
 
           activeReaction = liveData.current_reaction || activeReaction;
           refreshReactionButtons();
@@ -6942,12 +6949,14 @@ async function ensureViewerPlayer(forceRestart = false) {
         async function heartbeat() {
           if (liveData?.live_status !== 'live') {
             liveViewerCount.textContent = '0';
+            if (livePlayerViewerCount) livePlayerViewerCount.textContent = '0';
             return;
           }
           const result = await PostsAPI.livestreamHeartbeat(liveId);
           if (result?.ok) {
             const count = String(Number(result.data?.viewer_count || 0));
             liveViewerCount.textContent = count;
+            if (livePlayerViewerCount) livePlayerViewerCount.textContent = count;
           }
         }
 
@@ -7046,46 +7055,113 @@ async function ensureViewerPlayer(forceRestart = false) {
 
         const mobileOverlay = container.querySelector('#live-mobile-overlay');
         const playerControls = container.querySelector('#live-player-controls');
+        const playerTapCatcher = container.querySelector('#live-player-tap-catcher');
         let inVideoFullscreen = false; // landscape fullscreen (video only)
         let overlayVisible = true;
+        let fullscreenHudVisible = true;
         const isHostOnMobile = isHostRoute && !isDesktopClient();
         const isHostOnDesktop = isHostRoute && isDesktopClient();
 
+        function isVideoFullscreenActive() {
+          return Boolean(
+            inVideoFullscreen
+            || document.fullscreenElement === liveVideoWrap
+            || liveVideoWrap?.matches?.(':fullscreen')
+          );
+        }
+
+        function setVideoFullscreenHudVisible(visible) {
+          fullscreenHudVisible = visible;
+          overlayVisible = visible;
+          liveVideoWrap?.classList.toggle('live-video-hud-hidden', !visible);
+          if (playerControls) {
+            playerControls.style.opacity = '1';
+            playerControls.style.pointerEvents = 'none';
+            playerControls.style.visibility = 'visible';
+          }
+          if (mobileOverlay) {
+            mobileOverlay.style.opacity = '0';
+            mobileOverlay.style.pointerEvents = 'none';
+          }
+        }
+
+        function toggleVideoFullscreenHud() {
+          setVideoFullscreenHudVisible(!fullscreenHudVisible);
+        }
+
         function showOverlay() {
+          clearTimeout(overlayTimer);
+          if (isVideoFullscreenActive()) {
+            setVideoFullscreenHudVisible(true);
+            return;
+          }
           overlayVisible = true;
           overlays.forEach(el => { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; });
-          if (playerControls) { playerControls.style.opacity = '1'; playerControls.style.pointerEvents = 'auto'; }
+          if (playerControls) {
+            playerControls.style.opacity = '1';
+            playerControls.style.pointerEvents = 'auto';
+            playerControls.style.visibility = 'visible';
+          }
           // Show X button on mobile viewers only (host never sees X)
           if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
             immersiveBtn.classList.remove('hidden'); // clear display:none from video-fullscreen
             immersiveBtn.style.opacity = '1';
             immersiveBtn.style.pointerEvents = 'auto';
           }
-          clearTimeout(overlayTimer);
-          if (!isHostOnDesktop) {
+          if (!isHostOnDesktop && !inVideoFullscreen) {
             overlayTimer = setTimeout(hideOverlay, 5000);
           }
         }
         function hideOverlay() {
           if (isHostOnDesktop) return;
           if (selectorOpen) return;
+          clearTimeout(overlayTimer);
+          if (isVideoFullscreenActive()) {
+            setVideoFullscreenHudVisible(false);
+            return;
+          }
           overlayVisible = false;
           overlays.forEach(el => { el.style.opacity = '0'; el.style.pointerEvents = 'none'; });
           // Hide player controls
-          if (playerControls) { playerControls.style.opacity = '0'; playerControls.style.pointerEvents = 'none'; }
+          if (playerControls) {
+            playerControls.style.opacity = '0';
+            playerControls.style.pointerEvents = 'none';
+            playerControls.style.visibility = 'hidden';
+          }
           // Hide X button
           if (immersiveBtn && !isDesktopClient()) {
             immersiveBtn.style.opacity = '0';
             immersiveBtn.style.pointerEvents = 'none';
           }
           // DO NOT hide mobile-overlay (title/comments/input/reactions must always be visible)
+          if (isVideoFullscreenActive()) {
+            if (mobileOverlay) { mobileOverlay.style.opacity = '0'; mobileOverlay.style.pointerEvents = 'none'; }
+          }
         }
         function toggleOverlay() {
+          if (isVideoFullscreenActive()) {
+            toggleVideoFullscreenHud();
+            return;
+          }
           if (overlayVisible) { clearTimeout(overlayTimer); hideOverlay(); }
           else { showOverlay(); }
         }
+
+        function movePlayerControlsToFullscreenHud() {
+          if (!liveVideoWrap || !playerControls) return;
+          if (playerControls.parentElement !== liveVideoWrap) {
+            liveVideoWrap.appendChild(playerControls);
+          }
+        }
+
+        function restorePlayerControlsParent() {
+          if (!playerControls || !liveVideoWrap) return;
+          if (playerControls.parentElement !== liveVideoWrap) {
+            liveVideoWrap.appendChild(playerControls);
+          }
+        }
         function maybeRequestViewerShellFullscreenFromGesture() {
-          if (isDesktopClient() || isHostOnMobile || !immersiveActive || !liveShell) return;
+          if (isDesktopClient() || isHostOnMobile || shouldUseFullscreenOnlyImmersive || !immersiveActive || !liveShell) return;
           if (document.fullscreenElement) return;
           requestLiveShellFullscreen().catch(() => {});
         }
@@ -7103,6 +7179,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           // Mobile: touchend toggles overlay
           let lastTouchToggleTime = 0;
           liveVideoWrap.addEventListener('touchend', (e) => {
+            if (isVideoFullscreenActive()) return;
             if (e.target.closest('button')) return;
             lastTouchTime = Date.now();
             lastTouchToggleTime = Date.now();
@@ -7120,7 +7197,8 @@ async function ensureViewerPlayer(forceRestart = false) {
         }
         // Also toggle on tap anywhere on the live shell (not just video wrap)
         let lastGlobalShellTouchTime = 0;
-        let lastFullscreenVideoTouchTime = 0;
+        let lastFullscreenDirectEventTime = 0;
+        let lastFullscreenTapEvent = null;
         const handleGlobalLiveTouchToggle = (e) => {
           if (isDesktopClient() || !liveShell || !liveShell.isConnected) return;
           const target = e.target;
@@ -7136,23 +7214,43 @@ async function ensureViewerPlayer(forceRestart = false) {
           }
         };
         const handleVideoFullscreenTouchToggle = (e) => {
-          if (document.fullscreenElement !== liveVideoWrap) return;
-          const target = e.target;
-          if (!(target instanceof Element)) return;
-          if (target.closest('button, input, textarea, #live-reaction-selector, [data-live-set-reaction]')) return;
+          if (!isVideoFullscreenActive()) return;
+          if (e === lastFullscreenTapEvent) return;
+          lastFullscreenTapEvent = e;
           const now = Date.now();
-          if (e.type === 'click') {
-            if (now - lastFullscreenVideoTouchTime < 500) return;
-          } else {
-            if (now - lastFullscreenVideoTouchTime < 300) return;
-            lastFullscreenVideoTouchTime = now;
+          if (e.type === 'click' && now - lastFullscreenDirectEventTime < 800) return;
+          if (e.type !== 'click' && now - lastFullscreenDirectEventTime < 90) return;
+          const target = e.target;
+          if (target instanceof Element && target.closest('button, input, textarea, #live-reaction-selector, [data-live-set-reaction]')) return;
+          if (e.type !== 'click') {
+            lastFullscreenDirectEventTime = now;
           }
-          toggleOverlay();
+          e.preventDefault?.();
+          e.stopPropagation?.();
+          toggleVideoFullscreenHud();
+        };
+        const addFullscreenTapListeners = (target) => {
+          if (!target?.addEventListener) return;
+          target.addEventListener('pointerdown', handleVideoFullscreenTouchToggle, true);
+          target.addEventListener('touchstart', handleVideoFullscreenTouchToggle, { passive: false, capture: true });
+          target.addEventListener('click', handleVideoFullscreenTouchToggle, true);
+        };
+        const removeFullscreenTapListeners = (target) => {
+          if (!target?.removeEventListener) return;
+          target.removeEventListener('pointerdown', handleVideoFullscreenTouchToggle, true);
+          target.removeEventListener('touchstart', handleVideoFullscreenTouchToggle, true);
+          target.removeEventListener('click', handleVideoFullscreenTouchToggle, true);
         };
         if (!isDesktopClient()) {
+          addFullscreenTapListeners(document);
+          addFullscreenTapListeners(liveVideoWrap);
+          addFullscreenTapListeners(viewerPlayerRoot);
+          addFullscreenTapListeners(playerTapCatcher);
           document.addEventListener('touchend', handleGlobalLiveTouchToggle, { passive: true });
-          document.addEventListener('touchend', handleVideoFullscreenTouchToggle, { passive: true, capture: true });
-          document.addEventListener('click', handleVideoFullscreenTouchToggle, true);
+          if (viewerPlayerRoot) {
+            viewerPlayerRoot.addEventListener('touchend', guardViewerPlayerTap, true);
+            viewerPlayerRoot.addEventListener('click', guardViewerPlayerTap, true);
+          }
           scheduleLiveMobileViewportSync();
           scheduleLiveMobileViewportSync(140);
           scheduleLiveMobileViewportSync(320);
@@ -7205,23 +7303,24 @@ async function ensureViewerPlayer(forceRestart = false) {
         function activateImmersive() {
           immersiveActive = true;
           document.body.classList.add('live-immersive-active');
-          if (!shouldUseFullscreenOnlyImmersive) {
-            liveShell.classList.add('live-immersive-shell');
-          }
+          if (!shouldUseFullscreenOnlyImmersive) liveShell.classList.add('live-immersive-shell');
           scheduleLiveMobileViewportSync();
           scheduleLiveMobileViewportSync(140);
           scheduleLiveMobileViewportSync(320);
 
-            if (!isDesktopClient()) {
-              if (!(shouldUseFullscreenOnlyImmersive && document.fullscreenElement)) {
-                requestLiveShellFullscreen().catch(() => {});
-              }
+          if (!isDesktopClient()) {
+            if (shouldUseFullscreenOnlyImmersive) {
+              // Viewer mobile: CSS-only immersive. Keep the normal stacked layout and
+              // never request Fullscreen API from mount/taps, otherwise Android Chrome
+              // can promote the inner video into an unwanted vertical fullscreen takeover.
+            } else {
+              // Host mobile: full-bleed camera mode.
+              requestLiveShellFullscreen().catch(() => {});
               // Move the X button out of the overlay so overlay timer can't hide it
-              if (!shouldUseFullscreenOnlyImmersive && immersiveBtn && liveShell) {
-                liveShell.appendChild(immersiveBtn);
-              }
-              const icon = immersiveBtn?.querySelector('.material-symbols-outlined');
-              if (icon) icon.textContent = 'close';
+              if (immersiveBtn && liveShell) liveShell.appendChild(immersiveBtn);
+            }
+            const icon = immersiveBtn?.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = 'close';
             if (mobileOverlay) {
               mobileOverlay.style.opacity = '';
               mobileOverlay.style.pointerEvents = '';
@@ -7237,6 +7336,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           immersiveActive = false;
           document.body.classList.remove('live-immersive-active');
           liveShell.classList.remove('live-immersive-shell');
+          liveShell.classList.remove('live-shell-fullscreen');
 
           // Exit fullscreen if shell is the fullscreen element
           if (document.fullscreenElement === liveShell) {
@@ -7244,9 +7344,9 @@ async function ensureViewerPlayer(forceRestart = false) {
           }
 
           // Mobile: move button back to its original parent (the overlay)
-            if (!isDesktopClient() && !shouldUseFullscreenOnlyImmersive && immersiveBtn && immersiveBtnOriginalParent) {
-              immersiveBtnOriginalParent.appendChild(immersiveBtn);
-            }
+          if (!isDesktopClient() && !shouldUseFullscreenOnlyImmersive && immersiveBtn && immersiveBtnOriginalParent) {
+            immersiveBtnOriginalParent.appendChild(immersiveBtn);
+          }
 
           if (!isDesktopClient()) {
             syncMobileCloseButton();
@@ -7292,22 +7392,23 @@ async function ensureViewerPlayer(forceRestart = false) {
           scheduleLiveMobileViewportSync();
           scheduleLiveMobileViewportSync(140);
           scheduleLiveMobileViewportSync(320);
-          if (exitingLivestream || pendingVideoFs) return;
+          if (exitingLivestream) return;
 
           const fsEl = document.fullscreenElement;
 
           if (fsEl === liveVideoWrap) {
+            pendingVideoFs = false;
             // Entered video fullscreen (landscape)
             inVideoFullscreen = true;
+            liveVideoWrap?.classList.remove('live-video-hud-hidden');
             const icon = fullscreenBtn?.querySelector('.material-symbols-outlined');
             if (icon) icon.textContent = 'fullscreen_exit';
             const playerFsIcon = playerFsBtn?.querySelector('.material-symbols-outlined');
             if (playerFsIcon) playerFsIcon.textContent = 'fullscreen_exit';
-            if (mobileOverlay) { mobileOverlay.style.opacity = '0'; mobileOverlay.style.pointerEvents = 'none'; }
             if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
               immersiveBtn.classList.remove('hidden');
             }
-            showOverlay();
+            setVideoFullscreenHudVisible(true);
           } else if (fsEl === liveShell) {
             // Shell fullscreen active — show overlay so X reappears
             if (!isDesktopClient()) {
@@ -7318,21 +7419,16 @@ async function ensureViewerPlayer(forceRestart = false) {
           } else if (!isDesktopClient() && !isHostOnMobile && fsEl && liveVideoWrap?.contains(fsEl)) {
             recoverUnexpectedViewerFullscreen(viewerVideo);
           } else if (!fsEl) {
+            pendingVideoFs = false;
             if (suppressViewerShellExit) {
               suppressViewerShellExit = false;
               restoreViewerShellLayout();
-              if (!isDesktopClient() && liveShell && immersiveActive) {
-                requestLiveShellFullscreen().then((entered) => {
-                  if (!entered) {
-                    restoreViewerShellLayout();
-                  }
-                });
-              }
               return;
             }
             if (inVideoFullscreen) {
               // Exited video fullscreen → restore mobileOverlay, re-enter shell fullscreen
               inVideoFullscreen = false;
+              liveVideoWrap?.classList.remove('live-video-hud-hidden');
               try { screen.orientation.unlock(); } catch(e) {}
               const icon = fullscreenBtn?.querySelector('.material-symbols-outlined');
               if (icon) icon.textContent = 'fullscreen';
@@ -7343,25 +7439,8 @@ async function ensureViewerPlayer(forceRestart = false) {
               if (immersiveBtn && !isDesktopClient() && !isHostOnMobile) {
                 immersiveBtn.classList.remove('hidden');
               }
-              if (!isDesktopClient() && liveShell && immersiveActive) {
-                requestLiveShellFullscreen().then((entered) => {
-                  if (!entered) {
-                    showOverlay();
-                  }
-                });
-              } else {
-                showOverlay();
-              }
+              showOverlay();
               return;
-              if (!isDesktopClient() && liveShell && immersiveActive && !shouldUseFullscreenOnlyImmersive) {
-                // Re-enter shell fullscreen only for mobile flows that explicitly stay immersive.
-                liveShell.requestFullscreen().catch(() => {
-                  // requestFullscreen failed (e.g. browser policy) — still show overlay
-                  showOverlay();
-                });
-              } else {
-                showOverlay();
-              }
             } else if (immersiveActive && !isDesktopClient()) {
               restoreViewerShellLayout();
             }
@@ -7439,8 +7518,9 @@ async function ensureViewerPlayer(forceRestart = false) {
               try {
                 await liveVideoWrap.requestFullscreen();
                 try { await screen.orientation.lock('landscape'); } catch(e) {}
-              } catch(e) {}
-              pendingVideoFs = false;
+              } catch(e) {
+                pendingVideoFs = false;
+              }
             }
           });
         }
@@ -7642,13 +7722,20 @@ async function ensureViewerPlayer(forceRestart = false) {
           window.cancelAnimationFrame(liveMobileViewportSyncRaf);
             window.clearTimeout(liveMobileViewportSyncTimeout);
             document.removeEventListener('touchend', handleGlobalLiveTouchToggle);
-            document.removeEventListener('touchend', handleVideoFullscreenTouchToggle, true);
-            document.removeEventListener('click', handleVideoFullscreenTouchToggle, true);
+            removeFullscreenTapListeners(document);
+            removeFullscreenTapListeners(liveVideoWrap);
+            removeFullscreenTapListeners(viewerPlayerRoot);
+            removeFullscreenTapListeners(playerTapCatcher);
+            if (viewerPlayerRoot) {
+              viewerPlayerRoot.removeEventListener('touchend', guardViewerPlayerTap, true);
+              viewerPlayerRoot.removeEventListener('click', guardViewerPlayerTap, true);
+            }
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
             // Clean up immersive mode
             document.body.classList.remove('live-immersive-active');
             if (liveShell) {
               liveShell.classList.remove('live-immersive-shell');
+              liveShell.classList.remove('live-shell-fullscreen');
             }
             releaseWakeLock();
           // If host mobile navigates away while stream is active, auto-end the stream via API

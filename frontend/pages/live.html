@@ -83,12 +83,25 @@
 
                     <!-- ── PLAYER CONTROLS (mobile only, bottom-right of video) ── -->
                     <div id="live-player-controls" class="live-mobile-only absolute bottom-3 right-3 z-30 flex items-center gap-2">
-                      <button id="live-player-mute-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar / Activar sonido">
-                        <span class="material-symbols-outlined text-[20px]">volume_up</span>
-                      </button>
-                      <button id="live-player-fs-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa">
-                        <span class="material-symbols-outlined text-[20px]">fullscreen</span>
-                      </button>
+                      <div id="live-player-tap-catcher" aria-hidden="true"></div>
+                      <div id="live-player-fs-status" class="hidden items-center gap-2">
+                        <div class="flex items-center gap-2 rounded-full gradient-live live-pulse shadow-glow px-3 py-1.5">
+                          <div class="w-2 h-2 rounded-full bg-white"></div>
+                          <span class="text-[10px] font-black tracking-[0.18em]">LIVE</span>
+                        </div>
+                        <div class="rounded-full glass px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+                          <span class="material-symbols-outlined text-[14px]">visibility</span>
+                          <span id="live-player-viewer-count">0</span>
+                        </div>
+                      </div>
+                      <div class="live-player-control-buttons flex items-center gap-2">
+                        <button id="live-player-mute-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Silenciar / Activar sonido">
+                          <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                        </button>
+                        <button id="live-player-fs-btn" type="button" class="hidden w-10 h-10 rounded-full glass flex items-center justify-center text-white hover:bg-white/20 transition" title="Pantalla completa">
+                          <span class="material-symbols-outlined text-[20px]">fullscreen</span>
+                        </button>
+                      </div>
                     </div>
 
                     <!-- Floating reactions -->
