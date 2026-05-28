@@ -4684,6 +4684,7 @@
         let heartbeatTimer = null;
         let liveStateTimer = null;
         let lastEventId = 0;
+        let reactionEventsCursorReady = false;
         let sourceBusy = false;
         let startedAt = Date.now();
         let ovenLivekit = null;
@@ -5363,6 +5364,7 @@
         };
 
 
+        const floatingReactionQueues = new WeakMap();
 
         function addFloatingReaction(type) {
           const emojiMap = {
@@ -5373,17 +5375,30 @@
             me_entristece: '😢',
           };
           const emoji = emojiMap[type] || '❤️';
-          const xOffset = (Math.random() - 0.5) * 30;
 
           [floatingReactions].forEach((target) => {
             if (!target) return;
-            const bubble = document.createElement('div');
-            bubble.textContent = emoji;
-            bubble.className = 'live-float-emoji';
-            bubble.style.right = `${Math.random() * 40}px`;
-            bubble.style.setProperty('--float-x', `${xOffset}px`);
-            target.appendChild(bubble);
-            window.setTimeout(() => bubble.remove(), 3200);
+            const nextAvailableAt = floatingReactionQueues.get(target) || 0;
+            const now = Date.now();
+            const delayMs = Math.max(0, nextAvailableAt - now);
+            floatingReactionQueues.set(target, Math.max(now, nextAvailableAt) + 140);
+
+            window.setTimeout(() => {
+              const bubble = document.createElement('div');
+              const lane = Math.floor(Math.random() * 4);
+              const laneOffset = lane * 16;
+              const xOffset = (Math.random() - 0.5) * 28;
+              const durationMs = 2400 + Math.floor(Math.random() * 520);
+              bubble.textContent = emoji;
+              bubble.className = 'live-float-emoji';
+              bubble.style.right = `${8 + laneOffset}px`;
+              bubble.style.bottom = `${10 + Math.floor(Math.random() * 18)}px`;
+              bubble.style.setProperty('--float-x', `${xOffset}px`);
+              bubble.style.setProperty('--float-rise', `${-160 - Math.floor(Math.random() * 70)}px`);
+              bubble.style.animationDuration = `${durationMs}ms`;
+              target.appendChild(bubble);
+              window.setTimeout(() => bubble.remove(), durationMs + 120);
+            }, delayMs);
           });
         }
 
@@ -6087,15 +6102,25 @@ async function ensureViewerPlayer(forceRestart = false) {
           return result;
         }
 
-        function getLiveAudioConstraints() {
-          return {
-            echoCancellation: { ideal: true },
-            noiseSuppression: { ideal: true },
-            autoGainControl: { ideal: true },
-            channelCount: { ideal: 1 },
-            sampleRate: { ideal: 48000 },
-            sampleSize: { ideal: 16 },
-          };
+        function getLiveAudioConstraints(profile = 'voice') {
+          const musicLike = profile === 'screen' || profile === 'mixed' || profile === 'system';
+          return musicLike
+            ? {
+                echoCancellation: { ideal: false },
+                noiseSuppression: { ideal: false },
+                autoGainControl: { ideal: false },
+                channelCount: { ideal: 2 },
+                sampleRate: { ideal: 48000 },
+                sampleSize: { ideal: 16 },
+              }
+            : {
+                echoCancellation: { ideal: true },
+                noiseSuppression: { ideal: true },
+                autoGainControl: { ideal: false },
+                channelCount: { ideal: 1 },
+                sampleRate: { ideal: 48000 },
+                sampleSize: { ideal: 16 },
+              };
         }
 
         function getLiveVideoConstraints(source, overrides = {}) {
@@ -6135,7 +6160,7 @@ async function ensureViewerPlayer(forceRestart = false) {
 
           stream.getAudioTracks().forEach((track) => {
             try {
-              track.contentHint = 'speech';
+              track.contentHint = source === 'screen' ? 'music' : 'speech';
             } catch (_error) {}
           });
         }
@@ -6156,18 +6181,18 @@ async function ensureViewerPlayer(forceRestart = false) {
 
             const destination = audioContext.createMediaStreamDestination();
             const compressor = audioContext.createDynamicsCompressor();
-            compressor.threshold.value = -18;
-            compressor.knee.value = 24;
-            compressor.ratio.value = 4;
-            compressor.attack.value = 0.003;
-            compressor.release.value = 0.25;
+            compressor.threshold.value = -14;
+            compressor.knee.value = 18;
+            compressor.ratio.value = 2;
+            compressor.attack.value = 0.008;
+            compressor.release.value = 0.18;
 
             const displaySource = audioContext.createMediaStreamSource(new MediaStream([displayAudioTrack]));
             const micSource = audioContext.createMediaStreamSource(new MediaStream([micAudioTrack]));
             const systemGainNode = audioContext.createGain();
             const micGainNode = audioContext.createGain();
-            systemGainNode.gain.value = 0.85;
-            micGainNode.gain.value = 1;
+            systemGainNode.gain.value = 0.95;
+            micGainNode.gain.value = 0.92;
 
             displaySource.connect(systemGainNode).connect(compressor);
             micSource.connect(micGainNode).connect(compressor);
@@ -6176,7 +6201,7 @@ async function ensureViewerPlayer(forceRestart = false) {
             const mixedTrack = destination.stream.getAudioTracks()[0] || null;
             if (mixedTrack) {
               try {
-                mixedTrack.contentHint = 'speech';
+                mixedTrack.contentHint = 'music';
               } catch (_error) {}
             }
 
@@ -6322,7 +6347,7 @@ async function ensureViewerPlayer(forceRestart = false) {
             let micStream = null;
 
             try {
-              micStream = await navigator.mediaDevices.getUserMedia({ audio: getLiveAudioConstraints(), video: false });
+              micStream = await navigator.mediaDevices.getUserMedia({ audio: getLiveAudioConstraints('voice'), video: false });
             } catch (error) {
               micStream = null;
             }
@@ -6367,7 +6392,7 @@ async function ensureViewerPlayer(forceRestart = false) {
           if (isDesktopClient()) {
             cameraStream = await navigator.mediaDevices.getUserMedia({
               video: getLiveVideoConstraints('camera'),
-              audio: getLiveAudioConstraints(),
+              audio: getLiveAudioConstraints('voice'),
             });
           } else {
             const videoInputs = await navigator.mediaDevices.enumerateDevices()
@@ -6394,7 +6419,7 @@ async function ensureViewerPlayer(forceRestart = false) {
               try {
                 cameraStream = await navigator.mediaDevices.getUserMedia({
                   video: videoConstraints,
-                  audio: getLiveAudioConstraints(),
+                  audio: getLiveAudioConstraints('voice'),
                 });
                 break;
               } catch (error) {
@@ -6963,11 +6988,18 @@ async function ensureViewerPlayer(forceRestart = false) {
         async function pollReactionEvents() {
           const result = await PostsAPI.getLivestreamEvents(liveId, lastEventId);
           const events = getList(result);
-          if (!result?.ok || !events.length) return;
+          if (!result?.ok) return;
+          if (!events.length) {
+            reactionEventsCursorReady = true;
+            return;
+          }
           events.forEach((event) => {
             lastEventId = Math.max(lastEventId, Number(event.id || 0));
-            addFloatingReaction(event.reaction_type);
+            if (reactionEventsCursorReady) {
+              addFloatingReaction(event.reaction_type);
+            }
           });
+          reactionEventsCursorReady = true;
         }
 
         async function sendActiveReaction() {
@@ -7319,8 +7351,7 @@ async function ensureViewerPlayer(forceRestart = false) {
               // Move the X button out of the overlay so overlay timer can't hide it
               if (immersiveBtn && liveShell) liveShell.appendChild(immersiveBtn);
             }
-            const icon = immersiveBtn?.querySelector('.material-symbols-outlined');
-            if (icon) icon.textContent = 'close';
+            syncMobileCloseButton();
             if (mobileOverlay) {
               mobileOverlay.style.opacity = '';
               mobileOverlay.style.pointerEvents = '';
@@ -7378,7 +7409,6 @@ async function ensureViewerPlayer(forceRestart = false) {
         if (immersiveBtn && liveShell) {
           immersiveBtn.addEventListener('click', () => {
             if (!isDesktopClient()) {
-              // Mobile: X button always exits the livestream
               exitLivestream();
             } else {
               // Desktop: toggle immersive mode

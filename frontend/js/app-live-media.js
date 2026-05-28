@@ -7,15 +7,25 @@
 
   const { isDesktopClient } = shared;
 
-  function getLiveAudioConstraints() {
-    return {
-      echoCancellation: { ideal: true },
-      noiseSuppression: { ideal: true },
-      autoGainControl: { ideal: true },
-      channelCount: { ideal: 1 },
-      sampleRate: { ideal: 48000 },
-      sampleSize: { ideal: 16 },
-    };
+  function getLiveAudioConstraints(profile = 'voice') {
+    const musicLike = profile === 'screen' || profile === 'mixed' || profile === 'system';
+    return musicLike
+      ? {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
+          channelCount: { ideal: 2 },
+          sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
+        }
+      : {
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: false },
+          channelCount: { ideal: 1 },
+          sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
+        };
   }
 
   function getLiveVideoConstraints(source, overrides = {}) {
@@ -55,7 +65,7 @@
 
     stream.getAudioTracks().forEach((track) => {
       try {
-        track.contentHint = 'speech';
+        track.contentHint = source === 'screen' ? 'music' : 'speech';
       } catch (_error) {}
     });
   }
@@ -76,18 +86,18 @@
 
       const destination = audioContext.createMediaStreamDestination();
       const compressor = audioContext.createDynamicsCompressor();
-      compressor.threshold.value = -18;
-      compressor.knee.value = 24;
-      compressor.ratio.value = 4;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.25;
+      compressor.threshold.value = -14;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 2;
+      compressor.attack.value = 0.008;
+      compressor.release.value = 0.18;
 
       const displaySource = audioContext.createMediaStreamSource(new MediaStream([displayAudioTrack]));
       const micSource = audioContext.createMediaStreamSource(new MediaStream([micAudioTrack]));
       const systemGainNode = audioContext.createGain();
       const micGainNode = audioContext.createGain();
-      systemGainNode.gain.value = 0.85;
-      micGainNode.gain.value = 1;
+      systemGainNode.gain.value = 0.95;
+      micGainNode.gain.value = 0.92;
 
       displaySource.connect(systemGainNode).connect(compressor);
       micSource.connect(micGainNode).connect(compressor);
@@ -96,7 +106,7 @@
       const mixedTrack = destination.stream.getAudioTracks()[0] || null;
       if (mixedTrack) {
         try {
-          mixedTrack.contentHint = 'speech';
+          mixedTrack.contentHint = 'music';
         } catch (_error) {}
       }
 

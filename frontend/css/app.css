@@ -281,13 +281,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: .9rem 1rem;
+  gap: .85rem;
+  width: min(100%, 26rem);
+  padding: .8rem .9rem;
   border: 1px solid #dbe4ff;
   border-radius: 1rem;
   background: rgba(255,255,255,.96);
   box-shadow: 0 18px 34px rgba(15, 23, 42, .1);
   backdrop-filter: blur(12px);
+}
+
+.feed-desktop-sidebar {
+  position: static;
+}
+
+@media (min-width: 768px) {
+  app-sidebar {
+    position: sticky;
+    top: calc(4rem + 1.5rem);
+    align-self: start;
+  }
 }
 
 @keyframes reaction-picker-in {
@@ -3519,32 +3532,6 @@ body {
   animation: live-pulse 1.8s ease-in-out infinite;
 }
 
-/* Floating reaction animations */
-@keyframes live-float-up {
-  0% {
-    opacity: 1;
-    transform: translateY(0) translateX(var(--float-x, 0px)) scale(1);
-  }
-
-  70% {
-    opacity: 0.7;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(-320px) translateX(var(--float-x, 0px)) scale(0.6);
-  }
-}
-
-.live-float-emoji {
-  position: absolute;
-  bottom: 60px;
-  font-size: 28px;
-  pointer-events: none;
-  animation: live-float-up 3s ease-out forwards;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
-}
-
 /* Comment fade-in */
 @keyframes live-comment-in {
   from {
@@ -5046,26 +5033,65 @@ body.live-immersive-active #app-view {
 /* ── Floating emoji animation ── */
 .live-float-emoji {
   position: absolute;
-  bottom: 0;
+  right: 0;
+  bottom: 12px;
   font-size: 28px;
-  animation: live-float-up 3s ease-out forwards;
+  line-height: 1;
+  animation: live-float-up 2.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   pointer-events: none;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.38));
+}
+
+@media (max-width: 767.98px) {
+  .feed-fresh-toast {
+    top: 4.75rem;
+    width: min(100%, 22rem);
+    padding: 0.72rem 0.8rem;
+    border-radius: 0.95rem;
+  }
+
+  .feed-fresh-toast .text-sm {
+    font-size: 0.88rem;
+    line-height: 1.15rem;
+  }
+
+  .feed-fresh-toast .text-xs {
+    font-size: 0.72rem;
+    line-height: 1rem;
+  }
+
+  .feed-fresh-toast button {
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.9rem;
+    font-size: 0.82rem;
+  }
+
+  .live-float-emoji {
+    font-size: 22px;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.32));
+  }
 }
 
 @keyframes live-float-up {
   0% {
-    opacity: 1;
-    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.84);
   }
 
-  60% {
-    opacity: 0.8;
-    transform: translateY(-40vh) translateX(var(--float-x, 0)) scale(1.2);
+  12% {
+    opacity: 1;
+    transform: translate3d(calc(var(--float-x, 0px) * 0.14), -12px, 0) scale(1);
+  }
+
+  55% {
+    opacity: 0.96;
+    transform: translate3d(calc(var(--float-x, 0px) * 0.66), calc(var(--float-rise, -220px) * 0.55), 0) scale(1.06);
   }
 
   100% {
     opacity: 0;
-    transform: translateY(-60vh) translateX(var(--float-x, 0)) scale(0.6);
+    transform: translate3d(var(--float-x, 0px), var(--float-rise, -220px), 0) scale(0.74);
   }
 }
 
